@@ -445,18 +445,19 @@
     <p class="subtitle">Professional video tools for the Candler Foundry team</p>
     <div class="wizard-alert">Local backend not detected</div>
     <p class="wizard-desc">
-      This app needs a small Python server running on your machine to process video,
-      run Whisper transcription, and call Claude AI. It only takes a minute to set up.
+      This app needs a small helper program running on your computer to process video.
+      Setup takes about 2 minutes — just download, unzip, and double-click.
     </p>
     <div class="wizard-steps">
       <ol>
-        <li>Install Python 3.14 from <strong>python.org</strong> (check "Add to PATH")</li>
-        <li>Open a terminal and run: <code>pip install flask flask-cors openai-whisper anthropic Pillow</code></li>
-        <li>Download and double-click <strong>start_server.bat</strong> below</li>
-        <li>This page will connect automatically — no refresh needed</li>
+        <li>Install <strong>Python 3.14</strong> from <strong>python.org</strong> — check <strong>"Add Python to PATH"</strong> during install</li>
+        <li>Download the zip file below and <strong>unzip it anywhere</strong> (Desktop, Dropbox, wherever you like)</li>
+        <li>Open the unzipped folder and double-click <strong>start_server.bat</strong> — it installs everything automatically</li>
+        <li>Keep that window open and come back here — this page will connect on its own</li>
       </ol>
     </div>
-    <a class="btn-download" href="backend/start_server.bat" download>Download start_server.bat</a>
+    <a class="btn-download" href="foundry-video-editor-backend.zip" download>Download Setup Package (.zip)</a>
+    <p style="margin: 8px 0 16px; font-size: 0.8rem; color: #888;">Contains start_server.bat + server.py — unzip anywhere, double-click to start</p>
     <div class="wizard-status">
       <div class="dot waiting" id="wiz-dot"></div>
       <span id="wiz-label">Waiting for backend...</span>
