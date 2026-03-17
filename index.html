@@ -575,11 +575,16 @@
       Clip candidate detection, word-level JSON picker, and preview will be wired in Session 4.
     </div>
 
-    <div class="drop-zone" onclick="document.getElementById('clips-file').click()">
+    <div class="drop-zone" id="clips-dropzone" onclick="document.getElementById('clips-file').click()">
       <div class="dz-icon">&#x2702;</div>
-      <div class="dz-label">Drop an MP4 to find clip candidates</div>
+      <div class="dz-label" id="clips-dz-label">Drop an MP4 to find clip candidates</div>
       <div class="dz-sub">Whisper (medium model) + Claude will identify high-value moments</div>
-      <input type="file" id="clips-file" accept=".mp4" />
+      <input type="file" id="clips-file" accept=".mp4" style="display:none;" />
+    </div>
+
+    <div id="clips-player-wrap" style="display:none; margin-top:16px;">
+      <video id="clips-video" controls style="width:100%; border-radius:8px; background:#000;"></video>
+      <p id="clips-filename" style="margin:8px 0 0; font-size:0.85rem; color:#888;"></p>
     </div>
 
     <div class="card">
@@ -679,6 +684,24 @@
   // Poll immediately, then every 3 seconds
   checkHealth();
   setInterval(checkHealth, 3000);
+
+  // ── Clips tab — file load ──
+  document.getElementById('clips-file').addEventListener('change', function () {
+    const file = this.files[0];
+    if (!file) return;
+
+    const url = URL.createObjectURL(file);
+    const video = document.getElementById('clips-video');
+    const wrap = document.getElementById('clips-player-wrap');
+    const label = document.getElementById('clips-dz-label');
+    const filenameEl = document.getElementById('clips-filename');
+
+    video.src = url;
+    wrap.style.display = 'block';
+    label.textContent = file.name;
+    filenameEl.textContent = file.name;
+    video.load();
+  });
 </script>
 </body>
 </html>
