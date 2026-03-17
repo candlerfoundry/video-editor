@@ -6,28 +6,30 @@
   <title>Foundry Video Editor</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Playfair+Display:wght@600;700&display=swap" rel="stylesheet">
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
     :root {
       --orange:        #E8541A;
+      --orange-hover:  #C94516;
       --orange-tint:   #FEF0EB;
-      --orange-tint2:  #FBDDD1;
+      --orange-tint2:  #F5D5C5;
       --sidebar-bg:    #F7F7F5;
-      --bg:            #FAFAF8;
+      --bg:            #FAFAF9;
       --surface:       #FFFFFF;
       --border:        #E8E6DE;
-      --border-2:      #D8D5CB;
+      --border-2:      #D4D0C6;
       --text:          #1A1A1A;
       --text-2:        #4A4A47;
       --muted:         #6B6B6B;
       --muted-light:   #A8A8A2;
-      --green:         #22C55E;
+      --green:         #2D6A4F;
       --amber:         #F59E0B;
       --shadow-sm:     0 1px 3px rgba(0,0,0,0.06), 0 1px 2px rgba(0,0,0,0.04);
-      --shadow-md:     0 4px 16px rgba(0,0,0,0.08), 0 2px 6px rgba(0,0,0,0.05);
+      --shadow-md:     0 4px 20px rgba(0,0,0,0.09), 0 2px 8px rgba(0,0,0,0.05);
       --font:          'Inter', system-ui, -apple-system, sans-serif;
+      --font-serif:    'Playfair Display', Georgia, serif;
       --font-mono:     'Consolas', 'Cascadia Code', monospace;
       --r:             10px;
       --r-lg:          14px;
@@ -46,18 +48,34 @@
       overflow: hidden;
     }
 
-    /* ─── DOTS ─── */
+    /* ─── ANIMATIONS ─── */
+    @keyframes fadeUp {
+      from { opacity: 0; transform: translateY(14px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+    @keyframes pulse {
+      0%, 100% { opacity: 1; transform: scale(1); }
+      50%       { opacity: 0.35; transform: scale(1.3); }
+    }
+    @keyframes shimmer {
+      0%, 100% { background-color: #F0EDE6; }
+      50%       { background-color: #E8E4DA; }
+    }
+    .fade-up   { animation: fadeUp 300ms ease both; }
+    .fade-up-1 { animation: fadeUp 300ms  80ms ease both; }
+    .fade-up-2 { animation: fadeUp 300ms 160ms ease both; }
+
+    /* ─── STATUS DOTS ─── */
     .dot {
-      width: 8px; height: 8px;
+      width: 10px; height: 10px;
       border-radius: 50%;
       background: var(--muted-light);
       flex-shrink: 0;
     }
-    .dot.waiting  { background: var(--amber); animation: pulse 1.6s ease-in-out infinite; }
-    .dot.connected { background: var(--green); animation: none; }
-    @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.3} }
+    .dot.waiting   { background: var(--amber); animation: pulse 1.6s ease-in-out infinite; }
+    .dot.connected { background: #4CAF50; animation: none; }
 
-    /* ─── SETUP WIZARD (full-screen overlay) ─── */
+    /* ─── SETUP WIZARD ─── */
     #setup-view {
       display: none;
       position: fixed; inset: 0; z-index: 100;
@@ -72,39 +90,31 @@
       background: var(--surface);
       border: 1px solid var(--border);
       border-radius: var(--r-lg);
-      padding: 44px 40px;
-      max-width: 500px;
+      padding: 40px 40px 36px;
+      max-width: 480px;
       width: 100%;
       box-shadow: var(--shadow-md);
     }
-    .wizard-brand {
-      display: flex; align-items: center; gap: 10px;
-      margin-bottom: 28px;
+    .wiz-logo-wrap {
+      text-align: center;
+      margin-bottom: 24px;
+      padding-bottom: 22px;
+      border-bottom: 1px solid var(--border);
     }
-    .wiz-mark {
-      width: 34px; height: 34px; border-radius: 8px;
-      background: var(--orange);
-      display: flex; align-items: center; justify-content: center;
-      font-size: 12px; font-weight: 700; color: #fff; letter-spacing: -0.5px;
-      flex-shrink: 0;
+    .wiz-logo-wrap img { height: 40px; width: auto; display: inline-block; }
+    .wiz-logo-wrap p {
+      font-size: 12px; font-weight: 500; color: var(--muted);
+      margin-top: 8px; letter-spacing: 0.03em;
     }
-    .wiz-wordmark { line-height: 1.2; }
-    .wiz-wordmark strong { display: block; font-size: 15px; font-weight: 700; color: var(--orange); }
-    .wiz-wordmark span   { display: block; font-size: 12px; font-weight: 400; color: var(--muted); }
 
-    .wizard-alert {
-      display: flex; align-items: center; gap: 8px;
-      background: var(--orange-tint); border: 1px solid var(--orange-tint2);
-      border-radius: 8px; padding: 10px 14px;
-      font-size: 13px; font-weight: 600; color: var(--orange);
-      margin-bottom: 20px;
-    }
-    .wizard-alert::before {
-      content: ''; width: 6px; height: 6px; border-radius: 50%;
-      background: var(--orange); flex-shrink: 0;
+    .wizard-heading {
+      font-family: var(--font-serif);
+      font-size: 22px; font-weight: 700;
+      color: var(--text); margin-bottom: 8px;
+      letter-spacing: -0.01em;
     }
     .wizard-desc {
-      font-size: 13px; color: var(--text-2); line-height: 1.65;
+      font-size: 13.5px; color: var(--text-2); line-height: 1.65;
       margin-bottom: 22px;
     }
     .wizard-steps {
@@ -114,35 +124,35 @@
     .wizard-steps ol { list-style: none; counter-reset: step; }
     .wizard-steps li {
       counter-increment: step;
-      display: flex; align-items: flex-start; gap: 11px;
-      padding: 9px 0; font-size: 13px; color: var(--text); line-height: 1.55;
+      display: flex; align-items: flex-start; gap: 12px;
+      padding: 10px 0; font-size: 13px; color: var(--text); line-height: 1.55;
       border-bottom: 1px solid var(--border);
     }
     .wizard-steps li:last-child { border-bottom: none; }
     .wizard-steps li::before {
       content: counter(step);
-      min-width: 20px; height: 20px;
+      min-width: 22px; height: 22px;
       background: var(--orange); color: #fff; border-radius: 50%;
-      font-size: 10px; font-weight: 700;
+      font-size: 11px; font-weight: 700;
       display: flex; align-items: center; justify-content: center;
-      flex-shrink: 0; margin-top: 2px;
+      flex-shrink: 0; margin-top: 1px;
     }
-    .wizard-steps li code {
-      background: var(--surface); border: 1px solid var(--border);
-      padding: 1px 6px; border-radius: 4px;
-      font-size: 11.5px; font-family: var(--font-mono); color: var(--orange);
+
+    .btn-dl-full {
+      display: block; width: 100%; text-align: center;
+      background: var(--surface);
+      border: 1px solid var(--border-2);
+      color: var(--text-2);
+      font-family: var(--font); font-size: 13px; font-weight: 500;
+      padding: 10px 20px; border-radius: 8px;
+      text-decoration: none;
+      transition: border-color 150ms, color 150ms;
+      margin-bottom: 18px;
     }
-    .btn-download {
-      display: inline-flex; align-items: center; gap: 7px;
-      background: var(--orange); color: #fff;
-      font-size: 13px; font-weight: 600; padding: 9px 20px;
-      border-radius: 8px; text-decoration: none;
-      transition: opacity 0.15s; margin-bottom: 4px;
-    }
-    .btn-download:hover { opacity: 0.88; }
-    .wizard-dl-note { font-size: 12px; color: var(--muted); margin-bottom: 18px; }
+    .btn-dl-full:hover { border-color: var(--orange); color: var(--orange); }
+
     .wizard-status {
-      display: flex; align-items: center; gap: 8px;
+      display: flex; align-items: center; gap: 9px;
       font-size: 12.5px; color: var(--muted); font-weight: 500;
       padding-top: 16px; border-top: 1px solid var(--border);
     }
@@ -157,7 +167,7 @@
 
     /* ─── SIDEBAR ─── */
     .sidebar {
-      width: 220px; min-width: 220px;
+      width: 240px; min-width: 240px;
       height: 100vh;
       background: var(--sidebar-bg);
       border-right: 1px solid var(--border);
@@ -170,18 +180,15 @@
       border-bottom: 1px solid var(--border);
       flex-shrink: 0;
     }
-    .brand-name {
-      display: block;
-      font-size: 14px; font-weight: 700;
-      color: var(--orange);
-      letter-spacing: -0.02em;
-      line-height: 1.2;
+    .sidebar-brand img {
+      height: 36px; width: auto;
+      display: block; margin-bottom: 8px;
     }
     .brand-sub {
       display: block;
-      font-size: 12px; font-weight: 400;
+      font-size: 12px; font-weight: 500;
       color: var(--muted);
-      margin-top: 1px;
+      letter-spacing: 0.02em;
     }
 
     .sidebar-nav {
@@ -192,18 +199,18 @@
 
     .tab-btn {
       width: 100%;
-      display: flex; align-items: center; gap: 10px;
-      padding: 10px 18px 10px 17px;
+      display: flex; align-items: center; gap: 11px;
+      padding: 12px 20px 12px 17px;
       background: none;
       border: none;
       border-left: 3px solid transparent;
       font-family: var(--font);
-      font-size: 13.5px; font-weight: 500;
+      font-size: 14px; font-weight: 500;
       color: var(--muted);
       text-align: left;
       cursor: pointer;
-      transition: background 0.12s, color 0.12s, border-color 0.12s;
-      line-height: 1.2;
+      transition: background 150ms ease, color 150ms ease, border-color 150ms ease;
+      min-height: 44px; line-height: 1.2;
     }
     .tab-btn:hover { background: #EFEDE8; color: var(--text); }
     .tab-btn.active {
@@ -215,14 +222,15 @@
     .tab-btn svg { flex-shrink: 0; }
 
     .sidebar-footer {
-      padding: 14px 20px;
+      padding: 16px 20px;
       border-top: 1px solid var(--border);
       flex-shrink: 0;
     }
     .status-row {
-      display: flex; align-items: center; gap: 8px;
+      display: flex; align-items: center; gap: 9px;
       font-size: 12px; font-weight: 500; color: var(--muted);
     }
+    #hdr-label { transition: color 400ms; }
 
     /* ─── MAIN CONTENT ─── */
     .main-content {
@@ -234,35 +242,93 @@
     .tab-panel { display: none; }
     .tab-panel.active { display: block; }
 
-    /* ─── SHARED PANEL ELEMENTS ─── */
+    /* ─── SECTION HERO BANNERS ─── */
+    .section-hero {
+      position: relative;
+      height: 180px;
+      display: flex;
+      align-items: flex-end;
+      justify-content: space-between;
+      padding: 28px 48px;
+      overflow: hidden;
+      background-color: var(--orange-tint);
+      border-bottom: 1px solid var(--border);
+      flex-shrink: 0;
+    }
+    .section-hero-bg {
+      position: absolute; inset: 0;
+      background-size: cover;
+      background-position: center;
+      opacity: 0.10;
+      pointer-events: none;
+    }
+    .section-hero-text { position: relative; z-index: 1; }
+    .section-hero h1 {
+      font-family: var(--font-serif);
+      font-size: 36px; font-weight: 700;
+      color: var(--text);
+      letter-spacing: -0.02em;
+      line-height: 1.1;
+      margin-bottom: 8px;
+    }
+    .section-hero p {
+      font-family: var(--font);
+      font-size: 14px; color: var(--text-2);
+      max-width: 500px; line-height: 1.6;
+    }
+    .section-hero-action {
+      position: relative; z-index: 1;
+      align-self: flex-end;
+      flex-shrink: 0;
+    }
+
+    /* ─── SHARED ELEMENTS ─── */
+    .panel-body { padding: 32px 48px; }
+
     .btn {
       display: inline-flex; align-items: center; gap: 7px;
       background: var(--orange); color: #fff;
       border: none; font-family: var(--font);
       font-size: 13.5px; font-weight: 600;
-      padding: 10px 20px; border-radius: 8px;
-      cursor: pointer; transition: opacity 0.15s;
+      padding: 10px 22px; border-radius: 8px;
+      cursor: pointer;
+      transition: background 150ms ease;
       letter-spacing: 0.01em;
+      box-shadow: 0 2px 8px rgba(232,84,26,0.25);
     }
-    .btn:hover { opacity: 0.88; }
-    .btn:disabled { opacity: 0.35; cursor: not-allowed; }
+    .btn:hover   { background: var(--orange-hover); }
+    .btn:disabled { opacity: 0.38; cursor: not-allowed; box-shadow: none; }
+
     .btn-ghost {
       display: inline-flex; align-items: center; gap: 7px;
       background: var(--surface); border: 1px solid var(--border-2);
       color: var(--text-2); font-family: var(--font);
       font-size: 13px; font-weight: 500;
-      padding: 9px 18px; border-radius: 8px;
-      cursor: pointer; transition: border-color 0.15s, color 0.15s;
+      padding: 10px 20px; border-radius: 8px;
+      cursor: pointer; transition: border-color 150ms, color 150ms;
     }
     .btn-ghost:hover { border-color: var(--orange); color: var(--orange); }
 
+    .btn-hero {
+      font-size: 14px; font-weight: 600;
+      padding: 11px 26px; border-radius: 9px;
+    }
+
     .card {
       background: var(--surface); border: 1px solid var(--border);
-      border-radius: var(--r); padding: 20px 22px;
+      border-radius: var(--r); padding: 20px 24px;
       box-shadow: var(--shadow-sm);
+      transition: border-color 150ms, box-shadow 150ms;
     }
+    .card:hover { border-color: rgba(232,84,26,0.28); box-shadow: 0 4px 16px rgba(0,0,0,0.08); }
     .card h3 { font-size: 14px; font-weight: 600; color: var(--text); margin-bottom: 6px; }
-    .card p  { font-size: 13px; color: var(--text-2); line-height: 1.65; }
+    .card p  { font-size: 13.5px; color: var(--text-2); line-height: 1.65; }
+
+    .card-accent {
+      border-left: 4px solid var(--orange);
+      border-radius: 0 var(--r) var(--r) 0;
+    }
+    .card-accent h3 { font-size: 16px; font-weight: 700; margin-bottom: 8px; }
 
     .drop-zone {
       background: var(--surface);
@@ -270,58 +336,30 @@
       border-radius: var(--r);
       display: flex; flex-direction: column;
       align-items: center; justify-content: center;
-      text-align: center; padding: 32px 20px;
+      text-align: center; padding: 36px 24px;
       cursor: pointer;
-      transition: border-color 0.15s, background 0.15s;
-      min-height: 180px;
+      transition: border-color 150ms, background 150ms;
+      min-height: 190px;
     }
     .drop-zone:hover, .drop-zone.dragover {
       border-color: var(--orange);
       background: var(--orange-tint);
     }
+    .drop-zone.loaded {
+      border: 2px solid var(--green);
+      background: #F0FAF5;
+    }
     .drop-zone input[type=file] { display: none; }
-    .dz-icon { font-size: 48px; line-height: 1; margin-bottom: 14px; }
+    .dz-icon  { font-size: 40px; line-height: 1; margin-bottom: 14px; }
     .dz-label { font-size: 15px; font-weight: 600; color: var(--text); margin-bottom: 4px; }
     .dz-sub   { font-size: 12.5px; color: var(--muted); line-height: 1.5; }
 
-    /* ─── CLIPS TAB ─── */
-    #tab-clips {
-      padding: 0;
-    }
-
-    .clip-hero {
-      padding: 40px 48px 32px;
-      border-bottom: 1px solid var(--border);
-      background: var(--surface);
-      display: flex; align-items: flex-start;
-      justify-content: space-between; gap: 24px;
-    }
-    .clip-hero-text {}
-    .clip-hero-title {
-      font-size: 28px; font-weight: 700;
-      color: var(--text); letter-spacing: -0.03em;
-      line-height: 1.1; margin-bottom: 10px;
-    }
-    .clip-hero-desc {
-      font-size: 14px; color: var(--text-2);
-      line-height: 1.65; max-width: 520px;
-    }
-    .btn-hero {
-      font-size: 14px; padding: 11px 26px;
-      border-radius: 9px; white-space: nowrap;
-      flex-shrink: 0; align-self: center;
-      box-shadow: 0 2px 8px rgba(232,84,26,0.3);
-    }
-
-    .clip-body {
-      padding: 32px 48px;
-    }
-
+    /* ─── CLIPS TAB SPECIFICS ─── */
     .drop-grid {
       display: grid;
       grid-template-columns: 1fr 1fr;
       gap: 16px;
-      margin-bottom: 32px;
+      margin-bottom: 28px;
     }
     .drop-zone-label {
       display: flex; align-items: center; gap: 7px;
@@ -331,47 +369,30 @@
     }
     .drop-zone-label svg { flex-shrink: 0; }
 
-    /* Empty state */
+    /* Clips empty state */
     .empty-state {
       display: flex; flex-direction: column;
       align-items: center; justify-content: center;
-      padding: 40px 24px;
-      text-align: center;
+      padding: 36px 24px; text-align: center;
     }
-    .empty-state-svg { margin-bottom: 18px; opacity: 0.65; }
-    .empty-state h4 {
-      font-size: 15px; font-weight: 600; color: var(--text-2);
-      margin-bottom: 6px;
-    }
-    .empty-state p {
-      font-size: 13px; color: var(--muted); line-height: 1.6;
-      max-width: 360px;
-    }
+    .empty-state-svg { margin-bottom: 16px; opacity: 0.6; }
+    .empty-state h4 { font-size: 15px; font-weight: 600; color: var(--text-2); margin-bottom: 5px; }
+    .empty-state p  { font-size: 13px; color: var(--muted); line-height: 1.6; max-width: 360px; }
 
     /* Clips video player */
-    #clips-player-wrap {
-      margin-bottom: 24px;
-    }
+    #clips-player-wrap { margin-bottom: 24px; }
     #clips-video {
       width: 100%; border-radius: 8px;
       background: #111; border: 1px solid var(--border);
     }
-    #clips-filename { margin-top: 8px; font-size: 12px; color: var(--muted); }
+    #clips-filename { margin-top: 8px; font-size: 12px; color: var(--muted); font-family: var(--font-mono); }
 
-    /* What Claude looks for — accented card */
-    .card-accent {
-      border-left: 4px solid var(--orange);
-      border-radius: 0 var(--r) var(--r) 0;
-    }
-    .card-accent h3 {
-      font-size: 15px; font-weight: 700;
-      margin-bottom: 8px;
-    }
-    .tag-row { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 14px; }
+    /* What Claude looks for tags */
+    .tag-row { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 16px; }
     .tag {
       display: inline-flex; align-items: center;
-      padding: 5px 13px; border-radius: 20px;
-      font-size: 12px; font-weight: 600; letter-spacing: 0.01em;
+      padding: 6px 14px; border-radius: 20px;
+      font-size: 12.5px; font-weight: 600; letter-spacing: 0.01em;
     }
     .tag-blue   { background: #EFF6FF; color: #1D4ED8; }
     .tag-orange { background: var(--orange-tint); color: var(--orange); }
@@ -379,99 +400,109 @@
     .tag-purple { background: #F5F3FF; color: #6D28D9; }
     .tag-red    { background: #FEF2F2; color: #DC2626; }
 
-    /* ─── CAPTION TAB ─── */
-    #tab-caption { padding: 40px 48px; }
-
-    /* ─── THUMBNAILS TAB ─── */
-    #tab-thumbnails { padding: 40px 48px; }
-
-    /* Style grid */
-    .style-grid { display: grid; grid-template-columns: repeat(3,1fr); gap: 14px; margin-top: 20px; }
+    /* ─── THUMBNAILS STYLE GRID ─── */
+    .style-grid {
+      display: grid; grid-template-columns: repeat(3,1fr);
+      gap: 14px; margin-top: 24px;
+    }
     .style-card {
       background: var(--surface); border: 1px solid var(--border);
       border-radius: var(--r); padding: 14px; text-align: center;
-      cursor: pointer; transition: border-color 0.15s, box-shadow 0.15s;
+      cursor: pointer; transition: border-color 150ms, box-shadow 150ms;
       box-shadow: var(--shadow-sm);
     }
     .style-card:hover { border-color: var(--orange); box-shadow: 0 0 0 3px var(--orange-tint); }
-    .style-preview { height: 60px; border-radius: 6px; margin-bottom: 10px; }
-    .style-name { font-size: 12.5px; font-weight: 600; color: var(--text); }
-    .style-desc { font-size: 11.5px; color: var(--muted); margin-top: 3px; }
+    .style-preview { height: 64px; border-radius: 6px; margin-bottom: 10px; }
+    .style-name { font-size: 13px; font-weight: 600; color: var(--text); }
+    .style-desc { font-size: 12px; color: var(--muted); margin-top: 3px; }
     .warm-bar    { background: linear-gradient(135deg, #7a3010 0%, #c84826 60%, #f5a623 100%); }
     .bold-corner { background: linear-gradient(135deg, #1a1a2e 0%, #2d2d5e 100%); }
     .kinetic     { background: linear-gradient(135deg, #0a1628 0%, #1a3a2a 60%, #2a5a1a 100%); }
 
-    /* ─── EDIT CAPTIONS TAB ─── */
-    #tab-edit-captions { padding: 40px 48px; }
-
-    .srt-table {
-      width: 100%; border-collapse: collapse; font-size: 13px;
-      background: var(--surface); border-radius: var(--r);
-      overflow: hidden; box-shadow: var(--shadow-sm);
-      border: 1px solid var(--border);
-    }
-    .srt-table th {
-      text-align: left; padding: 10px 14px;
-      font-size: 10.5px; font-weight: 700;
-      text-transform: uppercase; letter-spacing: 0.07em;
-      color: var(--muted); background: var(--sidebar-bg);
-      border-bottom: 1px solid var(--border);
-    }
-    .srt-table td { padding: 10px 14px; border-bottom: 1px solid var(--border); vertical-align: top; }
-    .srt-table tr:last-child td { border-bottom: none; }
-    .srt-table td.ts { color: var(--orange); font-size: 11px; font-family: var(--font-mono); white-space: nowrap; }
-    .srt-table td.txt input {
-      background: none; border: none; color: var(--text);
-      font-family: var(--font); font-size: 13px; width: 100%; outline: none;
-    }
-    .srt-table td.txt input:focus {
-      background: var(--orange-tint); border-radius: 4px; padding: 2px 6px; margin: -2px -6px;
+    /* ─── EDIT CAPTIONS SPECIFIC ─── */
+    .caption-toolbar {
+      display: flex; align-items: center; gap: 10px;
+      margin-bottom: 24px;
     }
 
-    /* ─── SHARED PANEL HEADER ─── */
-    .panel-header { margin-bottom: 28px; }
-    .panel-title { font-size: 20px; font-weight: 700; color: var(--text); letter-spacing: -0.02em; margin-bottom: 5px; }
-    .panel-desc  { font-size: 13.5px; color: var(--text-2); line-height: 1.6; }
+    .caption-empty {
+      display: flex; flex-direction: column;
+      align-items: center; justify-content: center;
+      padding: 56px 24px; text-align: center;
+      border: 2px dashed var(--border); border-radius: var(--r);
+      background: var(--surface);
+    }
+    .caption-empty svg { opacity: 0.35; margin-bottom: 16px; }
+    .caption-empty h4 {
+      font-size: 15px; font-weight: 600; color: var(--text-2);
+      margin-bottom: 6px;
+    }
+    .caption-empty p {
+      font-size: 13px; color: var(--muted); line-height: 1.6;
+      max-width: 300px; margin-bottom: 20px;
+    }
+
+    .caption-list { display: flex; flex-direction: column; gap: 6px; }
+    .caption-row {
+      display: flex; align-items: center; gap: 0;
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: var(--r); padding: 12px 16px;
+      transition: border-color 150ms;
+    }
+    .caption-row:nth-child(even) { background: #FAFAF8; }
+    .caption-row:hover { border-color: var(--border-2); }
+    .caption-ts {
+      font-family: var(--font-mono); font-size: 11px;
+      color: var(--orange); white-space: nowrap;
+      width: 130px; flex-shrink: 0;
+    }
+    .caption-input {
+      flex: 1; background: none; border: none;
+      font-family: var(--font); font-size: 13.5px;
+      color: var(--text); outline: none; line-height: 1.4;
+    }
+    .caption-input:focus {
+      background: var(--orange-tint);
+      border-radius: 4px; padding: 3px 8px;
+      margin: -3px -8px;
+    }
   </style>
 </head>
 <body>
 
 <!-- ══════════════════════════════════════════
-     SETUP WIZARD (shown until backend connects)
+     SETUP WIZARD
      ══════════════════════════════════════════ -->
 <div id="setup-view">
   <div class="wizard-card">
-    <div class="wizard-brand">
-      <div class="wiz-mark">FV</div>
-      <div class="wiz-wordmark">
-        <strong>Candler Foundry</strong>
-        <span>Video Editor</span>
-      </div>
+
+    <div class="wiz-logo-wrap">
+      <img src="TCF_Logo-Orange.png" alt="The Candler Foundry">
+      <p>Video Editor</p>
     </div>
 
-    <div class="wizard-alert">Local backend not detected</div>
-
+    <h2 class="wizard-heading">Set up your local server</h2>
     <p class="wizard-desc">
       This app needs a small helper program running on your computer to process video.
-      Your team lead has already set this up in Dropbox &mdash; follow the steps below to get started.
+      Your team lead has already set this up in Dropbox &mdash; follow the steps below.
     </p>
 
     <div class="wizard-steps">
       <ol>
         <li>Make sure <strong>Python 3.14</strong> is installed. Download from <strong>python.org</strong> and check <strong>"Add Python to PATH"</strong> during install.</li>
         <li>Open <strong>Dropbox &rarr; Scripts &rarr; Video Editor Downloads &rarr; foundry-video-editor-backend</strong></li>
-        <li>Double-click <strong>start_server.bat</strong> &mdash; a window opens and installs everything automatically</li>
-        <li>Keep that window open and return here &mdash; this page will connect on its own</li>
+        <li>Double-click <strong>start_server.bat</strong> &mdash; a window opens and sets everything up automatically</li>
+        <li>Keep that window open and come back here &mdash; this page will connect on its own</li>
       </ol>
     </div>
 
-    <p class="wizard-dl-note">Don't have Dropbox access? Download the setup package below.</p>
-    <a class="btn-download" href="foundry-video-editor-backend.zip" download>Download Setup Package (.zip)</a>
+    <a class="btn-dl-full" href="foundry-video-editor-backend.zip" download>Download setup package (.zip)</a>
 
     <div class="wizard-status">
       <div class="dot waiting" id="wiz-dot"></div>
-      <span id="wiz-label">Waiting for backend...</span>
+      <span id="wiz-label">Waiting for backend&hellip;</span>
     </div>
+
   </div>
 </div>
 
@@ -483,33 +514,30 @@
   <!-- SIDEBAR -->
   <aside class="sidebar">
     <div class="sidebar-brand">
-      <span class="brand-name">Candler Foundry</span>
+      <img src="TCF_Logo-Orange.png" alt="The Candler Foundry">
       <span class="brand-sub">Video Editor</span>
     </div>
 
     <nav class="sidebar-nav">
 
-      <!-- Clips -->
       <button class="tab-btn active" data-tab="clips">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
           <circle cx="6" cy="6" r="3"/><circle cx="6" cy="18" r="3"/>
           <path d="M20 4L8.12 15.88M14.47 14.48L20 20M8.12 8.12L12 12"/>
         </svg>
         Clips
       </button>
 
-      <!-- Caption Videos -->
       <button class="tab-btn" data-tab="caption">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
           <rect x="2" y="4" width="20" height="16" rx="2"/>
           <path d="M8 14h8M8 10h4"/>
         </svg>
         Caption Videos
       </button>
 
-      <!-- Thumbnails -->
       <button class="tab-btn" data-tab="thumbnails">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
           <rect x="3" y="3" width="18" height="18" rx="2"/>
           <circle cx="8.5" cy="8.5" r="1.5"/>
           <path d="M21 15l-5-5L5 21"/>
@@ -517,9 +545,8 @@
         Thumbnails
       </button>
 
-      <!-- Edit Captions -->
       <button class="tab-btn" data-tab="edit-captions">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
           <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
           <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
         </svg>
@@ -531,46 +558,50 @@
     <div class="sidebar-footer">
       <div class="status-row">
         <div class="dot waiting" id="hdr-dot"></div>
-        <span id="hdr-label">Connecting...</span>
+        <span id="hdr-label">Connecting&hellip;</span>
       </div>
     </div>
   </aside>
 
-  <!-- MAIN CONTENT AREA -->
+  <!-- MAIN CONTENT -->
   <main class="main-content">
 
-    <!-- ── CLIPS ── -->
+    <!-- ══ CLIPS ══ -->
     <div class="tab-panel active" id="tab-clips">
 
-      <div class="clip-hero">
-        <div class="clip-hero-text">
-          <h1 class="clip-hero-title">Clip Creator</h1>
-          <p class="clip-hero-desc">
-            Drop your MP4 and optional word-timing JSON. Claude will identify the strongest clip candidates &mdash; quotable moments, high-energy exchanges, and segments with clear narrative arcs.
-          </p>
+      <!-- Hero banner -->
+      <div class="section-hero">
+        <div class="section-hero-bg" style="background-image: url('Graphic_3.png')"></div>
+        <div class="section-hero-text fade-up">
+          <h1>Clip Creator</h1>
+          <p>Load a video and transcript to find high-impact moments for social media. Claude identifies quotable statements, emotional peaks, and self-contained segments.</p>
         </div>
-        <button class="btn btn-hero" onclick="document.getElementById('clips-file').click()">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <circle cx="6" cy="6" r="3"/><circle cx="6" cy="18" r="3"/>
-            <path d="M20 4L8.12 15.88M14.47 14.48L20 20M8.12 8.12L12 12"/>
-          </svg>
-          Find Clips
-        </button>
+        <div class="section-hero-action fade-up-1">
+          <button class="btn btn-hero" onclick="document.getElementById('clips-file').click()">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+              <circle cx="6" cy="6" r="3"/><circle cx="6" cy="18" r="3"/>
+              <path d="M20 4L8.12 15.88M14.47 14.48L20 20M8.12 8.12L12 12"/>
+            </svg>
+            Find Clips
+          </button>
+        </div>
       </div>
 
-      <div class="clip-body">
+      <!-- Body -->
+      <div class="panel-body">
 
         <!-- Two-column drop zones -->
-        <div class="drop-grid">
+        <div class="drop-grid fade-up">
           <div>
             <div class="drop-zone-label">
               <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-                <path d="M15 10l4.553-2.276A1 1 0 0121 8.724v6.552a1 1 0 01-1.447.894L15 14M3 8a2 2 0 012-2h10a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2V8z"/>
+                <rect x="3" y="8" width="13" height="8" rx="2"/>
+                <path d="M16 10l4.553-2.276A1 1 0 0121 8.724v6.552a1 1 0 01-1.447.894L16 14"/>
               </svg>
               Video File
             </div>
             <div class="drop-zone" id="clips-dropzone" onclick="document.getElementById('clips-file').click()">
-              <div class="dz-icon">&#x1F3AC;</div>
+              <div class="dz-icon">🎬</div>
               <div class="dz-label" id="clips-dz-label">Drop MP4 here</div>
               <div class="dz-sub">or click to browse &mdash; .mp4 files only</div>
               <input type="file" id="clips-file" accept=".mp4" />
@@ -580,13 +611,15 @@
           <div>
             <div class="drop-zone-label">
               <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-                <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/>
-                <line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/>
+                <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/>
+                <polyline points="14 2 14 8 20 8"/>
+                <line x1="16" y1="13" x2="8" y2="13"/>
+                <line x1="16" y1="17" x2="8" y2="17"/>
               </svg>
               Word Timing JSON
             </div>
             <div class="drop-zone" id="words-dropzone" onclick="document.getElementById('words-file').click()">
-              <div class="dz-icon">&#x1F4C4;</div>
+              <div class="dz-icon">📄</div>
               <div class="dz-label">Drop Words JSON here</div>
               <div class="dz-sub">Whisper word-level output &mdash; optional but improves precision</div>
               <input type="file" id="words-file" accept=".json" />
@@ -600,39 +633,35 @@
           <p id="clips-filename"></p>
         </div>
 
-        <!-- Empty state illustration -->
-        <div class="empty-state" id="clips-empty-state">
+        <!-- Empty state -->
+        <div class="empty-state fade-up-1" id="clips-empty-state">
           <div class="empty-state-svg">
-            <svg width="96" height="72" viewBox="0 0 96 72" fill="none" xmlns="http://www.w3.org/2000/svg">
-              <!-- Film strip body -->
-              <rect x="8" y="16" width="80" height="40" rx="4" fill="#F0EDE6" stroke="#D4D0C6" stroke-width="1.5"/>
-              <!-- Sprocket holes top -->
-              <rect x="14" y="12" width="8" height="8" rx="2" fill="#D4D0C6"/>
-              <rect x="30" y="12" width="8" height="8" rx="2" fill="#D4D0C6"/>
-              <rect x="46" y="12" width="8" height="8" rx="2" fill="#D4D0C6"/>
-              <rect x="62" y="12" width="8" height="8" rx="2" fill="#D4D0C6"/>
-              <!-- Sprocket holes bottom -->
-              <rect x="14" y="52" width="8" height="8" rx="2" fill="#D4D0C6"/>
-              <rect x="30" y="52" width="8" height="8" rx="2" fill="#D4D0C6"/>
-              <rect x="46" y="52" width="8" height="8" rx="2" fill="#D4D0C6"/>
-              <rect x="62" y="52" width="8" height="8" rx="2" fill="#D4D0C6"/>
-              <!-- Frame windows -->
-              <rect x="14" y="22" width="18" height="28" rx="2" fill="#E0DDD5"/>
-              <rect x="39" y="22" width="18" height="28" rx="2" fill="#E0DDD5"/>
-              <rect x="64" y="22" width="18" height="28" rx="2" fill="#E0DDD5"/>
-              <!-- Scissors overlay -->
-              <circle cx="76" cy="58" r="10" fill="#FAFAF8" stroke="#D4D0C6" stroke-width="1.5"/>
-              <path d="M70 52l12 12M82 52l-12 12" stroke="#B8B4AA" stroke-width="2" stroke-linecap="round"/>
-              <circle cx="69" cy="51" r="3" fill="none" stroke="#B8B4AA" stroke-width="1.5"/>
-              <circle cx="83" cy="63" r="3" fill="none" stroke="#B8B4AA" stroke-width="1.5"/>
+            <svg width="100" height="76" viewBox="0 0 100 76" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <rect x="6" y="18" width="88" height="42" rx="5" fill="#F0EDE6" stroke="#D4D0C6" stroke-width="1.5"/>
+              <rect x="12" y="13" width="9" height="9" rx="2.5" fill="#D4D0C6"/>
+              <rect x="30" y="13" width="9" height="9" rx="2.5" fill="#D4D0C6"/>
+              <rect x="48" y="13" width="9" height="9" rx="2.5" fill="#D4D0C6"/>
+              <rect x="66" y="13" width="9" height="9" rx="2.5" fill="#D4D0C6"/>
+              <rect x="12" y="56" width="9" height="9" rx="2.5" fill="#D4D0C6"/>
+              <rect x="30" y="56" width="9" height="9" rx="2.5" fill="#D4D0C6"/>
+              <rect x="48" y="56" width="9" height="9" rx="2.5" fill="#D4D0C6"/>
+              <rect x="66" y="56" width="9" height="9" rx="2.5" fill="#D4D0C6"/>
+              <rect x="14" y="24" width="20" height="30" rx="2.5" fill="#E0DDD5"/>
+              <rect x="41" y="24" width="20" height="30" rx="2.5" fill="#E0DDD5"/>
+              <rect x="68" y="24" width="20" height="30" rx="2.5" fill="#E0DDD5"/>
+              <circle cx="80" cy="62" r="12" fill="#FAFAF8" stroke="#D4D0C6" stroke-width="1.5"/>
+              <circle cx="75" cy="57" r="3.5" fill="none" stroke="#B8B4AA" stroke-width="1.8"/>
+              <circle cx="85" cy="67" r="3.5" fill="none" stroke="#B8B4AA" stroke-width="1.8"/>
+              <path d="M73 59l14 14" stroke="#B8B4AA" stroke-width="1.8" stroke-linecap="round"/>
+              <path d="M87 59L73 73" stroke="#B8B4AA" stroke-width="1.8" stroke-linecap="round"/>
             </svg>
           </div>
           <h4>Ready to find your best clips</h4>
           <p>Drop an MP4 above and Claude will scan for quotable moments, high-energy exchanges, and segments that work as short-form content.</p>
         </div>
 
-        <!-- What Claude looks for -->
-        <div class="card card-accent">
+        <!-- What Claude looks for card -->
+        <div class="card card-accent fade-up-2">
           <h3>What Claude looks for</h3>
           <p>Strong standalone moments that work without context &mdash; quotable statements, emotional peaks, and segments with a clear beginning, middle, and end.</p>
           <div class="tag-row">
@@ -647,90 +676,125 @@
       </div>
     </div>
 
-    <!-- ── CAPTION VIDEOS ── -->
+    <!-- ══ CAPTION VIDEOS ══ -->
     <div class="tab-panel" id="tab-caption">
-      <div style="padding: 40px 48px;">
-        <div class="panel-header">
-          <div class="panel-title">Caption Videos</div>
-          <p class="panel-desc">Select one or more MP4 files, generate transcripts via Whisper, then burn captions directly into the video.</p>
-        </div>
 
-        <div class="drop-zone" id="caption-drop" style="margin-bottom:20px;" onclick="document.getElementById('caption-file').click()">
-          <div class="dz-icon">&#x1F3AC;</div>
+      <div class="section-hero">
+        <div class="section-hero-bg" style="background-image: url('Graphic_1.png')"></div>
+        <div class="section-hero-text fade-up">
+          <h1>Caption Videos</h1>
+          <p>Add captions to your video automatically. Upload an MP4 and the app will transcribe it and burn captions directly into the file.</p>
+        </div>
+      </div>
+
+      <div class="panel-body">
+
+        <div class="drop-zone fade-up" id="caption-drop" style="margin-bottom:20px;" onclick="document.getElementById('caption-file').click()">
+          <div class="dz-icon">🎬</div>
           <div class="dz-label">Drop MP4 files here or click to browse</div>
           <div class="dz-sub">Supports .mp4 &mdash; multiple files allowed</div>
           <input type="file" id="caption-file" accept=".mp4" multiple />
         </div>
 
-        <div class="card" style="margin-bottom:20px;">
+        <div class="card fade-up-1" style="margin-bottom:20px;">
           <h3>Options</h3>
           <p>Transcript type, font size, and caption style settings will appear here once backend is wired.</p>
         </div>
 
-        <button class="btn" disabled>Generate Captions</button>
+        <button class="btn fade-up-2" disabled>Generate Captions</button>
+
       </div>
     </div>
 
-    <!-- ── THUMBNAILS ── -->
+    <!-- ══ THUMBNAILS ══ -->
     <div class="tab-panel" id="tab-thumbnails">
-      <div style="padding: 40px 48px;">
-        <div class="panel-header">
-          <div class="panel-title">Thumbnails</div>
-          <p class="panel-desc">Extract frames, transcribe with Whisper (tiny), correct with Claude AI, and generate thumbnails in three styles.</p>
-        </div>
 
-        <div class="drop-zone" style="margin-bottom:20px;" onclick="document.getElementById('thumb-file').click()">
-          <div class="dz-icon">&#x1F5BC;</div>
-          <div class="dz-label">Drop an MP4 here to extract frames</div>
+      <div class="section-hero">
+        <div class="section-hero-bg" style="background-image: url('Graphic_2.png')"></div>
+        <div class="section-hero-text fade-up">
+          <h1>Thumbnails</h1>
+          <p>Extract key frames, generate title options with Claude, and export a polished thumbnail in your chosen style.</p>
+        </div>
+      </div>
+
+      <div class="panel-body">
+
+        <div class="drop-zone fade-up" style="margin-bottom:24px;" onclick="document.getElementById('thumb-file').click()">
+          <div class="dz-icon">🖼</div>
+          <div class="dz-label">Drop an MP4 here to get started</div>
           <div class="dz-sub">Whisper (tiny model) will transcribe for AI title generation</div>
           <input type="file" id="thumb-file" accept=".mp4" />
         </div>
 
         <div class="style-grid">
-          <div class="style-card">
+          <div class="style-card fade-up">
             <div class="style-preview warm-bar"></div>
             <div class="style-name">Warm Bar</div>
             <div class="style-desc">Gradient bar with centered title</div>
           </div>
-          <div class="style-card">
+          <div class="style-card fade-up-1">
             <div class="style-preview bold-corner"></div>
             <div class="style-name">Bold Corner</div>
             <div class="style-desc">High-contrast corner overlay</div>
           </div>
-          <div class="style-card">
+          <div class="style-card fade-up-2">
             <div class="style-preview kinetic"></div>
             <div class="style-name">Kinetic Slash</div>
             <div class="style-desc">Dynamic diagonal accent</div>
           </div>
         </div>
+
       </div>
     </div>
 
-    <!-- ── EDIT CAPTIONS ── -->
+    <!-- ══ EDIT CAPTIONS ══ -->
     <div class="tab-panel" id="tab-edit-captions">
-      <div style="padding: 40px 48px;">
-        <div class="panel-header">
-          <div class="panel-title">Edit Captions</div>
-          <p class="panel-desc">Load an SRT file, edit individual caption entries, then save back to disk.</p>
+
+      <div class="section-hero">
+        <div class="section-hero-bg" style="background-image: url('Graphic_1.png')"></div>
+        <div class="section-hero-text fade-up">
+          <h1>Edit Captions</h1>
+          <p>Open a caption file to review and edit each line. Download when you&rsquo;re done.</p>
+        </div>
+      </div>
+
+      <div class="panel-body">
+
+        <div class="caption-toolbar fade-up">
+          <button class="btn-ghost">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/>
+              <polyline points="14 2 14 8 20 8"/>
+            </svg>
+            Open Caption File
+          </button>
+          <button class="btn">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/>
+              <polyline points="7 10 12 15 17 10"/>
+              <line x1="12" y1="15" x2="12" y2="3"/>
+            </svg>
+            Download Edited Captions
+          </button>
         </div>
 
-        <div style="display:flex; gap:10px; margin-bottom:20px;">
-          <button class="btn-ghost">Load SRT File</button>
-          <button class="btn" disabled>Save SRT</button>
+        <!-- Empty state (shown when no SRT loaded) -->
+        <div class="caption-empty fade-up-1">
+          <svg width="56" height="56" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/>
+            <polyline points="14 2 14 8 20 8"/>
+            <line x1="16" y1="13" x2="8" y2="13"/>
+            <line x1="16" y1="17" x2="8" y2="17"/>
+            <polyline points="10 9 9 9 8 9"/>
+          </svg>
+          <h4>No caption file open yet</h4>
+          <p>Click &ldquo;Open Caption File&rdquo; to load an SRT and start editing.</p>
+          <button class="btn">Open Caption File</button>
         </div>
 
-        <table class="srt-table">
-          <thead>
-            <tr>
-              <th>#</th>
-              <th>Timecode</th>
-              <th>Caption Text</th>
-            </tr>
-          </thead>
-          <tbody id="srt-body">
-            <tr><td colspan="3" style="color:var(--muted);padding:28px;text-align:center;font-size:13px;">No SRT loaded</td></tr>
-          </tbody>
-        </table>
+        <!-- Caption entry list (populated by JS when SRT loads) -->
+        <div class="caption-list" id="srt-body" style="display:none;"></div>
+
       </div>
     </div>
 
@@ -776,7 +840,7 @@
     const hdrLabel = document.getElementById('hdr-label');
     hdrDot.className = 'dot connected';
     hdrLabel.textContent = 'Backend connected';
-    hdrLabel.style.color = '#166534';
+    hdrLabel.style.color = '#2D6A4F';
 
     // Transition views smoothly
     setTimeout(() => {
@@ -789,11 +853,10 @@
     const hdrDot = document.getElementById('hdr-dot');
     const hdrLabel = document.getElementById('hdr-label');
     hdrDot.className = 'dot waiting';
-    hdrLabel.textContent = 'Connecting...';
+    hdrLabel.textContent = 'Connecting\u2026';
     hdrLabel.style.color = '';
 
     if (backendOnline) {
-      // Lost connection — could show a toast, for now just reload setup
       backendOnline = false;
       document.getElementById('app-view').classList.remove('active');
       document.getElementById('setup-view').classList.add('active');
