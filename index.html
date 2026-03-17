@@ -4,583 +4,469 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Foundry Video Editor</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
     :root {
-      --bg:          #F8F7F2;
-      --surface:     #FFFFFF;
-      --surface-alt: #F2F0E9;
-      --border:      #E6E4DB;
-      --border-strong: #D4D1C6;
-      --orange:      #C84826;
-      --orange-mid:  #E05530;
-      --orange-tint: #FDF0EC;
-      --orange-tint2:#FAE3DC;
-      --amber:       #B45309;
-      --amber-tint:  #FEF3C7;
-      --green:       #166534;
-      --green-tint:  #DCFCE7;
-      --text:        #1C1C1A;
-      --text-2:      #4A4A45;
-      --muted:       #8C8C84;
-      --shadow-sm:   0 1px 3px rgba(0,0,0,0.07), 0 1px 2px rgba(0,0,0,0.05);
-      --shadow-md:   0 4px 12px rgba(0,0,0,0.08), 0 2px 4px rgba(0,0,0,0.05);
-      --font:        'Segoe UI', system-ui, -apple-system, sans-serif;
-      --font-mono:   'Consolas', 'Cascadia Code', monospace;
-      --radius:      10px;
-      --radius-lg:   14px;
+      --orange:        #E8541A;
+      --orange-tint:   #FEF0EB;
+      --orange-tint2:  #FBDDD1;
+      --sidebar-bg:    #F7F7F5;
+      --bg:            #FAFAF8;
+      --surface:       #FFFFFF;
+      --border:        #E8E6DE;
+      --border-2:      #D8D5CB;
+      --text:          #1A1A1A;
+      --text-2:        #4A4A47;
+      --muted:         #6B6B6B;
+      --muted-light:   #A8A8A2;
+      --green:         #22C55E;
+      --amber:         #F59E0B;
+      --shadow-sm:     0 1px 3px rgba(0,0,0,0.06), 0 1px 2px rgba(0,0,0,0.04);
+      --shadow-md:     0 4px 16px rgba(0,0,0,0.08), 0 2px 6px rgba(0,0,0,0.05);
+      --font:          'Inter', system-ui, -apple-system, sans-serif;
+      --font-mono:     'Consolas', 'Cascadia Code', monospace;
+      --r:             10px;
+      --r-lg:          14px;
     }
 
-    body {
+    html, body {
+      height: 100%;
       font-family: var(--font);
-      background: var(--bg);
       color: var(--text);
-      min-height: 100vh;
-      display: flex;
-      flex-direction: column;
       -webkit-font-smoothing: antialiased;
     }
 
-    /* ── HEADER ── */
-    header {
-      background: var(--surface);
-      border-bottom: 1px solid var(--border);
-      padding: 0 28px;
-      height: 54px;
+    body {
       display: flex;
-      align-items: center;
-      gap: 10px;
-      flex-shrink: 0;
-      box-shadow: var(--shadow-sm);
-    }
-    .logo-mark {
-      width: 30px; height: 30px;
-      background: var(--orange);
-      border-radius: 7px;
-      display: flex; align-items: center; justify-content: center;
-      font-size: 12px; font-weight: 800; color: #fff;
-      letter-spacing: -0.5px;
-      flex-shrink: 0;
-    }
-    header h1 {
-      font-size: 14px;
-      font-weight: 600;
-      color: var(--text);
-      letter-spacing: 0.01em;
-    }
-    header h1 span { color: var(--orange); }
-    .header-divider {
-      width: 1px; height: 18px;
-      background: var(--border);
-      margin: 0 4px;
+      flex-direction: row;
+      overflow: hidden;
     }
 
-    #header-status {
-      margin-left: auto;
-      display: flex;
-      align-items: center;
-      gap: 7px;
-      font-size: 12px;
-      color: var(--muted);
-      font-weight: 500;
-    }
+    /* ─── DOTS ─── */
     .dot {
-      width: 7px; height: 7px;
+      width: 8px; height: 8px;
       border-radius: 50%;
-      background: var(--muted);
+      background: var(--muted-light);
       flex-shrink: 0;
     }
-    .dot.waiting {
-      background: #F59E0B;
-      animation: pulse 1.6s ease-in-out infinite;
-    }
-    .dot.connected {
-      background: #22C55E;
-      animation: none;
-    }
-    @keyframes pulse {
-      0%, 100% { opacity: 1; }
-      50% { opacity: 0.3; }
-    }
+    .dot.waiting  { background: var(--amber); animation: pulse 1.6s ease-in-out infinite; }
+    .dot.connected { background: var(--green); animation: none; }
+    @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.3} }
 
-    /* ── VIEWS ── */
-    #setup-view, #app-view {
-      flex: 1;
-      display: none;
-    }
-    #setup-view.active, #app-view.active { display: flex; }
-
-    /* ── SETUP WIZARD ── */
+    /* ─── SETUP WIZARD (full-screen overlay) ─── */
     #setup-view {
+      display: none;
+      position: fixed; inset: 0; z-index: 100;
+      background: var(--bg);
       align-items: center;
       justify-content: center;
       padding: 40px 24px;
-      background: var(--bg);
     }
+    #setup-view.active { display: flex; }
+
     .wizard-card {
       background: var(--surface);
       border: 1px solid var(--border);
-      border-radius: var(--radius-lg);
+      border-radius: var(--r-lg);
       padding: 44px 40px;
       max-width: 500px;
       width: 100%;
       box-shadow: var(--shadow-md);
     }
-    .wizard-logo {
-      display: flex;
-      align-items: center;
-      gap: 10px;
-      margin-bottom: 24px;
+    .wizard-brand {
+      display: flex; align-items: center; gap: 10px;
+      margin-bottom: 28px;
     }
-    .wizard-logo .logo-mark { width: 36px; height: 36px; font-size: 13px; border-radius: 9px; }
-    .wizard-logo-text {
-      font-size: 17px;
-      font-weight: 700;
-      color: var(--text);
+    .wiz-mark {
+      width: 34px; height: 34px; border-radius: 8px;
+      background: var(--orange);
+      display: flex; align-items: center; justify-content: center;
+      font-size: 12px; font-weight: 700; color: #fff; letter-spacing: -0.5px;
+      flex-shrink: 0;
     }
-    .wizard-logo-text span { color: var(--orange); }
+    .wiz-wordmark { line-height: 1.2; }
+    .wiz-wordmark strong { display: block; font-size: 15px; font-weight: 700; color: var(--orange); }
+    .wiz-wordmark span   { display: block; font-size: 12px; font-weight: 400; color: var(--muted); }
+
     .wizard-alert {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      background: var(--orange-tint);
-      border: 1px solid var(--orange-tint2);
-      border-radius: 8px;
-      padding: 10px 14px;
-      font-size: 13px;
-      font-weight: 500;
-      color: var(--orange);
+      display: flex; align-items: center; gap: 8px;
+      background: var(--orange-tint); border: 1px solid var(--orange-tint2);
+      border-radius: 8px; padding: 10px 14px;
+      font-size: 13px; font-weight: 600; color: var(--orange);
       margin-bottom: 20px;
     }
     .wizard-alert::before {
-      content: '';
-      width: 5px; height: 5px;
-      border-radius: 50%;
-      background: var(--orange);
-      flex-shrink: 0;
+      content: ''; width: 6px; height: 6px; border-radius: 50%;
+      background: var(--orange); flex-shrink: 0;
     }
     .wizard-desc {
-      font-size: 13px;
-      color: var(--text-2);
-      line-height: 1.65;
-      margin-bottom: 24px;
+      font-size: 13px; color: var(--text-2); line-height: 1.65;
+      margin-bottom: 22px;
     }
     .wizard-steps {
-      background: var(--surface-alt);
-      border: 1px solid var(--border);
-      border-radius: var(--radius);
-      padding: 18px 20px;
-      margin-bottom: 24px;
+      background: var(--sidebar-bg); border: 1px solid var(--border);
+      border-radius: var(--r); padding: 16px 20px; margin-bottom: 22px;
     }
-    .wizard-steps ol {
-      list-style: none;
-      counter-reset: step;
-    }
+    .wizard-steps ol { list-style: none; counter-reset: step; }
     .wizard-steps li {
       counter-increment: step;
-      display: flex;
-      align-items: flex-start;
-      gap: 11px;
-      padding: 9px 0;
-      font-size: 13px;
-      color: var(--text);
+      display: flex; align-items: flex-start; gap: 11px;
+      padding: 9px 0; font-size: 13px; color: var(--text); line-height: 1.55;
       border-bottom: 1px solid var(--border);
-      line-height: 1.55;
     }
     .wizard-steps li:last-child { border-bottom: none; }
     .wizard-steps li::before {
       content: counter(step);
       min-width: 20px; height: 20px;
-      background: var(--orange);
-      color: #fff;
-      border-radius: 50%;
-      font-size: 10px;
-      font-weight: 700;
+      background: var(--orange); color: #fff; border-radius: 50%;
+      font-size: 10px; font-weight: 700;
       display: flex; align-items: center; justify-content: center;
-      flex-shrink: 0;
-      margin-top: 2px;
+      flex-shrink: 0; margin-top: 2px;
     }
     .wizard-steps li code {
-      background: var(--surface);
-      border: 1px solid var(--border);
-      padding: 1px 6px;
-      border-radius: 4px;
-      font-size: 11.5px;
-      font-family: var(--font-mono);
-      color: var(--orange);
-    }
-    .wizard-download {
-      margin-bottom: 20px;
-    }
-    .wizard-download p {
-      font-size: 12px;
-      color: var(--muted);
-      margin-bottom: 10px;
+      background: var(--surface); border: 1px solid var(--border);
+      padding: 1px 6px; border-radius: 4px;
+      font-size: 11.5px; font-family: var(--font-mono); color: var(--orange);
     }
     .btn-download {
-      display: inline-flex;
-      align-items: center;
-      gap: 7px;
-      background: var(--orange);
-      color: #fff;
-      font-size: 13px;
-      font-weight: 600;
-      padding: 9px 20px;
-      border-radius: 8px;
-      text-decoration: none;
-      transition: background 0.15s;
-      letter-spacing: 0.01em;
+      display: inline-flex; align-items: center; gap: 7px;
+      background: var(--orange); color: #fff;
+      font-size: 13px; font-weight: 600; padding: 9px 20px;
+      border-radius: 8px; text-decoration: none;
+      transition: opacity 0.15s; margin-bottom: 4px;
     }
-    .btn-download:hover { background: var(--orange-mid); }
-    .btn-download::before {
-      content: '';
-      width: 13px; height: 13px;
-      background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='white'%3E%3Cpath d='M8 1v9M5 7l3 3 3-3M3 13h10' stroke='white' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round' fill='none'/%3E%3C/svg%3E") center/contain no-repeat;
-    }
+    .btn-download:hover { opacity: 0.88; }
+    .wizard-dl-note { font-size: 12px; color: var(--muted); margin-bottom: 18px; }
     .wizard-status {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      font-size: 12.5px;
-      color: var(--muted);
-      font-weight: 500;
-      padding-top: 16px;
-      border-top: 1px solid var(--border);
-      margin-top: 4px;
+      display: flex; align-items: center; gap: 8px;
+      font-size: 12.5px; color: var(--muted); font-weight: 500;
+      padding-top: 16px; border-top: 1px solid var(--border);
     }
-    .wizard-status .dot { width: 8px; height: 8px; }
 
-    /* ── MAIN APP ── */
-    #app-view { flex-direction: column; }
+    /* ─── APP VIEW ─── */
+    #app-view {
+      display: none;
+      flex: 1; flex-direction: row;
+      height: 100vh; overflow: hidden;
+    }
+    #app-view.active { display: flex; }
 
-    /* Tab bar */
-    .tab-bar {
-      background: var(--surface);
-      border-bottom: 1px solid var(--border);
-      display: flex;
-      padding: 0 24px;
-      gap: 2px;
+    /* ─── SIDEBAR ─── */
+    .sidebar {
+      width: 220px; min-width: 220px;
+      height: 100vh;
+      background: var(--sidebar-bg);
+      border-right: 1px solid var(--border);
+      display: flex; flex-direction: column;
       flex-shrink: 0;
     }
+
+    .sidebar-brand {
+      padding: 22px 20px 18px;
+      border-bottom: 1px solid var(--border);
+      flex-shrink: 0;
+    }
+    .brand-name {
+      display: block;
+      font-size: 14px; font-weight: 700;
+      color: var(--orange);
+      letter-spacing: -0.02em;
+      line-height: 1.2;
+    }
+    .brand-sub {
+      display: block;
+      font-size: 12px; font-weight: 400;
+      color: var(--muted);
+      margin-top: 1px;
+    }
+
+    .sidebar-nav {
+      flex: 1;
+      padding: 10px 0;
+      overflow-y: auto;
+    }
+
     .tab-btn {
+      width: 100%;
+      display: flex; align-items: center; gap: 10px;
+      padding: 10px 18px 10px 17px;
       background: none;
       border: none;
-      color: var(--muted);
+      border-left: 3px solid transparent;
       font-family: var(--font);
-      font-size: 13px;
-      font-weight: 500;
-      padding: 13px 14px 11px;
+      font-size: 13.5px; font-weight: 500;
+      color: var(--muted);
+      text-align: left;
       cursor: pointer;
-      border-bottom: 2px solid transparent;
-      transition: color 0.15s, border-color 0.15s;
-      letter-spacing: 0.01em;
+      transition: background 0.12s, color 0.12s, border-color 0.12s;
+      line-height: 1.2;
     }
-    .tab-btn:hover { color: var(--text); }
+    .tab-btn:hover { background: #EFEDE8; color: var(--text); }
     .tab-btn.active {
+      background: var(--orange-tint);
       color: var(--orange);
-      border-bottom-color: var(--orange);
+      border-left-color: var(--orange);
       font-weight: 600;
     }
+    .tab-btn svg { flex-shrink: 0; }
 
-    /* Tab panels */
-    .tab-panel {
-      display: none;
-      flex: 1;
-      padding: 32px 36px;
-      overflow-y: auto;
-      max-width: 900px;
+    .sidebar-footer {
+      padding: 14px 20px;
+      border-top: 1px solid var(--border);
+      flex-shrink: 0;
     }
+    .status-row {
+      display: flex; align-items: center; gap: 8px;
+      font-size: 12px; font-weight: 500; color: var(--muted);
+    }
+
+    /* ─── MAIN CONTENT ─── */
+    .main-content {
+      flex: 1; height: 100vh;
+      overflow-y: auto;
+      background: var(--bg);
+    }
+
+    .tab-panel { display: none; }
     .tab-panel.active { display: block; }
 
-    /* Panel heading */
-    .panel-header { margin-bottom: 28px; }
-    .panel-title {
-      font-size: 19px;
-      font-weight: 700;
-      color: var(--text);
-      letter-spacing: -0.01em;
-      margin-bottom: 4px;
+    /* ─── SHARED PANEL ELEMENTS ─── */
+    .btn {
+      display: inline-flex; align-items: center; gap: 7px;
+      background: var(--orange); color: #fff;
+      border: none; font-family: var(--font);
+      font-size: 13.5px; font-weight: 600;
+      padding: 10px 20px; border-radius: 8px;
+      cursor: pointer; transition: opacity 0.15s;
+      letter-spacing: 0.01em;
     }
-    .panel-desc {
-      font-size: 13px;
-      color: var(--text-2);
-      line-height: 1.6;
+    .btn:hover { opacity: 0.88; }
+    .btn:disabled { opacity: 0.35; cursor: not-allowed; }
+    .btn-ghost {
+      display: inline-flex; align-items: center; gap: 7px;
+      background: var(--surface); border: 1px solid var(--border-2);
+      color: var(--text-2); font-family: var(--font);
+      font-size: 13px; font-weight: 500;
+      padding: 9px 18px; border-radius: 8px;
+      cursor: pointer; transition: border-color 0.15s, color 0.15s;
     }
+    .btn-ghost:hover { border-color: var(--orange); color: var(--orange); }
 
-    /* Cards */
     .card {
-      background: var(--surface);
-      border: 1px solid var(--border);
-      border-radius: var(--radius);
-      padding: 20px 22px;
-      margin-bottom: 16px;
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: var(--r); padding: 20px 22px;
       box-shadow: var(--shadow-sm);
-      transition: border-color 0.15s, box-shadow 0.15s;
     }
-    .card:hover {
-      border-color: var(--orange-tint2);
-      box-shadow: var(--shadow-md);
-    }
-    .card h3 {
-      font-size: 13.5px;
-      font-weight: 600;
-      margin-bottom: 6px;
-      color: var(--text);
-    }
-    .card p {
-      font-size: 13px;
-      color: var(--text-2);
-      line-height: 1.6;
-    }
+    .card h3 { font-size: 14px; font-weight: 600; color: var(--text); margin-bottom: 6px; }
+    .card p  { font-size: 13px; color: var(--text-2); line-height: 1.65; }
 
-    /* File drop zone */
     .drop-zone {
-      border: 2px dashed var(--border-strong);
-      border-radius: var(--radius);
-      padding: 36px 24px;
-      text-align: center;
+      background: var(--surface);
+      border: 2px dashed var(--border-2);
+      border-radius: var(--r);
+      display: flex; flex-direction: column;
+      align-items: center; justify-content: center;
+      text-align: center; padding: 32px 20px;
       cursor: pointer;
       transition: border-color 0.15s, background 0.15s;
-      margin-bottom: 18px;
-      background: var(--surface);
+      min-height: 180px;
     }
     .drop-zone:hover, .drop-zone.dragover {
       border-color: var(--orange);
       background: var(--orange-tint);
     }
-    .dz-icon {
-      font-size: 28px;
-      margin-bottom: 10px;
-      line-height: 1;
-    }
-    .dz-label {
-      font-size: 14px;
-      font-weight: 600;
-      color: var(--text);
-      margin-bottom: 3px;
-    }
-    .dz-sub {
-      font-size: 12px;
-      color: var(--muted);
-    }
     .drop-zone input[type=file] { display: none; }
+    .dz-icon { font-size: 48px; line-height: 1; margin-bottom: 14px; }
+    .dz-label { font-size: 15px; font-weight: 600; color: var(--text); margin-bottom: 4px; }
+    .dz-sub   { font-size: 12.5px; color: var(--muted); line-height: 1.5; }
 
-    /* Buttons */
-    .btn {
-      display: inline-flex;
-      align-items: center;
-      gap: 6px;
-      background: var(--orange);
-      color: #fff;
-      border: none;
-      font-family: var(--font);
-      font-size: 13px;
-      font-weight: 600;
-      padding: 9px 18px;
-      border-radius: 8px;
-      cursor: pointer;
-      transition: background 0.15s;
-      letter-spacing: 0.01em;
+    /* ─── CLIPS TAB ─── */
+    #tab-clips {
+      padding: 0;
     }
-    .btn:hover { background: var(--orange-mid); }
-    .btn:disabled {
-      opacity: 0.38;
-      cursor: not-allowed;
-    }
-    .btn-ghost {
-      display: inline-flex;
-      align-items: center;
-      gap: 6px;
+
+    .clip-hero {
+      padding: 40px 48px 32px;
+      border-bottom: 1px solid var(--border);
       background: var(--surface);
-      border: 1px solid var(--border-strong);
-      color: var(--text-2);
-      font-family: var(--font);
-      font-size: 13px;
-      font-weight: 500;
-      padding: 9px 18px;
-      border-radius: 8px;
-      cursor: pointer;
-      transition: border-color 0.15s, color 0.15s;
+      display: flex; align-items: flex-start;
+      justify-content: space-between; gap: 24px;
     }
-    .btn-ghost:hover { border-color: var(--orange); color: var(--orange); }
-
-    /* Status badge */
-    .badge {
-      display: inline-flex;
-      align-items: center;
-      gap: 5px;
-      font-size: 10.5px;
-      font-weight: 700;
-      padding: 3px 9px;
-      border-radius: 20px;
-      letter-spacing: 0.06em;
-      text-transform: uppercase;
+    .clip-hero-text {}
+    .clip-hero-title {
+      font-size: 28px; font-weight: 700;
+      color: var(--text); letter-spacing: -0.03em;
+      line-height: 1.1; margin-bottom: 10px;
     }
-    .badge-stub {
-      background: var(--amber-tint);
-      color: var(--amber);
-      border: 1px solid #FDE68A;
+    .clip-hero-desc {
+      font-size: 14px; color: var(--text-2);
+      line-height: 1.65; max-width: 520px;
+    }
+    .btn-hero {
+      font-size: 14px; padding: 11px 26px;
+      border-radius: 9px; white-space: nowrap;
+      flex-shrink: 0; align-self: center;
+      box-shadow: 0 2px 8px rgba(232,84,26,0.3);
     }
 
-    /* Stub notice */
-    .stub-notice {
-      display: flex;
-      align-items: center;
-      gap: 10px;
-      background: var(--amber-tint);
-      border: 1px solid #FDE68A;
-      border-radius: 8px;
-      padding: 11px 14px;
-      font-size: 13px;
-      color: var(--amber);
-      margin-bottom: 20px;
-      font-weight: 500;
+    .clip-body {
+      padding: 32px 48px;
     }
 
-    /* Tags */
-    .tag-row { display: flex; gap: 7px; flex-wrap: wrap; margin-top: 12px; }
+    .drop-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+      margin-bottom: 32px;
+    }
+    .drop-zone-label {
+      display: flex; align-items: center; gap: 7px;
+      font-size: 11px; font-weight: 700;
+      text-transform: uppercase; letter-spacing: 0.07em;
+      color: var(--muted); margin-bottom: 8px;
+    }
+    .drop-zone-label svg { flex-shrink: 0; }
+
+    /* Empty state */
+    .empty-state {
+      display: flex; flex-direction: column;
+      align-items: center; justify-content: center;
+      padding: 40px 24px;
+      text-align: center;
+    }
+    .empty-state-svg { margin-bottom: 18px; opacity: 0.65; }
+    .empty-state h4 {
+      font-size: 15px; font-weight: 600; color: var(--text-2);
+      margin-bottom: 6px;
+    }
+    .empty-state p {
+      font-size: 13px; color: var(--muted); line-height: 1.6;
+      max-width: 360px;
+    }
+
+    /* Clips video player */
+    #clips-player-wrap {
+      margin-bottom: 24px;
+    }
+    #clips-video {
+      width: 100%; border-radius: 8px;
+      background: #111; border: 1px solid var(--border);
+    }
+    #clips-filename { margin-top: 8px; font-size: 12px; color: var(--muted); }
+
+    /* What Claude looks for — accented card */
+    .card-accent {
+      border-left: 4px solid var(--orange);
+      border-radius: 0 var(--r) var(--r) 0;
+    }
+    .card-accent h3 {
+      font-size: 15px; font-weight: 700;
+      margin-bottom: 8px;
+    }
+    .tag-row { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 14px; }
     .tag {
-      background: var(--surface-alt);
-      border: 1px solid var(--border);
-      border-radius: 20px;
-      padding: 3px 11px;
-      font-size: 11.5px;
-      color: var(--text-2);
-      font-weight: 500;
+      display: inline-flex; align-items: center;
+      padding: 5px 13px; border-radius: 20px;
+      font-size: 12px; font-weight: 600; letter-spacing: 0.01em;
     }
+    .tag-blue   { background: #EFF6FF; color: #1D4ED8; }
+    .tag-orange { background: var(--orange-tint); color: var(--orange); }
+    .tag-green  { background: #DCFCE7; color: #166534; }
+    .tag-purple { background: #F5F3FF; color: #6D28D9; }
+    .tag-red    { background: #FEF2F2; color: #DC2626; }
 
-    /* Style grid (Thumbnails tab) */
+    /* ─── CAPTION TAB ─── */
+    #tab-caption { padding: 40px 48px; }
+
+    /* ─── THUMBNAILS TAB ─── */
+    #tab-thumbnails { padding: 40px 48px; }
+
+    /* Style grid */
     .style-grid { display: grid; grid-template-columns: repeat(3,1fr); gap: 14px; margin-top: 20px; }
     .style-card {
-      background: var(--surface);
-      border: 1px solid var(--border);
-      border-radius: var(--radius);
-      padding: 14px;
-      text-align: center;
-      cursor: pointer;
-      transition: border-color 0.15s, box-shadow 0.15s;
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: var(--r); padding: 14px; text-align: center;
+      cursor: pointer; transition: border-color 0.15s, box-shadow 0.15s;
       box-shadow: var(--shadow-sm);
     }
-    .style-card:hover {
-      border-color: var(--orange);
-      box-shadow: 0 0 0 3px var(--orange-tint2);
-    }
-    .style-preview {
-      height: 58px;
-      border-radius: 6px;
-      margin-bottom: 10px;
-    }
+    .style-card:hover { border-color: var(--orange); box-shadow: 0 0 0 3px var(--orange-tint); }
+    .style-preview { height: 60px; border-radius: 6px; margin-bottom: 10px; }
     .style-name { font-size: 12.5px; font-weight: 600; color: var(--text); }
-    .style-desc { font-size: 11px; color: var(--muted); margin-top: 3px; }
+    .style-desc { font-size: 11.5px; color: var(--muted); margin-top: 3px; }
     .warm-bar    { background: linear-gradient(135deg, #7a3010 0%, #c84826 60%, #f5a623 100%); }
     .bold-corner { background: linear-gradient(135deg, #1a1a2e 0%, #2d2d5e 100%); }
     .kinetic     { background: linear-gradient(135deg, #0a1628 0%, #1a3a2a 60%, #2a5a1a 100%); }
 
-    /* SRT editor */
+    /* ─── EDIT CAPTIONS TAB ─── */
+    #tab-edit-captions { padding: 40px 48px; }
+
     .srt-table {
-      width: 100%;
-      border-collapse: collapse;
-      font-size: 13px;
-      background: var(--surface);
-      border-radius: var(--radius);
-      overflow: hidden;
-      box-shadow: var(--shadow-sm);
+      width: 100%; border-collapse: collapse; font-size: 13px;
+      background: var(--surface); border-radius: var(--r);
+      overflow: hidden; box-shadow: var(--shadow-sm);
       border: 1px solid var(--border);
     }
     .srt-table th {
-      text-align: left;
-      padding: 10px 14px;
-      font-size: 10.5px;
-      font-weight: 700;
-      text-transform: uppercase;
-      letter-spacing: 0.07em;
-      color: var(--muted);
-      background: var(--surface-alt);
+      text-align: left; padding: 10px 14px;
+      font-size: 10.5px; font-weight: 700;
+      text-transform: uppercase; letter-spacing: 0.07em;
+      color: var(--muted); background: var(--sidebar-bg);
       border-bottom: 1px solid var(--border);
     }
-    .srt-table td {
-      padding: 10px 14px;
-      border-bottom: 1px solid var(--border);
-      vertical-align: top;
-    }
+    .srt-table td { padding: 10px 14px; border-bottom: 1px solid var(--border); vertical-align: top; }
     .srt-table tr:last-child td { border-bottom: none; }
-    .srt-table td.ts {
-      color: var(--orange);
-      font-size: 11px;
-      font-family: var(--font-mono);
-      white-space: nowrap;
-    }
+    .srt-table td.ts { color: var(--orange); font-size: 11px; font-family: var(--font-mono); white-space: nowrap; }
     .srt-table td.txt input {
-      background: none;
-      border: none;
-      color: var(--text);
-      font-family: var(--font);
-      font-size: 13px;
-      width: 100%;
-      outline: none;
+      background: none; border: none; color: var(--text);
+      font-family: var(--font); font-size: 13px; width: 100%; outline: none;
     }
     .srt-table td.txt input:focus {
-      background: var(--orange-tint);
-      border-radius: 4px;
-      padding: 2px 6px;
-      margin: -2px -6px;
+      background: var(--orange-tint); border-radius: 4px; padding: 2px 6px; margin: -2px -6px;
     }
 
-    /* Clips video player */
-    #clips-player-wrap video {
-      border-radius: 8px;
-      background: var(--surface-alt);
-      border: 1px solid var(--border);
-    }
-    #clips-filename {
-      margin: 8px 0 0;
-      font-size: 12px;
-      color: var(--muted);
-    }
+    /* ─── SHARED PANEL HEADER ─── */
+    .panel-header { margin-bottom: 28px; }
+    .panel-title { font-size: 20px; font-weight: 700; color: var(--text); letter-spacing: -0.02em; margin-bottom: 5px; }
+    .panel-desc  { font-size: 13.5px; color: var(--text-2); line-height: 1.6; }
   </style>
 </head>
 <body>
 
-<!-- HEADER -->
-<header>
-  <div class="logo-mark">FV</div>
-  <h1>Foundry <span>Video Editor</span></h1>
-  <div class="header-divider"></div>
-  <div id="header-status">
-    <div class="dot waiting" id="hdr-dot"></div>
-    <span id="hdr-label">Connecting...</span>
-  </div>
-</header>
-
-<!-- SETUP WIZARD VIEW -->
+<!-- ══════════════════════════════════════════
+     SETUP WIZARD (shown until backend connects)
+     ══════════════════════════════════════════ -->
 <div id="setup-view">
   <div class="wizard-card">
-    <div class="wizard-logo">
-      <div class="logo-mark">FV</div>
-      <div class="wizard-logo-text">Foundry <span>Video Editor</span></div>
+    <div class="wizard-brand">
+      <div class="wiz-mark">FV</div>
+      <div class="wiz-wordmark">
+        <strong>Candler Foundry</strong>
+        <span>Video Editor</span>
+      </div>
     </div>
 
     <div class="wizard-alert">Local backend not detected</div>
 
     <p class="wizard-desc">
       This app needs a small helper program running on your computer to process video.
-      Your team lead has already set this up in Dropbox &mdash; just follow the steps below.
+      Your team lead has already set this up in Dropbox &mdash; follow the steps below to get started.
     </p>
 
     <div class="wizard-steps">
       <ol>
-        <li>Make sure <strong>Python 3.14</strong> is installed. If not, download it from <strong>python.org</strong> and check <strong>"Add Python to PATH"</strong> during install.</li>
+        <li>Make sure <strong>Python 3.14</strong> is installed. Download from <strong>python.org</strong> and check <strong>"Add Python to PATH"</strong> during install.</li>
         <li>Open <strong>Dropbox &rarr; Scripts &rarr; Video Editor Downloads &rarr; foundry-video-editor-backend</strong></li>
-        <li>Double-click <strong>start_server.bat</strong> &mdash; a window will open and install everything automatically</li>
+        <li>Double-click <strong>start_server.bat</strong> &mdash; a window opens and installs everything automatically</li>
         <li>Keep that window open and return here &mdash; this page will connect on its own</li>
       </ol>
     </div>
 
-    <div class="wizard-download">
-      <p>Don't have Dropbox access yet? Download the setup package instead.</p>
-      <a class="btn-download" href="foundry-video-editor-backend.zip" download>Download Setup Package (.zip)</a>
-    </div>
+    <p class="wizard-dl-note">Don't have Dropbox access? Download the setup package below.</p>
+    <a class="btn-download" href="foundry-video-editor-backend.zip" download>Download Setup Package (.zip)</a>
 
     <div class="wizard-status">
       <div class="dot waiting" id="wiz-dot"></div>
@@ -589,147 +475,266 @@
   </div>
 </div>
 
-<!-- MAIN APP VIEW -->
+<!-- ══════════════════════════════════════════
+     MAIN APP VIEW
+     ══════════════════════════════════════════ -->
 <div id="app-view">
-  <nav class="tab-bar">
-    <button class="tab-btn active" data-tab="caption">Caption Videos</button>
-    <button class="tab-btn" data-tab="edit-captions">Edit Captions</button>
-    <button class="tab-btn" data-tab="thumbnails">Thumbnails</button>
-    <button class="tab-btn" data-tab="clips">Clips</button>
-  </nav>
 
-  <!-- TAB: Caption Videos -->
-  <div class="tab-panel active" id="tab-caption">
-    <div class="panel-header">
-      <div class="panel-title">Caption Videos</div>
-      <p class="panel-desc">Select one or more MP4 files, generate transcripts via Whisper, then burn captions directly into the video.</p>
+  <!-- SIDEBAR -->
+  <aside class="sidebar">
+    <div class="sidebar-brand">
+      <span class="brand-name">Candler Foundry</span>
+      <span class="brand-sub">Video Editor</span>
     </div>
 
-    <div class="stub-notice">
-      <span class="badge badge-stub">Session 2</span>
-      File upload and ffmpeg burn will be wired in Session 2.
-    </div>
+    <nav class="sidebar-nav">
 
-    <div class="drop-zone" id="caption-drop" onclick="document.getElementById('caption-file').click()">
-      <div class="dz-icon">&#x1F3AC;</div>
-      <div class="dz-label">Drop MP4 files here or click to browse</div>
-      <div class="dz-sub">Supports .mp4 &mdash; multiple files allowed</div>
-      <input type="file" id="caption-file" accept=".mp4" multiple />
-    </div>
+      <!-- Clips -->
+      <button class="tab-btn active" data-tab="clips">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="6" cy="6" r="3"/><circle cx="6" cy="18" r="3"/>
+          <path d="M20 4L8.12 15.88M14.47 14.48L20 20M8.12 8.12L12 12"/>
+        </svg>
+        Clips
+      </button>
 
-    <div class="card">
-      <h3>Options</h3>
-      <p>Transcript type, font size, and caption style settings will appear here once backend is wired.</p>
-    </div>
+      <!-- Caption Videos -->
+      <button class="tab-btn" data-tab="caption">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+          <rect x="2" y="4" width="20" height="16" rx="2"/>
+          <path d="M8 14h8M8 10h4"/>
+        </svg>
+        Caption Videos
+      </button>
 
-    <button class="btn" disabled>Generate Captions</button>
-  </div>
+      <!-- Thumbnails -->
+      <button class="tab-btn" data-tab="thumbnails">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+          <rect x="3" y="3" width="18" height="18" rx="2"/>
+          <circle cx="8.5" cy="8.5" r="1.5"/>
+          <path d="M21 15l-5-5L5 21"/>
+        </svg>
+        Thumbnails
+      </button>
 
-  <!-- TAB: Edit Captions -->
-  <div class="tab-panel" id="tab-edit-captions">
-    <div class="panel-header">
-      <div class="panel-title">Edit Captions</div>
-      <p class="panel-desc">Load an SRT file, edit individual caption entries, then save back to disk.</p>
-    </div>
+      <!-- Edit Captions -->
+      <button class="tab-btn" data-tab="edit-captions">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
+          <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
+        </svg>
+        Edit Captions
+      </button>
 
-    <div class="stub-notice">
-      <span class="badge badge-stub">Session 5</span>
-      SRT load/edit/save will be wired in Session 5.
-    </div>
+    </nav>
 
-    <div style="display:flex; gap:10px; margin-bottom:20px;">
-      <button class="btn-ghost">Load SRT File</button>
-      <button class="btn" disabled>Save SRT</button>
-    </div>
-
-    <table class="srt-table">
-      <thead>
-        <tr>
-          <th>#</th>
-          <th>Timecode</th>
-          <th>Caption Text</th>
-        </tr>
-      </thead>
-      <tbody id="srt-body">
-        <tr><td colspan="3" style="color:var(--muted);padding:28px;text-align:center;font-size:13px;">No SRT loaded</td></tr>
-      </tbody>
-    </table>
-  </div>
-
-  <!-- TAB: Thumbnails -->
-  <div class="tab-panel" id="tab-thumbnails">
-    <div class="panel-header">
-      <div class="panel-title">Thumbnails</div>
-      <p class="panel-desc">Extract frames, transcribe with Whisper (tiny), correct with Claude AI, and generate thumbnails in three styles.</p>
-    </div>
-
-    <div class="stub-notice">
-      <span class="badge badge-stub">Session 3</span>
-      Frame extraction, Whisper, Claude AI correction, and style rendering will be wired in Session 3.
-    </div>
-
-    <div class="drop-zone" onclick="document.getElementById('thumb-file').click()">
-      <div class="dz-icon">&#x1F5BC;</div>
-      <div class="dz-label">Drop an MP4 here to extract frames</div>
-      <div class="dz-sub">Whisper (tiny model) will transcribe for AI title generation</div>
-      <input type="file" id="thumb-file" accept=".mp4" />
-    </div>
-
-    <div class="style-grid">
-      <div class="style-card">
-        <div class="style-preview warm-bar"></div>
-        <div class="style-name">Warm Bar</div>
-        <div class="style-desc">Gradient bar with centered title</div>
-      </div>
-      <div class="style-card">
-        <div class="style-preview bold-corner"></div>
-        <div class="style-name">Bold Corner</div>
-        <div class="style-desc">High-contrast corner overlay</div>
-      </div>
-      <div class="style-card">
-        <div class="style-preview kinetic"></div>
-        <div class="style-name">Kinetic Slash</div>
-        <div class="style-desc">Dynamic diagonal accent</div>
+    <div class="sidebar-footer">
+      <div class="status-row">
+        <div class="dot waiting" id="hdr-dot"></div>
+        <span id="hdr-label">Connecting...</span>
       </div>
     </div>
-  </div>
+  </aside>
 
-  <!-- TAB: Clips -->
-  <div class="tab-panel" id="tab-clips">
-    <div class="panel-header">
-      <div class="panel-title">Clips</div>
-      <p class="panel-desc">Browse your video, find viral clip candidates via Claude AI, preview segments, trim, and export.</p>
-    </div>
+  <!-- MAIN CONTENT AREA -->
+  <main class="main-content">
 
-    <div class="stub-notice">
-      <span class="badge badge-stub">Session 4</span>
-      Clip candidate detection, word-level JSON picker, and preview will be wired in Session 4.
-    </div>
+    <!-- ── CLIPS ── -->
+    <div class="tab-panel active" id="tab-clips">
 
-    <div class="drop-zone" id="clips-dropzone" onclick="document.getElementById('clips-file').click()">
-      <div class="dz-icon">&#x2702;</div>
-      <div class="dz-label" id="clips-dz-label">Drop an MP4 to find clip candidates</div>
-      <div class="dz-sub">Whisper (medium model) + Claude will identify high-value moments</div>
-      <input type="file" id="clips-file" accept=".mp4" style="display:none;" />
-    </div>
+      <div class="clip-hero">
+        <div class="clip-hero-text">
+          <h1 class="clip-hero-title">Clip Creator</h1>
+          <p class="clip-hero-desc">
+            Drop your MP4 and optional word-timing JSON. Claude will identify the strongest clip candidates &mdash; quotable moments, high-energy exchanges, and segments with clear narrative arcs.
+          </p>
+        </div>
+        <button class="btn btn-hero" onclick="document.getElementById('clips-file').click()">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="6" cy="6" r="3"/><circle cx="6" cy="18" r="3"/>
+            <path d="M20 4L8.12 15.88M14.47 14.48L20 20M8.12 8.12L12 12"/>
+          </svg>
+          Find Clips
+        </button>
+      </div>
 
-    <div id="clips-player-wrap" style="display:none; margin-top:16px;">
-      <video id="clips-video" controls style="width:100%;"></video>
-      <p id="clips-filename"></p>
-    </div>
+      <div class="clip-body">
 
-    <div class="card">
-      <h3>What Claude looks for</h3>
-      <p>Strong standalone moments, quotable statements, high-energy exchanges, and segments with clear narrative arcs that work as short-form content.</p>
-      <div class="tag-row">
-        <span class="tag">Quotable</span>
-        <span class="tag">High energy</span>
-        <span class="tag">Self-contained</span>
-        <span class="tag">Narrative arc</span>
-        <span class="tag">Emotional peak</span>
+        <!-- Two-column drop zones -->
+        <div class="drop-grid">
+          <div>
+            <div class="drop-zone-label">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M15 10l4.553-2.276A1 1 0 0121 8.724v6.552a1 1 0 01-1.447.894L15 14M3 8a2 2 0 012-2h10a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2V8z"/>
+              </svg>
+              Video File
+            </div>
+            <div class="drop-zone" id="clips-dropzone" onclick="document.getElementById('clips-file').click()">
+              <div class="dz-icon">&#x1F3AC;</div>
+              <div class="dz-label" id="clips-dz-label">Drop MP4 here</div>
+              <div class="dz-sub">or click to browse &mdash; .mp4 files only</div>
+              <input type="file" id="clips-file" accept=".mp4" />
+            </div>
+          </div>
+
+          <div>
+            <div class="drop-zone-label">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/>
+                <line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/>
+              </svg>
+              Word Timing JSON
+            </div>
+            <div class="drop-zone" id="words-dropzone" onclick="document.getElementById('words-file').click()">
+              <div class="dz-icon">&#x1F4C4;</div>
+              <div class="dz-label">Drop Words JSON here</div>
+              <div class="dz-sub">Whisper word-level output &mdash; optional but improves precision</div>
+              <input type="file" id="words-file" accept=".json" />
+            </div>
+          </div>
+        </div>
+
+        <!-- Video player (hidden until file selected) -->
+        <div id="clips-player-wrap" style="display:none; margin-bottom:24px;">
+          <video id="clips-video" controls></video>
+          <p id="clips-filename"></p>
+        </div>
+
+        <!-- Empty state illustration -->
+        <div class="empty-state" id="clips-empty-state">
+          <div class="empty-state-svg">
+            <svg width="96" height="72" viewBox="0 0 96 72" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <!-- Film strip body -->
+              <rect x="8" y="16" width="80" height="40" rx="4" fill="#F0EDE6" stroke="#D4D0C6" stroke-width="1.5"/>
+              <!-- Sprocket holes top -->
+              <rect x="14" y="12" width="8" height="8" rx="2" fill="#D4D0C6"/>
+              <rect x="30" y="12" width="8" height="8" rx="2" fill="#D4D0C6"/>
+              <rect x="46" y="12" width="8" height="8" rx="2" fill="#D4D0C6"/>
+              <rect x="62" y="12" width="8" height="8" rx="2" fill="#D4D0C6"/>
+              <!-- Sprocket holes bottom -->
+              <rect x="14" y="52" width="8" height="8" rx="2" fill="#D4D0C6"/>
+              <rect x="30" y="52" width="8" height="8" rx="2" fill="#D4D0C6"/>
+              <rect x="46" y="52" width="8" height="8" rx="2" fill="#D4D0C6"/>
+              <rect x="62" y="52" width="8" height="8" rx="2" fill="#D4D0C6"/>
+              <!-- Frame windows -->
+              <rect x="14" y="22" width="18" height="28" rx="2" fill="#E0DDD5"/>
+              <rect x="39" y="22" width="18" height="28" rx="2" fill="#E0DDD5"/>
+              <rect x="64" y="22" width="18" height="28" rx="2" fill="#E0DDD5"/>
+              <!-- Scissors overlay -->
+              <circle cx="76" cy="58" r="10" fill="#FAFAF8" stroke="#D4D0C6" stroke-width="1.5"/>
+              <path d="M70 52l12 12M82 52l-12 12" stroke="#B8B4AA" stroke-width="2" stroke-linecap="round"/>
+              <circle cx="69" cy="51" r="3" fill="none" stroke="#B8B4AA" stroke-width="1.5"/>
+              <circle cx="83" cy="63" r="3" fill="none" stroke="#B8B4AA" stroke-width="1.5"/>
+            </svg>
+          </div>
+          <h4>Ready to find your best clips</h4>
+          <p>Drop an MP4 above and Claude will scan for quotable moments, high-energy exchanges, and segments that work as short-form content.</p>
+        </div>
+
+        <!-- What Claude looks for -->
+        <div class="card card-accent">
+          <h3>What Claude looks for</h3>
+          <p>Strong standalone moments that work without context &mdash; quotable statements, emotional peaks, and segments with a clear beginning, middle, and end.</p>
+          <div class="tag-row">
+            <span class="tag tag-blue">Quotable</span>
+            <span class="tag tag-orange">High energy</span>
+            <span class="tag tag-green">Self-contained</span>
+            <span class="tag tag-purple">Narrative arc</span>
+            <span class="tag tag-red">Emotional peak</span>
+          </div>
+        </div>
+
       </div>
     </div>
-  </div>
+
+    <!-- ── CAPTION VIDEOS ── -->
+    <div class="tab-panel" id="tab-caption">
+      <div style="padding: 40px 48px;">
+        <div class="panel-header">
+          <div class="panel-title">Caption Videos</div>
+          <p class="panel-desc">Select one or more MP4 files, generate transcripts via Whisper, then burn captions directly into the video.</p>
+        </div>
+
+        <div class="drop-zone" id="caption-drop" style="margin-bottom:20px;" onclick="document.getElementById('caption-file').click()">
+          <div class="dz-icon">&#x1F3AC;</div>
+          <div class="dz-label">Drop MP4 files here or click to browse</div>
+          <div class="dz-sub">Supports .mp4 &mdash; multiple files allowed</div>
+          <input type="file" id="caption-file" accept=".mp4" multiple />
+        </div>
+
+        <div class="card" style="margin-bottom:20px;">
+          <h3>Options</h3>
+          <p>Transcript type, font size, and caption style settings will appear here once backend is wired.</p>
+        </div>
+
+        <button class="btn" disabled>Generate Captions</button>
+      </div>
+    </div>
+
+    <!-- ── THUMBNAILS ── -->
+    <div class="tab-panel" id="tab-thumbnails">
+      <div style="padding: 40px 48px;">
+        <div class="panel-header">
+          <div class="panel-title">Thumbnails</div>
+          <p class="panel-desc">Extract frames, transcribe with Whisper (tiny), correct with Claude AI, and generate thumbnails in three styles.</p>
+        </div>
+
+        <div class="drop-zone" style="margin-bottom:20px;" onclick="document.getElementById('thumb-file').click()">
+          <div class="dz-icon">&#x1F5BC;</div>
+          <div class="dz-label">Drop an MP4 here to extract frames</div>
+          <div class="dz-sub">Whisper (tiny model) will transcribe for AI title generation</div>
+          <input type="file" id="thumb-file" accept=".mp4" />
+        </div>
+
+        <div class="style-grid">
+          <div class="style-card">
+            <div class="style-preview warm-bar"></div>
+            <div class="style-name">Warm Bar</div>
+            <div class="style-desc">Gradient bar with centered title</div>
+          </div>
+          <div class="style-card">
+            <div class="style-preview bold-corner"></div>
+            <div class="style-name">Bold Corner</div>
+            <div class="style-desc">High-contrast corner overlay</div>
+          </div>
+          <div class="style-card">
+            <div class="style-preview kinetic"></div>
+            <div class="style-name">Kinetic Slash</div>
+            <div class="style-desc">Dynamic diagonal accent</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── EDIT CAPTIONS ── -->
+    <div class="tab-panel" id="tab-edit-captions">
+      <div style="padding: 40px 48px;">
+        <div class="panel-header">
+          <div class="panel-title">Edit Captions</div>
+          <p class="panel-desc">Load an SRT file, edit individual caption entries, then save back to disk.</p>
+        </div>
+
+        <div style="display:flex; gap:10px; margin-bottom:20px;">
+          <button class="btn-ghost">Load SRT File</button>
+          <button class="btn" disabled>Save SRT</button>
+        </div>
+
+        <table class="srt-table">
+          <thead>
+            <tr>
+              <th>#</th>
+              <th>Timecode</th>
+              <th>Caption Text</th>
+            </tr>
+          </thead>
+          <tbody id="srt-body">
+            <tr><td colspan="3" style="color:var(--muted);padding:28px;text-align:center;font-size:13px;">No SRT loaded</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+  </main>
 </div>
 
 <script>
