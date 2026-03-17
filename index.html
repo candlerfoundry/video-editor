@@ -7,6 +7,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Playfair+Display:wght@600;700&display=swap" rel="stylesheet">
+  <script src="https://unpkg.com/wavesurfer.js@7/dist/wavesurfer.min.js"></script>
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
@@ -575,6 +576,112 @@
     }
     .candidate-actions { display: flex; gap: 8px; }
     .btn-sm { padding: 6px 14px !important; font-size: 12.5px !important; }
+
+    /* ─── SELECTED CANDIDATE CARD ─── */
+    .candidate-card.selected {
+      border-color: var(--orange);
+      box-shadow: 0 0 0 3px var(--orange-tint), var(--shadow-sm);
+    }
+    .candidate-card.selected:hover { transform: none; }
+    .candidate-card { cursor: pointer; }
+
+    /* ─── MINI-EDITOR ─── */
+    #mini-editor-controls {
+      margin-top: 16px;
+      padding-top: 16px;
+      border-top: 1px solid var(--border);
+    }
+    .editor-clip-label {
+      font-size: 13px; font-weight: 600;
+      color: var(--orange);
+      background: var(--orange-tint);
+      border-left: 3px solid var(--orange);
+      border-radius: 0 6px 6px 0;
+      padding: 7px 14px;
+      margin-bottom: 14px;
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    }
+
+    /* Waveform container */
+    .waveform-wrap {
+      position: relative;
+      border-radius: 6px;
+      overflow: hidden;
+      margin-bottom: 14px;
+      background: #F4F2EE;
+      border: 1px solid var(--border);
+      min-height: 60px;
+    }
+    #waveform { width: 100%; display: block; }
+
+    /* Handle overlay */
+    .handle-overlay {
+      position: absolute;
+      inset: 0;
+      pointer-events: none;
+    }
+    .region-fill {
+      position: absolute;
+      top: 0; bottom: 0;
+      background: rgba(232,84,26,0.14);
+      pointer-events: none;
+    }
+    .handle {
+      position: absolute;
+      top: 0; bottom: 0;
+      width: 4px;
+      background: var(--orange);
+      cursor: ew-resize;
+      pointer-events: all;
+      z-index: 3;
+      transform: translateX(-2px);
+    }
+    /* Wider invisible hit area */
+    .handle::before {
+      content: '';
+      position: absolute;
+      top: 0; bottom: 0;
+      left: -10px; right: -10px;
+    }
+    /* Grip cap at the midpoint */
+    .handle::after {
+      content: '';
+      position: absolute;
+      top: 50%; left: 50%;
+      transform: translate(-50%, -50%);
+      width: 14px; height: 22px;
+      background: var(--orange);
+      border-radius: 4px;
+    }
+    .handle-in  { border-radius: 2px 0 0 2px; }
+    .handle-out { border-radius: 0 2px 2px 0; }
+
+    /* Time fields row */
+    .editor-time-row {
+      display: flex; align-items: center; gap: 16px;
+      margin-bottom: 10px; flex-wrap: wrap;
+    }
+    .time-field-group {
+      display: flex; align-items: center; gap: 6px;
+    }
+    .time-field-label {
+      font-size: 10px; font-weight: 700;
+      text-transform: uppercase; letter-spacing: 0.09em;
+      color: var(--muted);
+    }
+    .time-input {
+      font-family: var(--font-mono); font-size: 13px; font-weight: 500;
+      color: var(--text); background: var(--surface);
+      border: 1px solid var(--border-2); border-radius: 6px;
+      padding: 5px 10px; width: 88px;
+      outline: none; transition: border-color 150ms;
+    }
+    .time-input:focus { border-color: var(--orange); }
+
+    /* Below-video button row */
+    .editor-btn-row {
+      display: flex; gap: 8px; flex-wrap: wrap;
+    }
   </style>
 </head>
 <body>
@@ -756,6 +863,45 @@
         <div id="clips-player-wrap" style="display:none; margin-bottom:24px;">
           <video id="clips-video" controls></video>
           <p id="clips-filename"></p>
+
+          <!-- Mini-editor — revealed after candidate card click -->
+          <div id="mini-editor-controls" style="display:none;">
+
+            <div class="editor-clip-label" id="editor-clip-label">Select a clip below to edit</div>
+
+            <!-- WaveSurfer waveform + draggable in/out handles -->
+            <div class="waveform-wrap">
+              <div id="waveform"></div>
+              <div class="handle-overlay" id="handle-overlay">
+                <div class="region-fill"  id="region-fill"></div>
+                <div class="handle handle-in"  id="handle-in"  title="Drag to set in point"></div>
+                <div class="handle handle-out" id="handle-out" title="Drag to set out point"></div>
+              </div>
+            </div>
+
+            <!-- Editable time fields + Play Selection -->
+            <div class="editor-time-row">
+              <div class="time-field-group">
+                <span class="time-field-label">In</span>
+                <input type="text" id="in-time-field"  class="time-input" placeholder="0:00.00" />
+              </div>
+              <div class="time-field-group">
+                <span class="time-field-label">Out</span>
+                <input type="text" id="out-time-field" class="time-input" placeholder="0:30.00" />
+              </div>
+              <button class="btn btn-sm" onclick="playSelection()">
+                <svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+                Play Selection
+              </button>
+            </div>
+
+            <!-- Set point buttons -->
+            <div class="editor-btn-row">
+              <button class="btn-ghost btn-sm" onclick="setStartHere()">Set Start Here</button>
+              <button class="btn-ghost btn-sm" onclick="setEndHere()">Set End Here</button>
+            </div>
+
+          </div><!-- /#mini-editor-controls -->
         </div>
 
         <!-- Skeleton loader — shown while awaiting Claude -->
@@ -1036,6 +1182,12 @@
     filenameEl.textContent = file.name;
     video.load();
     document.getElementById('clips-dropzone').classList.add('loaded');
+
+    // Capture duration and initialise waveform once metadata is ready
+    video.addEventListener('loadedmetadata', function () {
+      _videoDuration = video.duration || 0;
+      initWaveSurfer();
+    }, { once: true });
   });
 
   // ── Clips tab — Words JSON load → render transcript ──
@@ -1250,6 +1402,13 @@
       const card = document.createElement('div');
       card.className = 'candidate-card';
       card.style.cssText = 'animation: fadeUp 300ms ' + (i * 60) + 'ms ease both;';
+
+      // Card click → activate mini-editor (ignore clicks on action buttons)
+      card.addEventListener('click', function (e) {
+        if (e.target.closest('button')) return;
+        activateCandidate(c, card);
+      });
+
       card.innerHTML =
         '<div class="candidate-header">' +
           '<div class="score-badge ' + scoreClass + '">' + score + '</div>' +
@@ -1290,6 +1449,213 @@
       .replace(/</g, '&lt;')
       .replace(/>/g, '&gt;')
       .replace(/"/g, '&quot;');
+  }
+
+  // ══════════════════════════════════════════
+  // MINI-EDITOR — WaveSurfer + in/out handles
+  // ══════════════════════════════════════════
+
+  let ws               = null;   // WaveSurfer instance
+  let _videoDuration   = 0;
+  let editorInTime     = 0;
+  let editorOutTime    = 0;
+  let _playSelTimer    = null;
+
+  // ── WaveSurfer init ──
+  function initWaveSurfer() {
+    if (!window.WaveSurfer) return; // CDN not loaded
+    if (ws) { try { ws.destroy(); } catch(_) {} ws = null; }
+
+    const video = document.getElementById('clips-video');
+    ws = WaveSurfer.create({
+      container:     '#waveform',
+      waveColor:     '#D4D0C6',
+      progressColor: '#E8541A',
+      height:        60,
+      barWidth:      2,
+      barRadius:     1,
+      barGap:        1,
+      normalize:     true,
+      interact:      true,
+      media:         video,          // sync to the <video> element
+    });
+
+    ws.on('ready', () => {
+      if (video.duration && isFinite(video.duration)) _videoDuration = video.duration;
+      updateHandles();
+    });
+
+    // Keep playhead following video timeupdate
+    ws.on('interaction', (newTime) => {
+      video.currentTime = newTime;
+    });
+  }
+
+  // ── Handle positioning ──
+  function updateHandles() {
+    const dur = _videoDuration || 1;
+    const pIn  = Math.max(0, Math.min(100, (editorInTime  / dur) * 100));
+    const pOut = Math.max(0, Math.min(100, (editorOutTime / dur) * 100));
+
+    document.getElementById('handle-in').style.left    = pIn  + '%';
+    document.getElementById('handle-out').style.left   = pOut + '%';
+    document.getElementById('region-fill').style.left  = pIn  + '%';
+    document.getElementById('region-fill').style.width = (pOut - pIn) + '%';
+
+    document.getElementById('in-time-field').value  = fmtPrecise(editorInTime);
+    document.getElementById('out-time-field').value = fmtPrecise(editorOutTime);
+  }
+
+  // ── Draggable handles ──
+  function setupHandleDrag(handleEl, isIn) {
+    handleEl.addEventListener('mousedown', function (e) {
+      e.preventDefault();
+      // Disable CSS transition on handles during drag for instant response
+      document.getElementById('handle-in').style.transition  = 'none';
+      document.getElementById('handle-out').style.transition = 'none';
+      document.getElementById('region-fill').style.transition = 'none';
+
+      const overlay = document.getElementById('handle-overlay');
+
+      function onMove(ev) {
+        const rect = overlay.getBoundingClientRect();
+        const pct  = Math.max(0, Math.min(1, (ev.clientX - rect.left) / rect.width));
+        const t    = pct * (_videoDuration || 1);
+        if (isIn) {
+          editorInTime  = Math.min(t, editorOutTime - 0.05);
+        } else {
+          editorOutTime = Math.max(t, editorInTime  + 0.05);
+        }
+        updateHandles();
+      }
+
+      function onUp() {
+        document.getElementById('handle-in').style.transition  = '';
+        document.getElementById('handle-out').style.transition = '';
+        document.getElementById('region-fill').style.transition = '';
+        document.removeEventListener('mousemove', onMove);
+        document.removeEventListener('mouseup',   onUp);
+      }
+
+      document.addEventListener('mousemove', onMove);
+      document.addEventListener('mouseup',   onUp);
+    });
+  }
+
+  // Wire handles after DOM is ready
+  setupHandleDrag(document.getElementById('handle-in'),  true);
+  setupHandleDrag(document.getElementById('handle-out'), false);
+
+  // ── Time field listeners ──
+  document.getElementById('in-time-field').addEventListener('change', function () {
+    const t = parsePrecise(this.value);
+    if (!isNaN(t) && t >= 0 && t < editorOutTime) {
+      editorInTime = t;
+      updateHandles();
+    } else {
+      this.value = fmtPrecise(editorInTime);
+    }
+  });
+
+  document.getElementById('out-time-field').addEventListener('change', function () {
+    const t = parsePrecise(this.value);
+    if (!isNaN(t) && t > editorInTime) {
+      editorOutTime = t;
+      updateHandles();
+    } else {
+      this.value = fmtPrecise(editorOutTime);
+    }
+  });
+
+  // ── Activate candidate in mini-editor ──
+  function activateCandidate(c, cardEl) {
+    // Highlight selected card
+    document.querySelectorAll('.candidate-card').forEach(el => el.classList.remove('selected'));
+    cardEl.classList.add('selected');
+
+    editorInTime  = c.starttime ?? 0;
+    editorOutTime = c.endtime   ?? 0;
+
+    // Show player + mini-editor
+    document.getElementById('clips-player-wrap').style.display      = 'block';
+    document.getElementById('mini-editor-controls').style.display   = 'block';
+    document.getElementById('editor-clip-label').textContent        = '\u201C' + (c.hookline || 'Clip') + '\u201D';
+
+    // Seek and play
+    const video = document.getElementById('clips-video');
+    if (video.src) {
+      video.currentTime = editorInTime;
+      video.play().catch(() => {});
+      if (video.duration && isFinite(video.duration)) _videoDuration = video.duration;
+    }
+
+    updateHandles();
+
+    // Scroll mini-editor into view
+    document.getElementById('mini-editor-controls').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+
+    // Sync transcript highlights if words are loaded
+    if (_transcriptWords.length) {
+      selStartIdx = findWordNearest(_transcriptWords, editorInTime,  false);
+      selEndIdx   = findWordNearest(_transcriptWords, editorOutTime, true);
+      updateTranscriptHighlights();
+    }
+  }
+
+  // Find word index nearest to a time (start or end timestamp)
+  function findWordNearest(words, time, useEnd) {
+    let best = 0, bestDist = Infinity;
+    for (let i = 0; i < words.length; i++) {
+      const wt   = parseFloat(useEnd ? (words[i].end ?? 0) : (words[i].start ?? 0));
+      const dist = Math.abs(wt - time);
+      if (dist < bestDist) { bestDist = dist; best = i; }
+    }
+    return best;
+  }
+
+  // ── Play Selection ──
+  function playSelection() {
+    const video = document.getElementById('clips-video');
+    if (!video.src) return;
+
+    if (_playSelTimer) clearTimeout(_playSelTimer);
+    video.currentTime = editorInTime;
+    video.play().catch(() => {});
+
+    const clipLen = Math.max(0, editorOutTime - editorInTime);
+    _playSelTimer = setTimeout(() => { video.pause(); }, clipLen * 1000);
+  }
+
+  // ── Set Start/End Here (from current playhead) ──
+  function setStartHere() {
+    const t = document.getElementById('clips-video').currentTime;
+    editorInTime = t;
+    if (editorInTime >= editorOutTime) editorOutTime = editorInTime + 5;
+    updateHandles();
+  }
+
+  function setEndHere() {
+    const t = document.getElementById('clips-video').currentTime;
+    editorOutTime = t;
+    if (editorOutTime <= editorInTime) editorInTime = Math.max(0, editorOutTime - 5);
+    updateHandles();
+  }
+
+  // ── Precise time formatting (M:SS.cc) ──
+  function fmtPrecise(secs) {
+    const s  = Math.floor(secs);
+    const cc = Math.round((secs - s) * 100);
+    return Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0') + '.' + String(cc).padStart(2, '0');
+  }
+
+  function parsePrecise(str) {
+    // Accepts M:SS.cc, M:SS, or plain seconds
+    str = String(str).trim();
+    const parts = str.split(':');
+    if (parts.length === 2) {
+      return parseInt(parts[0], 10) * 60 + parseFloat(parts[1]);
+    }
+    return parseFloat(str);
   }
 </script>
 </body>
