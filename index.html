@@ -8,15 +8,28 @@
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
     :root {
-      --bg:      #111111;
-      --surface: #1C1C1C;
-      --border:  #2A2A2A;
-      --orange:  #E8541A;
-      --amber:   #F5A623;
-      --green:   #2D6A4F;
-      --text:    #E8E8E8;
-      --muted:   #888888;
-      --font:    'Segoe UI', system-ui, sans-serif;
+      --bg:          #F8F7F2;
+      --surface:     #FFFFFF;
+      --surface-alt: #F2F0E9;
+      --border:      #E6E4DB;
+      --border-strong: #D4D1C6;
+      --orange:      #C84826;
+      --orange-mid:  #E05530;
+      --orange-tint: #FDF0EC;
+      --orange-tint2:#FAE3DC;
+      --amber:       #B45309;
+      --amber-tint:  #FEF3C7;
+      --green:       #166534;
+      --green-tint:  #DCFCE7;
+      --text:        #1C1C1A;
+      --text-2:      #4A4A45;
+      --muted:       #8C8C84;
+      --shadow-sm:   0 1px 3px rgba(0,0,0,0.07), 0 1px 2px rgba(0,0,0,0.05);
+      --shadow-md:   0 4px 12px rgba(0,0,0,0.08), 0 2px 4px rgba(0,0,0,0.05);
+      --font:        'Segoe UI', system-ui, -apple-system, sans-serif;
+      --font-mono:   'Consolas', 'Cascadia Code', monospace;
+      --radius:      10px;
+      --radius-lg:   14px;
     }
 
     body {
@@ -26,54 +39,69 @@
       min-height: 100vh;
       display: flex;
       flex-direction: column;
+      -webkit-font-smoothing: antialiased;
     }
 
     /* ── HEADER ── */
     header {
       background: var(--surface);
       border-bottom: 1px solid var(--border);
-      padding: 0 32px;
-      height: 56px;
+      padding: 0 28px;
+      height: 54px;
       display: flex;
       align-items: center;
-      gap: 12px;
+      gap: 10px;
       flex-shrink: 0;
+      box-shadow: var(--shadow-sm);
     }
     .logo-mark {
-      width: 28px; height: 28px;
+      width: 30px; height: 30px;
       background: var(--orange);
-      border-radius: 6px;
+      border-radius: 7px;
       display: flex; align-items: center; justify-content: center;
-      font-size: 14px; font-weight: 800; color: #fff;
-      letter-spacing: -1px;
+      font-size: 12px; font-weight: 800; color: #fff;
+      letter-spacing: -0.5px;
+      flex-shrink: 0;
     }
     header h1 {
-      font-size: 15px;
+      font-size: 14px;
       font-weight: 600;
       color: var(--text);
-      letter-spacing: 0.02em;
+      letter-spacing: 0.01em;
     }
     header h1 span { color: var(--orange); }
+    .header-divider {
+      width: 1px; height: 18px;
+      background: var(--border);
+      margin: 0 4px;
+    }
 
-    /* ── STATUS DOT (header) ── */
     #header-status {
       margin-left: auto;
       display: flex;
       align-items: center;
-      gap: 8px;
+      gap: 7px;
       font-size: 12px;
       color: var(--muted);
+      font-weight: 500;
     }
     .dot {
-      width: 8px; height: 8px;
+      width: 7px; height: 7px;
       border-radius: 50%;
       background: var(--muted);
+      flex-shrink: 0;
     }
-    .dot.waiting { animation: pulse 1.4s ease-in-out infinite; background: var(--amber); }
-    .dot.connected { background: #4CAF50; animation: none; }
+    .dot.waiting {
+      background: #F59E0B;
+      animation: pulse 1.6s ease-in-out infinite;
+    }
+    .dot.connected {
+      background: #22C55E;
+      animation: none;
+    }
     @keyframes pulse {
       0%, 100% { opacity: 1; }
-      50% { opacity: 0.35; }
+      50% { opacity: 0.3; }
     }
 
     /* ── VIEWS ── */
@@ -87,53 +115,63 @@
     #setup-view {
       align-items: center;
       justify-content: center;
-      padding: 32px;
+      padding: 40px 24px;
+      background: var(--bg);
     }
     .wizard-card {
       background: var(--surface);
       border: 1px solid var(--border);
-      border-radius: 16px;
-      padding: 48px 40px;
-      max-width: 520px;
+      border-radius: var(--radius-lg);
+      padding: 44px 40px;
+      max-width: 500px;
       width: 100%;
-      text-align: center;
+      box-shadow: var(--shadow-md);
     }
-    .wizard-icon {
-      font-size: 40px;
-      margin-bottom: 16px;
+    .wizard-logo {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 24px;
     }
-    .wizard-card h2 {
-      font-size: 22px;
+    .wizard-logo .logo-mark { width: 36px; height: 36px; font-size: 13px; border-radius: 9px; }
+    .wizard-logo-text {
+      font-size: 17px;
       font-weight: 700;
-      color: var(--orange);
-      margin-bottom: 8px;
+      color: var(--text);
     }
-    .wizard-card .subtitle {
-      font-size: 13px;
-      color: var(--muted);
-      margin-bottom: 24px;
-    }
+    .wizard-logo-text span { color: var(--orange); }
     .wizard-alert {
-      background: rgba(232,84,26,0.08);
-      border: 1px solid rgba(232,84,26,0.25);
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      background: var(--orange-tint);
+      border: 1px solid var(--orange-tint2);
       border-radius: 8px;
-      padding: 12px 16px;
+      padding: 10px 14px;
       font-size: 13px;
+      font-weight: 500;
       color: var(--orange);
-      margin-bottom: 24px;
+      margin-bottom: 20px;
+    }
+    .wizard-alert::before {
+      content: '';
+      width: 5px; height: 5px;
+      border-radius: 50%;
+      background: var(--orange);
+      flex-shrink: 0;
     }
     .wizard-desc {
       font-size: 13px;
-      color: var(--muted);
-      line-height: 1.6;
-      margin-bottom: 28px;
+      color: var(--text-2);
+      line-height: 1.65;
+      margin-bottom: 24px;
     }
     .wizard-steps {
-      text-align: left;
-      background: var(--bg);
-      border-radius: 10px;
-      padding: 20px 24px;
-      margin-bottom: 28px;
+      background: var(--surface-alt);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 18px 20px;
+      margin-bottom: 24px;
     }
     .wizard-steps ol {
       list-style: none;
@@ -143,60 +181,78 @@
       counter-increment: step;
       display: flex;
       align-items: flex-start;
-      gap: 12px;
-      padding: 8px 0;
+      gap: 11px;
+      padding: 9px 0;
       font-size: 13px;
       color: var(--text);
       border-bottom: 1px solid var(--border);
+      line-height: 1.55;
     }
     .wizard-steps li:last-child { border-bottom: none; }
     .wizard-steps li::before {
       content: counter(step);
-      min-width: 22px; height: 22px;
+      min-width: 20px; height: 20px;
       background: var(--orange);
       color: #fff;
       border-radius: 50%;
-      font-size: 11px;
+      font-size: 10px;
       font-weight: 700;
       display: flex; align-items: center; justify-content: center;
       flex-shrink: 0;
-      margin-top: 1px;
+      margin-top: 2px;
     }
     .wizard-steps li code {
-      background: var(--border);
-      padding: 2px 6px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      padding: 1px 6px;
       border-radius: 4px;
+      font-size: 11.5px;
+      font-family: var(--font-mono);
+      color: var(--orange);
+    }
+    .wizard-download {
+      margin-bottom: 20px;
+    }
+    .wizard-download p {
       font-size: 12px;
-      font-family: 'Consolas', monospace;
-      color: var(--amber);
+      color: var(--muted);
+      margin-bottom: 10px;
     }
     .btn-download {
-      display: inline-block;
+      display: inline-flex;
+      align-items: center;
+      gap: 7px;
       background: var(--orange);
       color: #fff;
       font-size: 13px;
       font-weight: 600;
-      padding: 10px 24px;
+      padding: 9px 20px;
       border-radius: 8px;
       text-decoration: none;
-      margin-bottom: 28px;
-      transition: opacity 0.15s;
+      transition: background 0.15s;
+      letter-spacing: 0.01em;
     }
-    .btn-download:hover { opacity: 0.85; }
+    .btn-download:hover { background: var(--orange-mid); }
+    .btn-download::before {
+      content: '';
+      width: 13px; height: 13px;
+      background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='white'%3E%3Cpath d='M8 1v9M5 7l3 3 3-3M3 13h10' stroke='white' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round' fill='none'/%3E%3C/svg%3E") center/contain no-repeat;
+    }
     .wizard-status {
       display: flex;
       align-items: center;
-      justify-content: center;
       gap: 8px;
-      font-size: 13px;
+      font-size: 12.5px;
       color: var(--muted);
+      font-weight: 500;
+      padding-top: 16px;
+      border-top: 1px solid var(--border);
+      margin-top: 4px;
     }
-    .wizard-status .dot { width: 10px; height: 10px; }
+    .wizard-status .dot { width: 8px; height: 8px; }
 
     /* ── MAIN APP ── */
-    #app-view {
-      flex-direction: column;
-    }
+    #app-view { flex-direction: column; }
 
     /* Tab bar */
     .tab-bar {
@@ -204,7 +260,7 @@
       border-bottom: 1px solid var(--border);
       display: flex;
       padding: 0 24px;
-      gap: 4px;
+      gap: 2px;
       flex-shrink: 0;
     }
     .tab-btn {
@@ -214,85 +270,97 @@
       font-family: var(--font);
       font-size: 13px;
       font-weight: 500;
-      padding: 14px 16px 12px;
+      padding: 13px 14px 11px;
       cursor: pointer;
       border-bottom: 2px solid transparent;
       transition: color 0.15s, border-color 0.15s;
+      letter-spacing: 0.01em;
     }
     .tab-btn:hover { color: var(--text); }
     .tab-btn.active {
       color: var(--orange);
       border-bottom-color: var(--orange);
+      font-weight: 600;
     }
 
     /* Tab panels */
     .tab-panel {
       display: none;
       flex: 1;
-      padding: 32px;
+      padding: 32px 36px;
       overflow-y: auto;
+      max-width: 900px;
     }
     .tab-panel.active { display: block; }
 
-    /* Panel title */
+    /* Panel heading */
+    .panel-header { margin-bottom: 28px; }
     .panel-title {
-      font-size: 20px;
+      font-size: 19px;
       font-weight: 700;
-      margin-bottom: 8px;
+      color: var(--text);
+      letter-spacing: -0.01em;
+      margin-bottom: 4px;
     }
     .panel-desc {
       font-size: 13px;
-      color: var(--muted);
-      margin-bottom: 28px;
+      color: var(--text-2);
+      line-height: 1.6;
     }
 
     /* Cards */
     .card {
       background: var(--surface);
       border: 1px solid var(--border);
-      border-radius: 12px;
-      padding: 24px;
-      margin-bottom: 20px;
-      transition: border-color 0.15s, transform 0.15s;
+      border-radius: var(--radius);
+      padding: 20px 22px;
+      margin-bottom: 16px;
+      box-shadow: var(--shadow-sm);
+      transition: border-color 0.15s, box-shadow 0.15s;
     }
     .card:hover {
-      border-color: rgba(232,84,26,0.35);
-      transform: translateY(-1px);
+      border-color: var(--orange-tint2);
+      box-shadow: var(--shadow-md);
     }
     .card h3 {
-      font-size: 14px;
+      font-size: 13.5px;
       font-weight: 600;
-      margin-bottom: 8px;
+      margin-bottom: 6px;
       color: var(--text);
     }
     .card p {
       font-size: 13px;
-      color: var(--muted);
+      color: var(--text-2);
       line-height: 1.6;
     }
 
     /* File drop zone */
     .drop-zone {
-      border: 2px dashed var(--border);
-      border-radius: 12px;
-      padding: 40px;
+      border: 2px dashed var(--border-strong);
+      border-radius: var(--radius);
+      padding: 36px 24px;
       text-align: center;
       cursor: pointer;
       transition: border-color 0.15s, background 0.15s;
-      margin-bottom: 20px;
+      margin-bottom: 18px;
+      background: var(--surface);
     }
     .drop-zone:hover, .drop-zone.dragover {
       border-color: var(--orange);
-      background: rgba(232,84,26,0.04);
+      background: var(--orange-tint);
     }
-    .drop-zone .dz-icon { font-size: 32px; margin-bottom: 12px; }
-    .drop-zone .dz-label {
+    .dz-icon {
+      font-size: 28px;
+      margin-bottom: 10px;
+      line-height: 1;
+    }
+    .dz-label {
       font-size: 14px;
       font-weight: 600;
       color: var(--text);
-      margin-bottom: 4px;
+      margin-bottom: 3px;
     }
-    .drop-zone .dz-sub {
+    .dz-sub {
       font-size: 12px;
       color: var(--muted);
     }
@@ -300,29 +368,40 @@
 
     /* Buttons */
     .btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
       background: var(--orange);
       color: #fff;
       border: none;
       font-family: var(--font);
       font-size: 13px;
       font-weight: 600;
-      padding: 10px 20px;
+      padding: 9px 18px;
       border-radius: 8px;
       cursor: pointer;
-      transition: opacity 0.15s;
+      transition: background 0.15s;
+      letter-spacing: 0.01em;
     }
-    .btn:hover { opacity: 0.85; }
-    .btn:disabled { opacity: 0.4; cursor: not-allowed; }
+    .btn:hover { background: var(--orange-mid); }
+    .btn:disabled {
+      opacity: 0.38;
+      cursor: not-allowed;
+    }
     .btn-ghost {
-      background: none;
-      border: 1px solid var(--border);
-      color: var(--text);
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      background: var(--surface);
+      border: 1px solid var(--border-strong);
+      color: var(--text-2);
       font-family: var(--font);
       font-size: 13px;
-      padding: 10px 20px;
+      font-weight: 500;
+      padding: 9px 18px;
       border-radius: 8px;
       cursor: pointer;
-      transition: border-color 0.15s;
+      transition: border-color 0.15s, color 0.15s;
     }
     .btn-ghost:hover { border-color: var(--orange); color: var(--orange); }
 
@@ -330,86 +409,108 @@
     .badge {
       display: inline-flex;
       align-items: center;
-      gap: 6px;
-      font-size: 11px;
-      font-weight: 600;
-      padding: 4px 10px;
+      gap: 5px;
+      font-size: 10.5px;
+      font-weight: 700;
+      padding: 3px 9px;
       border-radius: 20px;
-      letter-spacing: 0.04em;
+      letter-spacing: 0.06em;
       text-transform: uppercase;
     }
     .badge-stub {
-      background: rgba(245,166,35,0.12);
+      background: var(--amber-tint);
       color: var(--amber);
-      border: 1px solid rgba(245,166,35,0.3);
+      border: 1px solid #FDE68A;
     }
 
-    /* Placeholder content in panels */
+    /* Stub notice */
     .stub-notice {
       display: flex;
       align-items: center;
       gap: 10px;
-      background: rgba(245,166,35,0.06);
-      border: 1px solid rgba(245,166,35,0.2);
+      background: var(--amber-tint);
+      border: 1px solid #FDE68A;
       border-radius: 8px;
-      padding: 12px 16px;
+      padding: 11px 14px;
       font-size: 13px;
       color: var(--amber);
       margin-bottom: 20px;
+      font-weight: 500;
     }
 
-    /* Clips tag grid */
-    .tag-row { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 12px; }
+    /* Tags */
+    .tag-row { display: flex; gap: 7px; flex-wrap: wrap; margin-top: 12px; }
     .tag {
-      background: var(--bg);
+      background: var(--surface-alt);
       border: 1px solid var(--border);
       border-radius: 20px;
-      padding: 4px 12px;
-      font-size: 11px;
-      color: var(--muted);
+      padding: 3px 11px;
+      font-size: 11.5px;
+      color: var(--text-2);
+      font-weight: 500;
     }
 
-    /* Thumbnail style cards */
-    .style-grid { display: grid; grid-template-columns: repeat(3,1fr); gap: 16px; margin-top: 20px; }
+    /* Style grid (Thumbnails tab) */
+    .style-grid { display: grid; grid-template-columns: repeat(3,1fr); gap: 14px; margin-top: 20px; }
     .style-card {
-      background: var(--bg);
+      background: var(--surface);
       border: 1px solid var(--border);
-      border-radius: 10px;
-      padding: 16px;
+      border-radius: var(--radius);
+      padding: 14px;
       text-align: center;
       cursor: pointer;
-      transition: border-color 0.15s;
+      transition: border-color 0.15s, box-shadow 0.15s;
+      box-shadow: var(--shadow-sm);
     }
-    .style-card:hover { border-color: var(--orange); }
-    .style-card .style-preview {
-      height: 60px;
+    .style-card:hover {
+      border-color: var(--orange);
+      box-shadow: 0 0 0 3px var(--orange-tint2);
+    }
+    .style-preview {
+      height: 58px;
       border-radius: 6px;
       margin-bottom: 10px;
     }
-    .style-card .style-name { font-size: 12px; font-weight: 600; color: var(--text); }
-    .style-card .style-desc { font-size: 11px; color: var(--muted); margin-top: 4px; }
-    .warm-bar { background: linear-gradient(135deg, #2a1a0e 0%, #7a3010 100%); }
-    .bold-corner { background: linear-gradient(135deg, #0d0d0d 0%, #1a1a2e 100%); }
-    .kinetic { background: linear-gradient(135deg, #0a1628 0%, #1a3a2a 100%); }
+    .style-name { font-size: 12.5px; font-weight: 600; color: var(--text); }
+    .style-desc { font-size: 11px; color: var(--muted); margin-top: 3px; }
+    .warm-bar    { background: linear-gradient(135deg, #7a3010 0%, #c84826 60%, #f5a623 100%); }
+    .bold-corner { background: linear-gradient(135deg, #1a1a2e 0%, #2d2d5e 100%); }
+    .kinetic     { background: linear-gradient(135deg, #0a1628 0%, #1a3a2a 60%, #2a5a1a 100%); }
 
     /* SRT editor */
-    .srt-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+    .srt-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 13px;
+      background: var(--surface);
+      border-radius: var(--radius);
+      overflow: hidden;
+      box-shadow: var(--shadow-sm);
+      border: 1px solid var(--border);
+    }
     .srt-table th {
       text-align: left;
-      padding: 10px 12px;
-      font-size: 11px;
-      font-weight: 600;
+      padding: 10px 14px;
+      font-size: 10.5px;
+      font-weight: 700;
       text-transform: uppercase;
-      letter-spacing: 0.06em;
+      letter-spacing: 0.07em;
       color: var(--muted);
+      background: var(--surface-alt);
       border-bottom: 1px solid var(--border);
     }
     .srt-table td {
-      padding: 10px 12px;
+      padding: 10px 14px;
       border-bottom: 1px solid var(--border);
       vertical-align: top;
     }
-    .srt-table td.ts { color: var(--amber); font-size: 11px; font-family: 'Consolas', monospace; white-space: nowrap; }
+    .srt-table tr:last-child td { border-bottom: none; }
+    .srt-table td.ts {
+      color: var(--orange);
+      font-size: 11px;
+      font-family: var(--font-mono);
+      white-space: nowrap;
+    }
     .srt-table td.txt input {
       background: none;
       border: none;
@@ -420,8 +521,22 @@
       outline: none;
     }
     .srt-table td.txt input:focus {
-      background: rgba(255,255,255,0.04);
+      background: var(--orange-tint);
       border-radius: 4px;
+      padding: 2px 6px;
+      margin: -2px -6px;
+    }
+
+    /* Clips video player */
+    #clips-player-wrap video {
+      border-radius: 8px;
+      background: var(--surface-alt);
+      border: 1px solid var(--border);
+    }
+    #clips-filename {
+      margin: 8px 0 0;
+      font-size: 12px;
+      color: var(--muted);
     }
   </style>
 </head>
@@ -431,6 +546,7 @@
 <header>
   <div class="logo-mark">FV</div>
   <h1>Foundry <span>Video Editor</span></h1>
+  <div class="header-divider"></div>
   <div id="header-status">
     <div class="dot waiting" id="hdr-dot"></div>
     <span id="hdr-label">Connecting...</span>
@@ -440,25 +556,32 @@
 <!-- SETUP WIZARD VIEW -->
 <div id="setup-view">
   <div class="wizard-card">
-    <div class="wizard-icon">&#x26A0;&#xFE0F;</div>
-    <h2>Foundry Video Editor</h2>
-    <p class="subtitle">Professional video tools for the Candler Foundry team</p>
+    <div class="wizard-logo">
+      <div class="logo-mark">FV</div>
+      <div class="wizard-logo-text">Foundry <span>Video Editor</span></div>
+    </div>
+
     <div class="wizard-alert">Local backend not detected</div>
+
     <p class="wizard-desc">
       This app needs a small helper program running on your computer to process video.
-      Your team lead has already set this up in Dropbox — just follow the steps below.
+      Your team lead has already set this up in Dropbox &mdash; just follow the steps below.
     </p>
+
     <div class="wizard-steps">
       <ol>
-        <li>Make sure <strong>Python 3.14</strong> is installed on your computer. If not, download it from <strong>python.org</strong> — check <strong>"Add Python to PATH"</strong> during install. Ask your team lead if unsure.</li>
-        <li>Open <strong>Dropbox → Scripts → Video Editor Downloads → foundry-video-editor-backend</strong></li>
-        <li>Double-click <strong>start_server.bat</strong> — a window will open and install everything automatically</li>
-        <li>Keep that window open and come back here — this page will connect on its own</li>
+        <li>Make sure <strong>Python 3.14</strong> is installed. If not, download it from <strong>python.org</strong> and check <strong>"Add Python to PATH"</strong> during install.</li>
+        <li>Open <strong>Dropbox &rarr; Scripts &rarr; Video Editor Downloads &rarr; foundry-video-editor-backend</strong></li>
+        <li>Double-click <strong>start_server.bat</strong> &mdash; a window will open and install everything automatically</li>
+        <li>Keep that window open and return here &mdash; this page will connect on its own</li>
       </ol>
     </div>
-    <p style="margin: 0 0 8px; font-size: 0.8rem; color: #888;">Don't have Dropbox access yet? Download the setup package below instead.</p>
-    <a class="btn-download" href="foundry-video-editor-backend.zip" download>Download Setup Package (.zip)</a>
-    <p style="margin: 8px 0 16px; font-size: 0.8rem; color: #888;">Unzip anywhere, then double-click start_server.bat to start</p>
+
+    <div class="wizard-download">
+      <p>Don't have Dropbox access yet? Download the setup package instead.</p>
+      <a class="btn-download" href="foundry-video-editor-backend.zip" download>Download Setup Package (.zip)</a>
+    </div>
+
     <div class="wizard-status">
       <div class="dot waiting" id="wiz-dot"></div>
       <span id="wiz-label">Waiting for backend...</span>
@@ -477,8 +600,10 @@
 
   <!-- TAB: Caption Videos -->
   <div class="tab-panel active" id="tab-caption">
-    <div class="panel-title">Caption Videos</div>
-    <p class="panel-desc">Select one or more MP4 files, generate transcripts via Whisper, then burn captions directly into the video.</p>
+    <div class="panel-header">
+      <div class="panel-title">Caption Videos</div>
+      <p class="panel-desc">Select one or more MP4 files, generate transcripts via Whisper, then burn captions directly into the video.</p>
+    </div>
 
     <div class="stub-notice">
       <span class="badge badge-stub">Session 2</span>
@@ -488,7 +613,7 @@
     <div class="drop-zone" id="caption-drop" onclick="document.getElementById('caption-file').click()">
       <div class="dz-icon">&#x1F3AC;</div>
       <div class="dz-label">Drop MP4 files here or click to browse</div>
-      <div class="dz-sub">Supports .mp4 — multiple files allowed</div>
+      <div class="dz-sub">Supports .mp4 &mdash; multiple files allowed</div>
       <input type="file" id="caption-file" accept=".mp4" multiple />
     </div>
 
@@ -502,15 +627,17 @@
 
   <!-- TAB: Edit Captions -->
   <div class="tab-panel" id="tab-edit-captions">
-    <div class="panel-title">Edit Captions</div>
-    <p class="panel-desc">Load an SRT file, edit individual caption entries, then save back to disk.</p>
+    <div class="panel-header">
+      <div class="panel-title">Edit Captions</div>
+      <p class="panel-desc">Load an SRT file, edit individual caption entries, then save back to disk.</p>
+    </div>
 
     <div class="stub-notice">
       <span class="badge badge-stub">Session 5</span>
       SRT load/edit/save will be wired in Session 5.
     </div>
 
-    <div style="display:flex; gap:12px; margin-bottom:20px;">
+    <div style="display:flex; gap:10px; margin-bottom:20px;">
       <button class="btn-ghost">Load SRT File</button>
       <button class="btn" disabled>Save SRT</button>
     </div>
@@ -524,15 +651,17 @@
         </tr>
       </thead>
       <tbody id="srt-body">
-        <tr><td colspan="3" style="color:var(--muted);padding:24px;text-align:center;">No SRT loaded</td></tr>
+        <tr><td colspan="3" style="color:var(--muted);padding:28px;text-align:center;font-size:13px;">No SRT loaded</td></tr>
       </tbody>
     </table>
   </div>
 
   <!-- TAB: Thumbnails -->
   <div class="tab-panel" id="tab-thumbnails">
-    <div class="panel-title">Thumbnails</div>
-    <p class="panel-desc">Extract frames, transcribe with Whisper (tiny), correct with Claude AI, and generate thumbnails in three styles.</p>
+    <div class="panel-header">
+      <div class="panel-title">Thumbnails</div>
+      <p class="panel-desc">Extract frames, transcribe with Whisper (tiny), correct with Claude AI, and generate thumbnails in three styles.</p>
+    </div>
 
     <div class="stub-notice">
       <span class="badge badge-stub">Session 3</span>
@@ -567,8 +696,10 @@
 
   <!-- TAB: Clips -->
   <div class="tab-panel" id="tab-clips">
-    <div class="panel-title">Clips</div>
-    <p class="panel-desc">Browse your video, find viral clip candidates via Claude AI, preview segments, trim, and export.</p>
+    <div class="panel-header">
+      <div class="panel-title">Clips</div>
+      <p class="panel-desc">Browse your video, find viral clip candidates via Claude AI, preview segments, trim, and export.</p>
+    </div>
 
     <div class="stub-notice">
       <span class="badge badge-stub">Session 4</span>
@@ -583,8 +714,8 @@
     </div>
 
     <div id="clips-player-wrap" style="display:none; margin-top:16px;">
-      <video id="clips-video" controls style="width:100%; border-radius:8px; background:#000;"></video>
-      <p id="clips-filename" style="margin:8px 0 0; font-size:0.85rem; color:#888;"></p>
+      <video id="clips-video" controls style="width:100%;"></video>
+      <p id="clips-filename"></p>
     </div>
 
     <div class="card">
@@ -633,14 +764,14 @@
     const wizLabel = document.getElementById('wiz-label');
     wizDot.className = 'dot connected';
     wizLabel.textContent = 'Connected!';
-    wizLabel.style.color = '#4CAF50';
+    wizLabel.style.color = '#166534';
 
     // Update header
     const hdrDot = document.getElementById('hdr-dot');
     const hdrLabel = document.getElementById('hdr-label');
     hdrDot.className = 'dot connected';
     hdrLabel.textContent = 'Backend connected';
-    hdrLabel.style.color = '#4CAF50';
+    hdrLabel.style.color = '#166534';
 
     // Transition views smoothly
     setTimeout(() => {
