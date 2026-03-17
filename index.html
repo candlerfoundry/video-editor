@@ -466,6 +466,115 @@
       border-radius: 4px; padding: 3px 8px;
       margin: -3px -8px;
     }
+    /* ─── MODE BAR (set start/end range) ─── */
+    .mode-bar {
+      display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: var(--r); padding: 11px 16px;
+      margin-bottom: 12px; box-shadow: var(--shadow-sm);
+    }
+    .mode-label {
+      font-size: 11px; font-weight: 700; text-transform: uppercase;
+      letter-spacing: 0.08em; color: var(--muted); flex-shrink: 0;
+    }
+    .mode-toggle {
+      display: flex; border: 1px solid var(--border-2);
+      border-radius: 6px; overflow: hidden; flex-shrink: 0;
+    }
+    .mode-btn {
+      padding: 5px 14px; font-size: 13px; font-weight: 500;
+      background: none; border: none; cursor: pointer;
+      color: var(--muted); font-family: var(--font);
+      transition: background 150ms, color 150ms;
+    }
+    .mode-btn + .mode-btn { border-left: 1px solid var(--border-2); }
+    .mode-btn.active { background: var(--orange); color: #fff; }
+    .mode-range-display {
+      flex: 1; font-size: 12.5px; font-family: var(--font-mono);
+      color: var(--text-2); min-width: 120px;
+    }
+    .btn-clear {
+      background: none; border: 1px solid var(--border-2);
+      color: var(--muted); font-family: var(--font);
+      font-size: 12px; font-weight: 500; padding: 4px 10px;
+      border-radius: 5px; cursor: pointer;
+      transition: border-color 150ms, color 150ms; flex-shrink: 0;
+    }
+    .btn-clear:hover { border-color: var(--orange); color: var(--orange); }
+
+    /* ─── TRANSCRIPT PANEL ─── */
+    .transcript-panel-wrap {
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: var(--r); padding: 18px 22px;
+      margin-bottom: 20px; max-height: 250px;
+      overflow-y: auto; box-shadow: var(--shadow-sm);
+    }
+    #transcript-panel {
+      font-size: 17px; font-weight: 400; line-height: 1.8;
+      color: var(--text); font-family: var(--font);
+    }
+    .tx-word {
+      display: inline; cursor: pointer; border-radius: 3px;
+      padding: 1px 1px; transition: background 80ms;
+    }
+    .tx-word:hover { background: #F0EDE6; }
+    .tx-word.sel-start {
+      background: var(--orange-tint2); color: var(--orange);
+      border-radius: 3px 0 0 3px;
+    }
+    .tx-word.in-range { background: var(--orange-tint); }
+    .tx-word.sel-end {
+      background: var(--orange-tint2); color: var(--orange);
+      border-radius: 0 3px 3px 0;
+    }
+
+    /* ─── SKELETON LOADER ─── */
+    .skeleton-card {
+      background: #F0EDE6; border-radius: var(--r);
+      height: 114px; margin-bottom: 12px;
+      animation: shimmer 1.4s ease-in-out infinite;
+    }
+    .skeleton-card:nth-child(2) { animation-delay: 0.2s; opacity: 0.8; }
+    .skeleton-card:nth-child(3) { animation-delay: 0.4s; opacity: 0.6; }
+
+    /* ─── CANDIDATE CARDS ─── */
+    #candidates-section { margin-bottom: 24px; }
+    .candidate-card {
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: var(--r); padding: 18px 22px;
+      box-shadow: var(--shadow-sm); margin-bottom: 10px;
+      transition: transform 150ms ease, border-color 150ms, box-shadow 150ms;
+    }
+    .candidate-card:hover {
+      transform: translateY(-2px);
+      border-color: rgba(232,84,26,0.35);
+      box-shadow: 0 8px 24px rgba(0,0,0,0.10);
+    }
+    .candidate-header {
+      display: flex; align-items: center; gap: 12px; margin-bottom: 12px;
+    }
+    .score-badge {
+      width: 38px; height: 38px; border-radius: 50%;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 14px; font-weight: 700; flex-shrink: 0;
+    }
+    .score-green  { background: #DCFCE7; color: #166534; }
+    .score-amber  { background: #FEF3C7; color: #92400E; }
+    .score-grey   { background: #F3F4F6; color: #6B7280; }
+    .candidate-ts {
+      font-family: var(--font-mono); font-size: 12px;
+      color: var(--orange); font-weight: 500; margin-top: 2px;
+    }
+    .candidate-hookline {
+      font-size: 15px; font-weight: 600; color: var(--text);
+      margin-bottom: 6px; line-height: 1.4;
+    }
+    .candidate-reason {
+      font-size: 13px; color: var(--text-2);
+      line-height: 1.65; margin-bottom: 14px;
+    }
+    .candidate-actions { display: flex; gap: 8px; }
+    .btn-sm { padding: 6px 14px !important; font-size: 12.5px !important; }
   </style>
 </head>
 <body>
@@ -577,7 +686,7 @@
           <p>Load a video and transcript to find high-impact moments for social media. Claude identifies quotable statements, emotional peaks, and self-contained segments.</p>
         </div>
         <div class="section-hero-action fade-up-1">
-          <button class="btn btn-hero" onclick="document.getElementById('clips-file').click()">
+          <button class="btn btn-hero" onclick="findClips()">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
               <circle cx="6" cy="6" r="3"/><circle cx="6" cy="18" r="3"/>
               <path d="M20 4L8.12 15.88M14.47 14.48L20 20M8.12 8.12L12 12"/>
@@ -627,11 +736,37 @@
           </div>
         </div>
 
+        <!-- Mode bar — shown after Words JSON loaded -->
+        <div id="mode-bar" class="mode-bar" style="display:none;">
+          <span class="mode-label">Mark range:</span>
+          <div class="mode-toggle">
+            <button class="mode-btn active" id="btn-set-start" onclick="setMode('start')">Set Start</button>
+            <button class="mode-btn" id="btn-set-end" onclick="setMode('end')">Set End</button>
+          </div>
+          <span class="mode-range-display" id="mode-range-display">Click a word to set start</span>
+          <button class="btn-clear" id="btn-clear-range" onclick="clearRange()" style="display:none;">Clear</button>
+        </div>
+
+        <!-- Transcript panel — shown after Words JSON loaded -->
+        <div class="transcript-panel-wrap" id="transcript-panel-wrap" style="display:none;">
+          <div id="transcript-panel"></div>
+        </div>
+
         <!-- Video player (hidden until file selected) -->
         <div id="clips-player-wrap" style="display:none; margin-bottom:24px;">
           <video id="clips-video" controls></video>
           <p id="clips-filename"></p>
         </div>
+
+        <!-- Skeleton loader — shown while awaiting Claude -->
+        <div id="clips-skeleton" style="display:none; margin-bottom:24px;">
+          <div class="skeleton-card"></div>
+          <div class="skeleton-card"></div>
+          <div class="skeleton-card"></div>
+        </div>
+
+        <!-- Candidate cards — rendered after Claude responds -->
+        <div id="candidates-section" style="display:none;"></div>
 
         <!-- Empty state -->
         <div class="empty-state fade-up-1" id="clips-empty-state">
@@ -661,7 +796,7 @@
         </div>
 
         <!-- What Claude looks for card -->
-        <div class="card card-accent fade-up-2">
+        <div class="card card-accent fade-up-2" id="what-claude-card">
           <h3>What Claude looks for</h3>
           <p>Strong standalone moments that work without context &mdash; quotable statements, emotional peaks, and segments with a clear beginning, middle, and end.</p>
           <div class="tag-row">
@@ -884,7 +1019,7 @@
   checkHealth();
   setInterval(checkHealth, 3000);
 
-  // ── Clips tab — file load ──
+  // ── Clips tab — MP4 file load ──
   document.getElementById('clips-file').addEventListener('change', function () {
     const file = this.files[0];
     if (!file) return;
@@ -900,7 +1035,262 @@
     label.textContent = file.name;
     filenameEl.textContent = file.name;
     video.load();
+    document.getElementById('clips-dropzone').classList.add('loaded');
   });
+
+  // ── Clips tab — Words JSON load → render transcript ──
+  let _transcriptWords = [];
+  let clipMode = 'start';
+  let selStartIdx = null;
+  let selEndIdx = null;
+
+  document.getElementById('words-file').addEventListener('change', function () {
+    const file = this.files[0];
+    if (!file) return;
+
+    // Update drop zone state
+    document.getElementById('words-dropzone').classList.add('loaded');
+    document.querySelector('#words-dropzone .dz-label').textContent = file.name;
+
+    const reader = new FileReader();
+    reader.onload = function (e) {
+      try {
+        const data = JSON.parse(e.target.result);
+        _transcriptWords = extractWords(data);
+        renderTranscript(_transcriptWords);
+
+        // Show transcript UI, hide empty state
+        document.getElementById('mode-bar').style.display = 'flex';
+        document.getElementById('transcript-panel-wrap').style.display = 'block';
+        document.getElementById('clips-empty-state').style.display = 'none';
+        updateRangeDisplay();
+      } catch (err) {
+        alert('Could not parse Words JSON: ' + err.message);
+      }
+    };
+    reader.readAsText(file);
+  });
+
+  function extractWords(data) {
+    // Handle Whisper flat array: [{word, start, end}, ...]
+    if (Array.isArray(data)) return data;
+    // Handle Whisper nested: {segments: [{words: [{word, start, end}]}]}
+    if (data.segments) {
+      const words = [];
+      for (const seg of data.segments) {
+        if (seg.words) words.push(...seg.words);
+      }
+      return words;
+    }
+    // Handle flat {words: [...]}
+    if (data.words) return data.words;
+    return [];
+  }
+
+  function renderTranscript(words) {
+    const panel = document.getElementById('transcript-panel');
+    panel.innerHTML = '';
+    words.forEach((w, i) => {
+      const span = document.createElement('span');
+      span.className = 'tx-word';
+      span.dataset.idx = i;
+      span.dataset.start = w.start ?? 0;
+      span.dataset.end = w.end ?? 0;
+      // Whisper words often have a leading space; preserve it
+      span.textContent = (w.word ?? w.text ?? '') + ' ';
+      panel.appendChild(span);
+    });
+  }
+
+  // ── Transcript word click (event delegation) ──
+  document.getElementById('transcript-panel').addEventListener('click', function (e) {
+    const wordEl = e.target.closest('.tx-word');
+    if (!wordEl) return;
+    const idx = parseInt(wordEl.dataset.idx, 10);
+
+    if (clipMode === 'start') {
+      selStartIdx = idx;
+      if (selEndIdx !== null && selEndIdx <= idx) selEndIdx = null;
+      setMode('end'); // auto-advance to end-picking
+    } else {
+      if (idx > (selStartIdx ?? -1)) {
+        selEndIdx = idx;
+      } else {
+        // Clicked before start — treat as new start
+        selStartIdx = idx;
+        selEndIdx = null;
+        setMode('end');
+      }
+    }
+    updateTranscriptHighlights();
+  });
+
+  function setMode(mode) {
+    clipMode = mode;
+    document.getElementById('btn-set-start').classList.toggle('active', mode === 'start');
+    document.getElementById('btn-set-end').classList.toggle('active', mode === 'end');
+  }
+
+  function updateTranscriptHighlights() {
+    const spans = document.querySelectorAll('.tx-word');
+    const lo = selStartIdx !== null && selEndIdx !== null ? Math.min(selStartIdx, selEndIdx) : selStartIdx;
+    const hi = selStartIdx !== null && selEndIdx !== null ? Math.max(selStartIdx, selEndIdx) : null;
+
+    spans.forEach((s, i) => {
+      s.classList.remove('sel-start', 'sel-end', 'in-range');
+      if (hi !== null) {
+        if (i === lo) s.classList.add('sel-start');
+        else if (i === hi) s.classList.add('sel-end');
+        else if (i > lo && i < hi) s.classList.add('in-range');
+      } else if (i === lo) {
+        s.classList.add('sel-start');
+      }
+    });
+    updateRangeDisplay();
+  }
+
+  function updateRangeDisplay() {
+    const display = document.getElementById('mode-range-display');
+    const clearBtn = document.getElementById('btn-clear-range');
+    if (selStartIdx !== null && selEndIdx !== null) {
+      const st = parseFloat(_transcriptWords[selStartIdx]?.start ?? 0);
+      const et = parseFloat(_transcriptWords[selEndIdx]?.end ?? 0);
+      display.textContent = formatTime(st) + ' \u2192 ' + formatTime(et);
+      clearBtn.style.display = 'inline-block';
+    } else if (selStartIdx !== null) {
+      const st = parseFloat(_transcriptWords[selStartIdx]?.start ?? 0);
+      display.textContent = 'From ' + formatTime(st) + ' \u2014 now click Set End then a word';
+      clearBtn.style.display = 'inline-block';
+    } else {
+      display.textContent = 'Click a word to set start';
+      clearBtn.style.display = 'none';
+    }
+  }
+
+  function clearRange() {
+    selStartIdx = null;
+    selEndIdx = null;
+    setMode('start');
+    document.querySelectorAll('.tx-word').forEach(s =>
+      s.classList.remove('sel-start', 'sel-end', 'in-range')
+    );
+    updateRangeDisplay();
+  }
+
+  function formatTime(secs) {
+    const s = Math.floor(secs);
+    return Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0');
+  }
+
+  // ── Find Clips → POST /clips → render candidates ──
+  async function findClips() {
+    if (!_transcriptWords.length) {
+      alert('Load a Words JSON file first \u2014 drop it in the right-hand zone above.');
+      return;
+    }
+    if (!backendOnline) {
+      alert('Backend is not connected. Make sure start_server.bat is running.');
+      return;
+    }
+
+    const transcript = _transcriptWords
+      .map(w => w.word ?? w.text ?? '')
+      .join(' ')
+      .trim();
+
+    const payload = { transcript };
+    if (selStartIdx !== null) payload.starttime = parseFloat(_transcriptWords[selStartIdx]?.start ?? 0);
+    if (selEndIdx !== null)   payload.endtime   = parseFloat(_transcriptWords[selEndIdx]?.end   ?? 0);
+
+    // UI: show skeleton, hide other states
+    document.getElementById('clips-empty-state').style.display = 'none';
+    document.getElementById('candidates-section').style.display = 'none';
+    document.getElementById('what-claude-card').style.display = 'none';
+    document.getElementById('clips-skeleton').style.display = 'block';
+
+    try {
+      const res = await fetch(BACKEND + '/clips', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+      const data = await res.json();
+      document.getElementById('clips-skeleton').style.display = 'none';
+
+      if (data.error) {
+        document.getElementById('what-claude-card').style.display = 'block';
+        alert('Backend error: ' + data.error);
+        return;
+      }
+      renderCandidates(data.candidates || []);
+    } catch (err) {
+      document.getElementById('clips-skeleton').style.display = 'none';
+      document.getElementById('what-claude-card').style.display = 'block';
+      alert('Request failed: ' + err.message);
+    }
+  }
+
+  function renderCandidates(candidates) {
+    const section = document.getElementById('candidates-section');
+    section.innerHTML = '';
+    section.style.display = 'block';
+
+    if (!candidates.length) {
+      section.innerHTML = '<p style="color:var(--muted);font-size:14px;padding:24px 0;">Claude returned no candidates. Try a longer transcript.</p>';
+      document.getElementById('what-claude-card').style.display = 'block';
+      return;
+    }
+
+    candidates.forEach((c, i) => {
+      const score = c.hookscore ?? 0;
+      const scoreClass = score >= 8 ? 'score-green' : score >= 5 ? 'score-amber' : 'score-grey';
+      const startFmt = formatTime(c.starttime ?? 0);
+      const endFmt   = formatTime(c.endtime   ?? 0);
+
+      const card = document.createElement('div');
+      card.className = 'candidate-card';
+      card.style.cssText = 'animation: fadeUp 300ms ' + (i * 60) + 'ms ease both;';
+      card.innerHTML =
+        '<div class="candidate-header">' +
+          '<div class="score-badge ' + scoreClass + '">' + score + '</div>' +
+          '<div>' +
+            '<div style="font-size:13px;font-weight:600;color:var(--text);">Clip ' + (i + 1) + '</div>' +
+            '<div class="candidate-ts">' + startFmt + ' &rarr; ' + endFmt + '</div>' +
+          '</div>' +
+        '</div>' +
+        '<div class="candidate-hookline">' + escHtml(c.hookline ?? '') + '</div>' +
+        '<div class="candidate-reason">' + escHtml(c.reason ?? '') + '</div>' +
+        '<div class="candidate-actions">' +
+          '<button class="btn-ghost btn-sm" onclick="previewClip(' + (c.starttime ?? 0) + ')">' +
+            '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polygon points="5 3 19 12 5 21 5 3"/></svg>' +
+            ' Preview' +
+          '</button>' +
+          '<button class="btn btn-sm">' +
+            '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>' +
+            ' Select' +
+          '</button>' +
+        '</div>';
+      section.appendChild(card);
+    });
+
+    document.getElementById('what-claude-card').style.display = 'block';
+  }
+
+  function previewClip(startSec) {
+    const video = document.getElementById('clips-video');
+    if (!video.src) return;
+    video.currentTime = startSec;
+    video.play();
+    document.getElementById('clips-player-wrap').style.display = 'block';
+  }
+
+  function escHtml(s) {
+    return String(s)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;');
+  }
 </script>
 </body>
 </html>

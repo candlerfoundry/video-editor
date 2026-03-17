@@ -5,7 +5,9 @@ Runs on localhost:5000
 
 import os
 import json
+import re
 import subprocess
+import anthropic
 from flask import Flask, jsonify, request
 from flask_cors import CORS
 
@@ -98,19 +100,74 @@ def thumbnails():
 @app.route("/clips", methods=["POST"])
 def clips():
     """
-    Accepts: { "file_path": "..." }
-    Returns: { "candidates": [{ "start": 0.0, "end": 30.0, "reason": "..." }, ...] }
-    Session 4: wire Whisper medium + Claude clip detection here.
+    Accepts: { "transcript": "...", "starttime": float (optional), "endtime": float (optional) }
+    Returns: { "candidates": [{ "starttime", "endtime", "hookscore", "hookline", "reason" }, ...] }
     """
     data = request.get_json(force=True)
-    file_path = data.get("file_path", "")
+    transcript = data.get("transcript", "").strip()
+    starttime  = data.get("starttime")
+    endtime    = data.get("endtime")
 
-    return jsonify({
-        "status": "stub",
-        "message": "Clip detection not yet implemented — wiring in Session 4",
-        "input": file_path,
-        "candidates": [],
-    })
+    if not transcript:
+        return jsonify({"error": "No transcript provided"}), 400
+
+    api_key = read_api_key()
+    if not api_key:
+        return jsonify({"error": f"API key not found at {API_KEY_PATH}"}), 500
+
+    # Optionally focus Claude on a user-selected time range
+    range_note = ""
+    if starttime is not None and endtime is not None:
+        range_note = (
+            f"\n\nThe user has highlighted a range from {starttime:.1f}s to {endtime:.1f}s. "
+            "Prioritise candidates that fall within or near this window, but still return "
+            "the 3-5 best clips overall."
+        )
+
+    prompt = (
+        "You are an expert social media video editor. Analyse this transcript and identify "
+        "3-5 segments that would make excellent standalone short-form clips for Instagram, "
+        "TikTok, or YouTube Shorts.\n\n"
+        "Look for:\n"
+        "- Quotable, self-contained statements\n"
+        "- High-energy or emotionally resonant moments\n"
+        "- Segments with a clear narrative arc (setup \u2192 payoff)\n"
+        "- Hooks that grab attention in the first 3 seconds\n\n"
+        "TRANSCRIPT:\n"
+        + transcript
+        + range_note
+        + "\n\n"
+        "Return ONLY a valid JSON array with 3-5 objects. Each object must have exactly:\n"
+        '- "starttime": number (seconds)\n'
+        '- "endtime": number (seconds)\n'
+        '- "hookscore": integer 1-10 (10 = highest viral potential)\n'
+        '- "hookline": string (the single strongest sentence from that segment)\n'
+        '- "reason": string (1-2 sentences on why this makes a great clip)\n\n'
+        "Return ONLY the JSON array — no markdown fences, no explanation."
+    )
+
+    try:
+        client = anthropic.Anthropic(api_key=api_key)
+        message = client.messages.create(
+            model="claude-sonnet-4-5",
+            max_tokens=1500,
+            messages=[{"role": "user", "content": prompt}]
+        )
+        response_text = message.content[0].text.strip()
+
+        # Extract the JSON array even if Claude adds surrounding text
+        match = re.search(r'\[[\s\S]*\]', response_text)
+        candidates = json.loads(match.group() if match else response_text)
+
+        return jsonify({"candidates": candidates})
+
+    except json.JSONDecodeError as e:
+        return jsonify({
+            "error": f"Could not parse Claude response as JSON: {e}",
+            "raw": response_text
+        }), 500
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 
 
 if __name__ == "__main__":
