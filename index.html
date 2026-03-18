@@ -682,6 +682,51 @@
     .editor-btn-row {
       display: flex; gap: 8px; flex-wrap: wrap;
     }
+
+    /* ─── SAVE CLIP ROW ─── */
+    .save-clip-row {
+      margin-top: 16px;
+      padding-top: 16px;
+      border-top: 1px solid var(--border);
+      display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
+    }
+
+    /* ─── EXPORT STATUS ─── */
+    #export-status { margin-top: 12px; }
+
+    .export-progress-bar {
+      height: 8px; border-radius: 6px;
+      background: #F0EDE6; overflow: hidden; position: relative;
+    }
+    @keyframes exportShimmer {
+      0%   { transform: translateX(-100%); }
+      100% { transform: translateX(250%); }
+    }
+    .export-shimmer {
+      position: absolute; inset: 0; width: 40%;
+      background: linear-gradient(90deg, transparent, rgba(232,84,26,0.45), transparent);
+      animation: exportShimmer 1.3s ease-in-out infinite;
+    }
+    .export-progress-label {
+      font-size: 12.5px; color: var(--muted); margin-top: 8px;
+    }
+
+    .export-success {
+      display: flex; align-items: center; gap: 12px;
+      background: #F0FAF5; border: 1px solid var(--green);
+      border-radius: var(--r); padding: 12px 16px;
+    }
+    .export-success-icon { color: var(--green); flex-shrink: 0; }
+    .export-success-text { flex: 1; }
+    .export-success-text strong { display: block; font-size: 13px; font-weight: 600; color: var(--text); margin-bottom: 2px; }
+    .export-success-text span   { font-size: 12px; color: var(--muted); font-family: var(--font-mono); }
+
+    .export-error {
+      background: #FEF2F2; border: 1px solid #FECACA;
+      border-radius: var(--r); padding: 12px 16px;
+      font-size: 13px; color: #CC2200; line-height: 1.6;
+    }
+    .export-error strong { font-weight: 600; }
   </style>
 </head>
 <body>
@@ -900,6 +945,21 @@
               <button class="btn-ghost btn-sm" onclick="setStartHere()">Set Start Here</button>
               <button class="btn-ghost btn-sm" onclick="setEndHere()">Set End Here</button>
             </div>
+
+            <!-- Save Clip -->
+            <div class="save-clip-row">
+              <button class="btn" id="btn-save-clip" onclick="saveClip()">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M19 21H5a2 2 0 01-2-2V5a2 2 0 012-2h11l5 5v11a2 2 0 01-2 2z"/>
+                  <polyline points="17 21 17 13 7 13 7 21"/>
+                  <polyline points="7 3 7 8 15 8"/>
+                </svg>
+                Save Clip
+              </button>
+            </div>
+
+            <!-- Export status (progress / success / error) -->
+            <div id="export-status" style="display:none;"></div>
 
           </div><!-- /#mini-editor-controls -->
         </div>
@@ -1166,9 +1226,13 @@
   setInterval(checkHealth, 3000);
 
   // ── Clips tab — MP4 file load ──
+  let _clipFile = null;
+
   document.getElementById('clips-file').addEventListener('change', function () {
     const file = this.files[0];
     if (!file) return;
+
+    _clipFile = file;
 
     const url = URL.createObjectURL(file);
     const video = document.getElementById('clips-video');
@@ -1656,6 +1720,66 @@
       return parseInt(parts[0], 10) * 60 + parseFloat(parts[1]);
     }
     return parseFloat(str);
+  }
+
+  // ── Save Clip → POST /export_clip → download ──
+  async function saveClip() {
+    if (!_clipFile) {
+      alert('Load a video file first.');
+      return;
+    }
+
+    const statusEl = document.getElementById('export-status');
+    const btnSave  = document.getElementById('btn-save-clip');
+
+    // Show shimmer progress
+    btnSave.disabled = true;
+    statusEl.style.display = 'block';
+    statusEl.innerHTML =
+      '<div class="export-progress-bar"><div class="export-shimmer"></div></div>' +
+      '<p class="export-progress-label">Cutting clip with ffmpeg\u2026</p>';
+
+    const baseName     = _clipFile.name.replace(/\.mp4$/i, '');
+    const startFmt     = editorInTime.toFixed(1);
+    const endFmt       = editorOutTime.toFixed(1);
+    const suggestedName = baseName + ' - Clip (' + startFmt + '-' + endFmt + ').mp4';
+
+    const form = new FormData();
+    form.append('file', _clipFile);
+    form.append('starttime', editorInTime);
+    form.append('endtime', editorOutTime);
+    form.append('suggested_name', suggestedName);
+
+    try {
+      const res = await fetch(BACKEND + '/export_clip', { method: 'POST', body: form });
+
+      if (!res.ok) {
+        let errMsg = res.statusText;
+        try { const d = await res.json(); errMsg = d.error || errMsg; } catch (_) {}
+        throw new Error(errMsg);
+      }
+
+      // Extract filename from Content-Disposition if present
+      const cd = res.headers.get('Content-Disposition') || '';
+      const nameMatch = cd.match(/filename[^;=\n]*=["']?([^"'\n]+)/i);
+      const downloadName = nameMatch ? nameMatch[1].trim() : suggestedName;
+
+      const blob = await res.blob();
+      const blobUrl = URL.createObjectURL(blob);
+
+      statusEl.innerHTML =
+        '<div class="export-success">' +
+          '<svg class="export-success-icon" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>' +
+          '<div class="export-success-text"><strong>Clip ready!</strong><span>' + escHtml(downloadName) + '</span></div>' +
+          '<a href="' + blobUrl + '" download="' + escHtml(downloadName) + '" class="btn btn-sm">Download</a>' +
+        '</div>';
+
+    } catch (err) {
+      statusEl.innerHTML =
+        '<div class="export-error"><strong>Export failed:</strong> ' + escHtml(err.message) + '</div>';
+    } finally {
+      btnSave.disabled = false;
+    }
   }
 </script>
 </body>

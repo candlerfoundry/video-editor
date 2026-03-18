@@ -3,12 +3,15 @@ Foundry Video Editor — Local Flask Backend
 Runs on localhost:5000
 """
 
+import io
 import os
 import json
 import re
+import shutil
 import subprocess
+import tempfile
 import anthropic
-from flask import Flask, jsonify, request
+from flask import Flask, jsonify, request, send_file
 from flask_cors import CORS
 
 app = Flask(__name__)
@@ -168,6 +171,74 @@ def clips():
         }), 500
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+
+
+# ── Export Clip ──
+FFMPEG = r"C:\Users\esavant\Dropbox\FFMPEG\ffmpeg.exe"
+
+@app.route("/export_clip", methods=["POST"])
+def export_clip():
+    """
+    Accepts multipart/form-data:
+      file          — the source MP4
+      starttime     — float, in-point seconds
+      endtime       — float, out-point seconds
+      suggested_name — desired output filename (e.g. "Talk - Clip (12.5-45.0).mp4")
+    Returns the clipped MP4 as a download.
+    """
+    file = request.files.get("file")
+    if not file:
+        return jsonify({"error": "No file provided"}), 400
+
+    try:
+        starttime      = float(request.form.get("starttime", 0))
+        endtime        = float(request.form.get("endtime",   0))
+        suggested_name = request.form.get("suggested_name", "clip.mp4")
+    except (ValueError, TypeError) as e:
+        return jsonify({"error": f"Invalid parameters: {e}"}), 400
+
+    if endtime <= starttime:
+        return jsonify({"error": "endtime must be greater than starttime"}), 400
+
+    # Write source to a clean temp path (avoids special characters in filename)
+    tmp_dir = tempfile.mkdtemp()
+    try:
+        input_path  = os.path.join(tmp_dir, "source.mp4")
+        output_name = suggested_name if suggested_name.lower().endswith(".mp4") else suggested_name + ".mp4"
+        output_path = os.path.join(tmp_dir, output_name)
+
+        file.save(input_path)
+
+        cmd = [
+            FFMPEG, "-y",
+            "-ss", str(starttime),
+            "-to", str(endtime),
+            "-i", input_path,
+            "-c", "copy",
+            output_path,
+        ]
+        result = subprocess.run(
+            cmd,
+            capture_output=True,
+            creationflags=CREATE_NO_WINDOW,
+        )
+        if result.returncode != 0:
+            err = result.stderr.decode("utf-8", errors="replace")[-600:]
+            return jsonify({"error": "ffmpeg failed: " + err}), 500
+
+        # Read into memory so we can clean up temp files immediately
+        with open(output_path, "rb") as f:
+            clip_bytes = f.read()
+
+    finally:
+        shutil.rmtree(tmp_dir, ignore_errors=True)
+
+    return send_file(
+        io.BytesIO(clip_bytes),
+        as_attachment=True,
+        download_name=output_name,
+        mimetype="video/mp4",
+    )
 
 
 if __name__ == "__main__":
