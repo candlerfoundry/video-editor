@@ -182,43 +182,55 @@ def bare_stem(name):
     return stem
 
 
-@app.route("/find_json", methods=["POST"])
+@app.route('/find_json', methods=['POST'])
 def find_json():
-    """
-    Accepts: { "file_path": "..." } OR { "filename": "Video.mp4" }
-    If file_path given and exists: searches same directory.
-    If only filename given: walks Dropbox looking for a matching Words JSON.
-    Returns: { "found": true, "json_path": "..." } or { "found": false }
-    """
-    data = request.get_json(force=True)
-    file_path = data.get("file_path", "").strip()
-    filename  = data.get("filename",  "").strip()
+    import glob as glob_module
+    filename = request.json.get('filename', '')
+    dropbox_root_local = os.path.join(os.path.expanduser('~'), 'Dropbox')
 
-    # Determine search root and stem
-    if file_path and os.path.isfile(file_path):
-        search_dirs = [os.path.dirname(file_path)]
-        target_bare = bare_stem(os.path.basename(file_path)).lower()
-    elif filename:
-        search_dirs = [dropbox_root]
-        target_bare = bare_stem(filename).lower()
-    else:
-        return jsonify({"found": False})
+    # Find the video file anywhere in Dropbox by exact filename
+    video_matches = glob_module.glob(
+        os.path.join(dropbox_root_local, '**', filename), recursive=True
+    )
+    if not video_matches:
+        return jsonify({'found': False, 'reason': 'Could not locate video in Dropbox'})
 
-    def search_dir_tree(roots):
-        for root in roots:
-            for dirpath, _dirs, files in os.walk(root):
-                for entry in files:
-                    if not entry.lower().endswith('.json'):
-                        continue
-                    entry_lower = entry.lower()
-                    if target_bare in entry_lower and 'words' in entry_lower:
-                        return os.path.join(dirpath, entry)
-        return None
+    video_dir = os.path.dirname(video_matches[0])
 
-    result = search_dir_tree(search_dirs)
-    if result:
-        return jsonify({"found": True, "json_path": result})
-    return jsonify({"found": False})
+    # Look for Words JSON in the same folder — no naming convention required
+    json_matches = glob_module.glob(os.path.join(video_dir, '*Words*.json'))
+
+    # Fallback: case-insensitive 'words' anywhere in filename
+    if not json_matches:
+        json_matches = [
+            f for f in glob_module.glob(os.path.join(video_dir, '*.json'))
+            if 'words' in os.path.basename(f).lower()
+        ]
+
+    # Last resort: any JSON in the folder
+    if not json_matches:
+        json_matches = glob_module.glob(os.path.join(video_dir, '*.json'))
+
+    if not json_matches:
+        return jsonify({'found': False, 'reason': 'No transcript JSON found in video folder'})
+
+    # If multiple, pick most similar to video filename
+    if len(json_matches) > 1:
+        video_stem = os.path.splitext(filename)[0].lower()
+        def similarity(path):
+            return sum(1 for c in video_stem if c in os.path.basename(path).lower())
+        json_matches.sort(key=similarity, reverse=True)
+
+    json_path = json_matches[0]
+    with open(json_path, 'r', encoding='utf-8') as f:
+        content = json.load(f)
+
+    return jsonify({
+        'found': True,
+        'json_path': json_path,
+        'json_filename': os.path.basename(json_path),
+        'json_content': content
+    })
 
 
 # ── Generate Transcript ──

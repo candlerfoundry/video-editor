@@ -985,16 +985,16 @@
 
           <div class="clips-load-row fade-up">
 
-            <!-- Left: Folder picker -->
+            <!-- Left: Single MP4 picker -->
             <div>
-              <div class="clc-label" style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.06em;color:var(--muted);margin-bottom:6px;">Video Folder</div>
+              <div class="clc-label" style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.06em;color:var(--muted);margin-bottom:6px;">Video File</div>
               <div class="clips-load-card" id="clc-video" onclick="document.getElementById('clips-file').click()">
-                <div class="clc-icon">📁</div>
+                <div class="clc-icon">🎬</div>
                 <div class="clc-body">
-                  <div class="clc-value muted" id="clc-video-value">Select the folder containing your video</div>
-                  <div style="font-size:11px;color:var(--muted);margin-top:2px;">The app will find the video and transcript automatically</div>
+                  <div class="clc-value muted" id="clc-video-value">Browse for video</div>
+                  <div style="font-size:11px;color:var(--muted);margin-top:2px;">Select your MP4 &mdash; transcript loads automatically</div>
                 </div>
-                <input type="file" id="clips-file" webkitdirectory style="display:none;" />
+                <input type="file" accept=".mp4,.MP4,video/mp4" id="clips-file" style="display:none;" />
               </div>
             </div>
 
@@ -1372,7 +1372,7 @@
     // Reset video card
     const clcV = document.getElementById('clc-video');
     clcV.classList.remove('loaded');
-    document.getElementById('clc-video-value').textContent = 'Select the folder containing your video';
+    document.getElementById('clc-video-value').textContent = 'Browse for video';
     document.getElementById('clc-video-value').className = 'clc-value muted';
     // Reset JSON card
     const clcJ = document.getElementById('clc-json');
@@ -1405,69 +1405,66 @@
     return stem;
   }
 
-  // ── Folder picker — auto-detects MP4 + Words JSON from selected folder ──
-  document.getElementById('clips-file').addEventListener('change', function (e) {
-    const files = Array.from(e.target.files);
-    // Debug: log all filenames so we can see exactly what the browser provides
-    console.log('Files seen in folder:', files.map(f => f.name));
-    // Find MP4 — fully case-insensitive, ignore captioned outputs
-    const mp4File = files.find(f => {
-      const name = f.name.toLowerCase();
-      return name.endsWith('.mp4') && !name.includes('captioned');
-    });
-    if (!mp4File) {
-      const fileList = files.map(f => f.name).join('\n');
-      showError('No MP4 found in folder. Files seen:\n' + fileList);
-      return;
-    }
-    // Strip folder path prefix if present (webkitdirectory includes it on some browsers)
-    const mp4BaseName = mp4File.name.includes('/')
-      ? mp4File.name.split('/').pop()
-      : mp4File.name;
-    // Strip known suffixes to get base stem for JSON matching
-    let stem = mp4BaseName
-      .replace(/\.mp4$/i, '')
-      .replace(/\s*-\s*horizontal\s*-\s*uncaptioned/i, '')
-      .replace(/\s*\(uncaptioned\)/i, '')
-      .replace(/\s*-\s*horizontal/i, '')
-      .trim();
-    // Find matching Words JSON — case-insensitive
-    const jsonFile = files.find(f => {
-      const name = f.name.toLowerCase();
-      return name.includes('words') &&
-             name.endsWith('.json') &&
-             name.includes(stem.toLowerCase());
-    });
+  // ── Single MP4 picker — backend locates matching Words JSON in Dropbox ──
+  document.getElementById('clips-file').addEventListener('change', async function(e) {
+    const file = e.target.files[0];
+    if (!file) return;
 
-    // 2. Load video
-    _clipFile = mp4File;
-    const clcV = document.getElementById('clc-video');
-    clcV.classList.add('loaded');
-    const valEl = document.getElementById('clc-video-value');
-    valEl.textContent = mp4BaseName;
-    valEl.className = 'clc-value mono';
-    valEl.style.color = '';
-    const vid = document.getElementById('clips-video');
-    vid.src = URL.createObjectURL(mp4File);
-    vid.load();
+    // Load video
+    _clipFile = file;
+    const videoEl = document.getElementById('clips-video');
+    videoEl.src = URL.createObjectURL(file);
 
-    if (jsonFile) {
-      setJsonStatus('searching');
-      const reader = new FileReader();
-      reader.onload = function (e) {
-        try {
-          const data = JSON.parse(e.target.result);
-          setWordsData(extractWords(data), jsonFile.name);
-        } catch (err) {
-          setJsonStatus('not_found');
-          alert('Could not parse transcript JSON: ' + err.message);
-        }
-      };
-      reader.readAsText(jsonFile);
-    } else {
-      setJsonStatus('not_found');
+    // Show filename + green checkmark in video card
+    showVideoLoaded(file.name);
+
+    // Auto-find JSON via backend
+    showJsonSearching();
+    try {
+      const res = await fetch('http://localhost:5000/find_json', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({filename: file.name})
+      });
+      const data = await res.json();
+      if (data.found) {
+        window.clipsWordsData = data.json_content;
+        showJsonLoaded(data.json_filename);
+        enableFindClips();
+      } else {
+        showJsonNotFound();
+      }
+    } catch (err) {
+      showJsonNotFound();
     }
   });
+
+  // ── Picker helper functions ──
+  function showVideoLoaded(filename) {
+    const card = document.getElementById('clc-video');
+    card.classList.add('loaded');
+    const valEl = document.getElementById('clc-video-value');
+    valEl.textContent = filename;
+    valEl.className = 'clc-value mono';
+    valEl.style.color = '';
+  }
+
+  function showJsonSearching() {
+    setJsonStatus('searching');
+  }
+
+  function showJsonLoaded(filename) {
+    const words = extractWords(window.clipsWordsData);
+    setWordsData(words, filename);
+  }
+
+  function showJsonNotFound() {
+    setJsonStatus('not_found');
+  }
+
+  function enableFindClips() {
+    updateFindButton();
+  }
 
   function setJsonStatus(status, filename) {
     const card = document.getElementById('clc-json');
