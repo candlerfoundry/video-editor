@@ -1661,9 +1661,9 @@
     candidates.forEach((c, i) => {
       const score      = c.hook_score ?? c.hookscore ?? 0;
       const scoreClass = score >= 8 ? 'score-green' : score >= 5 ? 'score-amber' : 'score-grey';
-      const startFmt   = formatTime(c.starttime ?? 0);
-      const endFmt     = formatTime(c.endtime   ?? 0);
-      const durSec     = Math.round((c.endtime ?? 0) - (c.starttime ?? 0));
+      const startFmt   = formatTime(c.start_time ?? 0);
+      const endFmt     = formatTime(c.end_time   ?? 0);
+      const durSec     = Math.round((c.end_time ?? 0) - (c.start_time ?? 0));
       const whyText    = c.why_it_works ?? c.reason ?? '';
 
       const card = document.createElement('div');
@@ -1678,7 +1678,7 @@
             '<span class="cand-ts">' + startFmt + ' \u2014 ' + endFmt + '</span>' +
             '<span class="cand-dur">' + durSec + 's</span>' +
           '</div>' +
-          '<div class="cand-hookline">' + escHtml(c.hookline ?? '') + '</div>' +
+          '<div class="cand-hookline">' + escHtml(c.hook_line ?? '') + '</div>' +
           '<div class="cand-why">' + escHtml(whyText) + '</div>' +
           '<div class="candidate-actions">' +
             '<button class="btn-ghost btn-sm" onclick="togglePreview(event,' + i + ')">' +
@@ -1719,9 +1719,9 @@
       vid.src = URL.createObjectURL(_clipFile);
       vid.load();
       vid.addEventListener('loadedmetadata', function () {
-        vid.currentTime = c.starttime ?? 0;
+        vid.currentTime = c.start_time ?? 0;
         vid.play().catch(() => {});
-        const dur = (c.endtime ?? 0) - (c.starttime ?? 0);
+        const dur = (c.end_time ?? 0) - (c.start_time ?? 0);
         setTimeout(() => vid.pause(), dur * 1000);
       }, { once: true });
     }
@@ -1730,8 +1730,8 @@
   // ── Select & Edit → Stage 3 ──
   function selectAndEdit(idx) {
     _editCandidate = _candidates[idx];
-    editorInTime  = _editCandidate.starttime ?? 0;
-    editorOutTime = _editCandidate.endtime   ?? 0;
+    editorInTime  = _editCandidate.start_time ?? 0;
+    editorOutTime = _editCandidate.end_time   ?? 0;
 
     // Set up edit-video
     const vid = document.getElementById('edit-video');
@@ -1743,7 +1743,7 @@
     }, { once: true });
 
     document.getElementById('editor-clip-label').textContent =
-      '\u201C' + (_editCandidate.hookline || 'Clip') + '\u201D';
+      '\u201C' + (_editCandidate.hook_line || 'Clip') + '\u201D';
 
     updateTimeFields();
 

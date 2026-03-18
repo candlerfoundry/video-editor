@@ -22,7 +22,7 @@ CREATE_NO_WINDOW = 0x08000000
 
 # ── Dropbox portable paths ──
 dropbox_root   = os.path.join(os.path.expanduser('~'), 'Dropbox')
-API_KEY_PATH   = os.path.join(dropbox_root, '3MB', 'api_key.txt')
+API_KEY_PATH   = os.path.join(dropbox_root, '3MB', 'Captioning Project', 'api_key.txt')
 FFMPEG         = os.path.join(dropbox_root, 'FFMPEG', 'ffmpeg.exe')
 FFMPEG_CAPTION = FFMPEG
 
@@ -331,81 +331,77 @@ def thumbnails():
 
 
 # ── Clips ──
-@app.route("/clips", methods=["POST"])
-def clips():
-    """
-    Accepts: { "transcript": "...", "starttime": float (optional), "endtime": float (optional) }
-    Returns: { "candidates": [{ "starttime", "endtime", "hookscore", "hookline", "reason" }, ...] }
-    """
-    data = request.get_json(force=True)
-    transcript = data.get("transcript", "").strip()
-
-    if not transcript:
-        return jsonify({"error": "No transcript provided"}), 400
-
-    api_key = read_api_key()
-    if not api_key:
-        return jsonify({"error": f"API key not found at {API_KEY_PATH}"}), 500
-
-    prompt = (
-        "You are a social media clip expert. Analyze this transcript and identify 8-10 "
-        "high-impact moments suitable for viral short-form video clips (30-90 seconds each).\n\n"
-        "For each clip, provide:\n"
-        '- "starttime": float (seconds)\n'
-        '- "endtime": float (seconds)\n'
-        '- "hook_score": integer 1-10 (virality potential)\n'
-        '- "hookline": string (the single most compelling sentence from this segment)\n'
-        '- "why_it_works": string (1-2 sentences explaining the viral potential)\n\n'
-        "Rank results by hook_score descending.\n\n"
-        "CRITICAL: Respond with ONLY a valid JSON array. No markdown, no code fences, "
-        "no explanation. Start your response with [ and end with ].\n\n"
-        "Transcript words: " + transcript
-    )
-
+@app.route('/clips', methods=['POST'])
+def find_clips():
     try:
+        data = request.json
+        transcript = data.get('transcript', [])
+
+        if not transcript or len(transcript) < 10:
+            return jsonify({'error': 'Transcript too short', 'candidates': []})
+
+        # Build plain text from words array
+        if isinstance(transcript[0], dict):
+            transcript_text = ' '.join(w.get('word', '') for w in transcript)
+        else:
+            transcript_text = ' '.join(str(w) for w in transcript)
+
+        # Log what we received
+        print(f"Transcript word count: {len(transcript)}")
+        print(f"Transcript preview: {transcript_text[:200]}")
+
+        api_key_path = os.path.join(os.path.expanduser('~'), 'Dropbox', '3MB', 'Captioning Project', 'api_key.txt')
+        with open(api_key_path, 'r') as f:
+            api_key = f.read().strip()
+
         client = anthropic.Anthropic(api_key=api_key)
+
         message = client.messages.create(
             model="claude-sonnet-4-6",
-            max_tokens=2500,
-            messages=[{"role": "user", "content": prompt}]
-        )
-        response_text = message.content[0].text.strip()
+            max_tokens=2000,
+            messages=[{
+                "role": "user",
+                "content": f"""You are a social media clip expert. Analyze this transcript and identify 8-10 high-impact moments for viral short-form video clips (30-90 seconds each).
 
-        # Strip markdown code fences if Claude added them despite instructions
-        raw = response_text
-        raw = re.sub(r'^```json\s*', '', raw)
-        raw = re.sub(r'^```\s*', '', raw)
-        raw = re.sub(r'```\s*$', '', raw)
+Return ONLY a valid JSON array. No markdown. No code fences. No explanation. Start your response with [ and end with ].
+
+Each item must have exactly these fields:
+- start_time: float (seconds from start of video)
+- end_time: float (seconds from start of video)
+- hook_score: integer 1-10
+- hook_line: string (most compelling sentence from this segment)
+- why_it_works: string (1-2 sentences)
+
+Rank by hook_score descending.
+
+Transcript: {transcript_text}"""
+            }]
+        )
+
+        raw = message.content[0].text.strip()
+        print(f"Claude raw response (first 300 chars): {raw[:300]}")
+
+        # Strip any markdown code fences defensively
+        raw = re.sub(r'^```json\s*', '', raw, flags=re.MULTILINE)
+        raw = re.sub(r'^```\s*', '', raw, flags=re.MULTILINE)
+        raw = re.sub(r'```\s*$', '', raw, flags=re.MULTILINE)
         raw = raw.strip()
 
-        # Fallback: extract the first [...] array if there is surrounding text
-        if not raw.startswith('['):
-            match = re.search(r'\[[\s\S]*\]', raw)
-            raw = match.group() if match else raw
+        # Find the JSON array even if there's extra text around it
+        start = raw.find('[')
+        end = raw.rfind(']')
+        if start != -1 and end != -1:
+            raw = raw[start:end+1]
 
         candidates = json.loads(raw)
+        print(f"Parsed {len(candidates)} candidates")
+        return jsonify({'candidates': candidates})
 
-        # Normalise field names: support both old (reason/hookscore) and new schema
-        normalised = []
-        for c in candidates:
-            normalised.append({
-                "starttime":    c.get("starttime", 0),
-                "endtime":      c.get("endtime",   0),
-                "hook_score":   c.get("hook_score", c.get("hookscore", 0)),
-                "hookline":     c.get("hookline", ""),
-                "why_it_works": c.get("why_it_works", c.get("reason", "")),
-            })
-        normalised.sort(key=lambda x: x["hook_score"], reverse=True)
-
-        return jsonify({"candidates": normalised})
-
-    except json.JSONDecodeError as e:
-        return jsonify({
-            "error": f"Could not parse Claude response as JSON: {e}",
-            "raw": response_text
-        }), 500
     except Exception as e:
-        return jsonify({"error": str(e)}), 500
+        print(f"ERROR in /clips: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({'error': str(e), 'candidates': []})
 
 
 # ── Export Clip ──
