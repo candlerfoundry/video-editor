@@ -355,20 +355,148 @@
     .dz-label { font-size: 15px; font-weight: 600; color: var(--text); margin-bottom: 4px; }
     .dz-sub   { font-size: 12.5px; color: var(--muted); line-height: 1.5; }
 
-    /* ─── CLIPS TAB SPECIFICS ─── */
-    .drop-grid {
+    /* ─── CLIPS TAB — 3-STAGE FLOW ─── */
+
+    /* Stage 1 load row */
+    .clips-load-row {
       display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 16px;
+      grid-template-columns: 3fr 2fr;
+      gap: 12px;
+      margin-bottom: 20px;
+      align-items: stretch;
+    }
+    .clips-load-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--r);
+      padding: 14px 16px;
+      box-shadow: var(--shadow-sm);
+      display: flex; align-items: center; gap: 12px;
+      min-height: 72px; cursor: pointer;
+      transition: border-color 150ms, background 150ms;
+    }
+    .clips-load-card:hover { border-color: var(--orange); background: var(--orange-tint); }
+    .clips-load-card.loaded {
+      border-color: var(--green); background: #F0FAF5; cursor: default;
+    }
+    .clips-load-card.loaded:hover { border-color: var(--green); background: #F0FAF5; }
+    .clips-load-card.warn { border-color: var(--amber); background: #FFFBEB; cursor: default; }
+    .clc-icon { font-size: 22px; flex-shrink: 0; }
+    .clc-body { flex: 1; min-width: 0; }
+    .clc-label {
+      font-size: 12px; font-weight: 700;
+      text-transform: uppercase; letter-spacing: 0.06em;
+      color: var(--muted); margin-bottom: 3px;
+    }
+    .clc-value {
+      font-size: 13px; font-weight: 500; color: var(--text);
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    }
+    .clc-value.mono { font-family: var(--font-mono); font-size: 12px; }
+    .clc-value.muted { color: var(--muted); }
+    .clc-check { color: var(--green); flex-shrink: 0; }
+    .clc-spinner {
+      width: 14px; height: 14px; border-radius: 50%;
+      border: 2px solid var(--border-2);
+      border-top-color: var(--muted);
+      animation: spin 0.8s linear infinite;
+      flex-shrink: 0;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .clc-alt-link {
+      font-size: 11px; color: var(--muted); margin-top: 4px;
+      text-decoration: underline; cursor: pointer;
+    }
+    .clc-alt-link:hover { color: var(--orange); }
+
+    /* Summary bar (Stage 2+) */
+    .clips-summary-bar {
+      display: none;
+      align-items: center; gap: 10px;
+      background: var(--sidebar-bg); border: 1px solid var(--border);
+      border-radius: var(--r); padding: 10px 16px;
+      margin-bottom: 20px; font-size: 13px; color: var(--text-2);
+    }
+    .clips-summary-bar.active { display: flex; }
+    .clips-summary-bar .mono { font-family: var(--font-mono); font-size: 12px; }
+    .clips-summary-bar a { color: var(--orange); text-decoration: none; font-weight: 500; margin-left: auto; }
+    .clips-summary-bar a:hover { text-decoration: underline; }
+
+    /* Find Viral Clips button row */
+    .clips-find-row {
       margin-bottom: 28px;
     }
-    .drop-zone-label {
-      display: flex; align-items: center; gap: 7px;
-      font-size: 11px; font-weight: 700;
-      text-transform: uppercase; letter-spacing: 0.07em;
-      color: var(--muted); margin-bottom: 8px;
+
+    /* Candidate card (Stage 2) */
+    .candidate-card {
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: var(--r); padding: 16px 20px;
+      box-shadow: var(--shadow-sm); margin-bottom: 10px;
+      transition: transform 150ms ease, border-color 150ms, box-shadow 150ms;
+      display: flex; gap: 16px; align-items: flex-start;
     }
-    .drop-zone-label svg { flex-shrink: 0; }
+    .candidate-card:hover {
+      transform: translateY(-2px);
+      border-color: rgba(232,84,26,0.35);
+      box-shadow: 0 8px 24px rgba(0,0,0,0.10);
+    }
+    .score-badge {
+      width: 44px; height: 44px; border-radius: 50%;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 15px; font-weight: 700; flex-shrink: 0;
+    }
+    .score-green  { background: #DCFCE7; color: #166534; }
+    .score-amber  { background: #FEF3C7; color: #92400E; }
+    .score-grey   { background: #F3F4F6; color: #6B7280; }
+    .cand-body { flex: 1; min-width: 0; }
+    .cand-meta { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; flex-wrap: wrap; }
+    .cand-ts {
+      font-family: var(--font-mono); font-size: 12px;
+      color: var(--orange); font-weight: 500;
+    }
+    .cand-dur {
+      font-size: 11px; font-weight: 500; color: var(--muted);
+      background: var(--sidebar-bg); border: 1px solid var(--border);
+      border-radius: 20px; padding: 2px 8px;
+    }
+    .cand-hookline {
+      font-size: 15px; font-weight: 600; color: var(--text);
+      margin-bottom: 5px; line-height: 1.4;
+    }
+    .cand-why {
+      font-size: 13px; color: var(--text-2);
+      line-height: 1.65; margin-bottom: 12px;
+    }
+    .candidate-actions { display: flex; gap: 8px; }
+    .btn-sm { padding: 6px 14px !important; font-size: 12.5px !important; }
+
+    /* Inline preview player (Stage 2 Preview) */
+    .inline-preview {
+      display: none; margin-top: 12px;
+      border-top: 1px solid var(--border); padding-top: 12px;
+    }
+    .inline-preview.active { display: block; }
+    .inline-preview video {
+      width: 100%; max-width: 480px; border-radius: 8px;
+      background: #111; border: 1px solid var(--border);
+      display: block;
+    }
+
+    /* Stage 3 Edit */
+    #clips-stage3 { display: none; }
+    #clips-stage3.active { display: block; }
+    .stage3-back {
+      display: inline-flex; align-items: center; gap: 6px;
+      font-size: 13px; font-weight: 500; color: var(--muted);
+      background: none; border: none; cursor: pointer;
+      margin-bottom: 20px; padding: 0;
+    }
+    .stage3-back:hover { color: var(--orange); }
+    #edit-video {
+      width: 100%; max-width: 640px; border-radius: 8px;
+      background: #111; border: 1px solid var(--border);
+      display: block; margin-bottom: 16px;
+    }
 
     /* Clips empty state */
     .empty-state {
@@ -380,13 +508,13 @@
     .empty-state h4 { font-size: 15px; font-weight: 600; color: var(--text-2); margin-bottom: 5px; }
     .empty-state p  { font-size: 13px; color: var(--muted); line-height: 1.6; max-width: 360px; }
 
-    /* Clips video player */
-    #clips-player-wrap { margin-bottom: 24px; }
-    #clips-video {
-      width: 100%; border-radius: 8px;
-      background: #111; border: 1px solid var(--border);
+    .drop-zone-label {
+      display: flex; align-items: center; gap: 7px;
+      font-size: 11px; font-weight: 700;
+      text-transform: uppercase; letter-spacing: 0.07em;
+      color: var(--muted); margin-bottom: 8px;
     }
-    #clips-filename { margin-top: 8px; font-size: 12px; color: var(--muted); font-family: var(--font-mono); }
+    .drop-zone-label svg { flex-shrink: 0; }
 
     /* What Claude looks for tags */
     .tag-row { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 16px; }
@@ -750,6 +878,7 @@
 
     <div class="wizard-steps">
       <ol>
+        <li>Install <strong>Dropbox</strong> and sign in with the Foundry account &mdash; <a href="https://www.dropbox.com/install" target="_blank" rel="noopener" style="color:var(--orange);">dropbox.com/install</a></li>
         <li>Make sure <strong>Python 3.14</strong> is installed. Download from <strong>python.org</strong> and check <strong>"Add Python to PATH"</strong> during install.</li>
         <li>Open <strong>Dropbox &rarr; Scripts &rarr; Video Editor Downloads &rarr; foundry-video-editor-backend</strong></li>
         <li>Double-click <strong>start_server.bat</strong> &mdash; a window opens and sets everything up automatically</li>
@@ -851,168 +980,145 @@
       <!-- Body -->
       <div class="panel-body">
 
-        <!-- Two-column drop zones -->
-        <div class="drop-grid fade-up">
-          <div>
-            <div class="drop-zone-label">
-              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-                <rect x="3" y="8" width="13" height="8" rx="2"/>
-                <path d="M16 10l4.553-2.276A1 1 0 0121 8.724v6.552a1 1 0 01-1.447.894L16 14"/>
+        <!-- ── STAGE 1: Load (compact two-col row) ── -->
+        <div id="clips-stage1">
+
+          <div class="clips-load-row fade-up">
+
+            <!-- Left: Video drop zone -->
+            <div>
+              <div class="clc-label" style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.06em;color:var(--muted);margin-bottom:6px;">Video File</div>
+              <div class="clips-load-card" id="clc-video" onclick="document.getElementById('clips-file').click()">
+                <div class="clc-icon">🎬</div>
+                <div class="clc-body">
+                  <div class="clc-value muted" id="clc-video-value">Drop MP4 here or click to browse</div>
+                </div>
+                <input type="file" id="clips-file" accept=".mp4" style="display:none;" />
+              </div>
+            </div>
+
+            <!-- Right: JSON status card -->
+            <div>
+              <div class="clc-label" style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.06em;color:var(--muted);margin-bottom:6px;">Transcript JSON</div>
+              <div class="clips-load-card" id="clc-json" style="cursor:default;">
+                <div class="clc-icon">📄</div>
+                <div class="clc-body">
+                  <div class="clc-value muted" id="clc-json-value">Load a video first</div>
+                  <div id="clc-json-sub" style="display:none;"></div>
+                </div>
+                <div id="clc-json-indicator"></div>
+                <input type="file" id="json-file-override" accept=".json" style="display:none;" />
+              </div>
+            </div>
+
+          </div>
+
+          <!-- Hidden video element — never shown in Stage 1 -->
+          <video id="clips-video" style="display:none;"></video>
+
+          <!-- Find Viral Clips button -->
+          <div class="clips-find-row fade-up-1">
+            <button class="btn" id="btn-find-clips" onclick="findClips()" disabled style="font-size:15px;padding:12px 32px;">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                <circle cx="6" cy="6" r="3"/><circle cx="6" cy="18" r="3"/>
+                <path d="M20 4L8.12 15.88M14.47 14.48L20 20M8.12 8.12L12 12"/>
               </svg>
-              Video File
-            </div>
-            <div class="drop-zone" id="clips-dropzone" onclick="document.getElementById('clips-file').click()">
-              <div class="dz-icon">🎬</div>
-              <div class="dz-label" id="clips-dz-label">Drop MP4 here</div>
-              <div class="dz-sub">or click to browse &mdash; .mp4 files only</div>
-              <input type="file" id="clips-file" accept=".mp4" />
-            </div>
+              Find Viral Clips
+            </button>
           </div>
 
-          <div>
-            <div class="drop-zone-label">
-              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-                <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/>
-                <polyline points="14 2 14 8 20 8"/>
-                <line x1="16" y1="13" x2="8" y2="13"/>
-                <line x1="16" y1="17" x2="8" y2="17"/>
+          <!-- Empty state / what Claude looks for -->
+          <div class="empty-state fade-up-2" id="clips-empty-state">
+            <div class="empty-state-svg">
+              <svg width="80" height="60" viewBox="0 0 100 76" fill="none">
+                <rect x="6" y="18" width="88" height="42" rx="5" fill="#F0EDE6" stroke="#D4D0C6" stroke-width="1.5"/>
+                <rect x="14" y="24" width="20" height="30" rx="2.5" fill="#E0DDD5"/>
+                <rect x="41" y="24" width="20" height="30" rx="2.5" fill="#E0DDD5"/>
+                <rect x="68" y="24" width="20" height="30" rx="2.5" fill="#E0DDD5"/>
               </svg>
-              Word Timing JSON
             </div>
-            <div class="drop-zone" id="words-dropzone" onclick="document.getElementById('words-file').click()">
-              <div class="dz-icon">📄</div>
-              <div class="dz-label">Drop Words JSON here</div>
-              <div class="dz-sub">Whisper word-level output &mdash; optional but improves precision</div>
-              <input type="file" id="words-file" accept=".json" />
-            </div>
+            <h4>Ready to find your best clips</h4>
+            <p>Load an MP4 above. Claude will scan the transcript and surface the top 8-10 moments for short-form social media.</p>
           </div>
-        </div>
 
-        <!-- Mode bar — shown after Words JSON loaded -->
-        <div id="mode-bar" class="mode-bar" style="display:none;">
-          <span class="mode-label">Mark range:</span>
-          <div class="mode-toggle">
-            <button class="mode-btn active" id="btn-set-start" onclick="setMode('start')">Set Start</button>
-            <button class="mode-btn" id="btn-set-end" onclick="setMode('end')">Set End</button>
+        </div><!-- /#clips-stage1 -->
+
+        <!-- ── STAGE 2: Results ── -->
+        <div id="clips-stage2" style="display:none;">
+
+          <!-- 1-line summary bar -->
+          <div class="clips-summary-bar active" id="clips-summary-bar">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="8" width="13" height="8" rx="2"/><path d="M16 10l4.553-2.276A1 1 0 0121 8.724v6.552a1 1 0 01-1.447.894L16 14"/></svg>
+            <span class="mono" id="summary-filename"></span>
+            <a href="#" onclick="resetToStage1(event)">Change video</a>
           </div>
-          <span class="mode-range-display" id="mode-range-display">Click a word to set start</span>
-          <button class="btn-clear" id="btn-clear-range" onclick="clearRange()" style="display:none;">Clear</button>
-        </div>
 
-        <!-- Transcript panel — shown after Words JSON loaded -->
-        <div class="transcript-panel-wrap" id="transcript-panel-wrap" style="display:none;">
-          <div id="transcript-panel"></div>
-        </div>
-
-        <!-- Video player (hidden until file selected) -->
-        <div id="clips-player-wrap" style="display:none; margin-bottom:24px;">
-          <video id="clips-video" controls></video>
-          <p id="clips-filename"></p>
-
-          <!-- Mini-editor — revealed after candidate card click -->
-          <div id="mini-editor-controls" style="display:none;">
-
-            <div class="editor-clip-label" id="editor-clip-label">Select a clip below to edit</div>
-
-            <!-- WaveSurfer waveform + draggable in/out handles -->
-            <div class="waveform-wrap">
-              <div id="waveform"></div>
-              <div class="handle-overlay" id="handle-overlay">
-                <div class="region-fill"  id="region-fill"></div>
-                <div class="handle handle-in"  id="handle-in"  title="Drag to set in point"></div>
-                <div class="handle handle-out" id="handle-out" title="Drag to set out point"></div>
-              </div>
-            </div>
-
-            <!-- Editable time fields + Play Selection -->
-            <div class="editor-time-row">
-              <div class="time-field-group">
-                <span class="time-field-label">In</span>
-                <input type="text" id="in-time-field"  class="time-input" placeholder="0:00.00" />
-              </div>
-              <div class="time-field-group">
-                <span class="time-field-label">Out</span>
-                <input type="text" id="out-time-field" class="time-input" placeholder="0:30.00" />
-              </div>
-              <button class="btn btn-sm" onclick="playSelection()">
-                <svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"/></svg>
-                Play Selection
-              </button>
-            </div>
-
-            <!-- Set point buttons -->
-            <div class="editor-btn-row">
-              <button class="btn-ghost btn-sm" onclick="setStartHere()">Set Start Here</button>
-              <button class="btn-ghost btn-sm" onclick="setEndHere()">Set End Here</button>
-            </div>
-
-            <!-- Save Clip -->
-            <div class="save-clip-row">
-              <button class="btn" id="btn-save-clip" onclick="saveClip()">
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
-                  <path d="M19 21H5a2 2 0 01-2-2V5a2 2 0 012-2h11l5 5v11a2 2 0 01-2 2z"/>
-                  <polyline points="17 21 17 13 7 13 7 21"/>
-                  <polyline points="7 3 7 8 15 8"/>
-                </svg>
-                Save Clip
-              </button>
-            </div>
-
-            <!-- Export status (progress / success / error) -->
-            <div id="export-status" style="display:none;"></div>
-
-          </div><!-- /#mini-editor-controls -->
-        </div>
-
-        <!-- Skeleton loader — shown while awaiting Claude -->
-        <div id="clips-skeleton" style="display:none; margin-bottom:24px;">
-          <div class="skeleton-card"></div>
-          <div class="skeleton-card"></div>
-          <div class="skeleton-card"></div>
-        </div>
-
-        <!-- Candidate cards — rendered after Claude responds -->
-        <div id="candidates-section" style="display:none;"></div>
-
-        <!-- Empty state -->
-        <div class="empty-state fade-up-1" id="clips-empty-state">
-          <div class="empty-state-svg">
-            <svg width="100" height="76" viewBox="0 0 100 76" fill="none" xmlns="http://www.w3.org/2000/svg">
-              <rect x="6" y="18" width="88" height="42" rx="5" fill="#F0EDE6" stroke="#D4D0C6" stroke-width="1.5"/>
-              <rect x="12" y="13" width="9" height="9" rx="2.5" fill="#D4D0C6"/>
-              <rect x="30" y="13" width="9" height="9" rx="2.5" fill="#D4D0C6"/>
-              <rect x="48" y="13" width="9" height="9" rx="2.5" fill="#D4D0C6"/>
-              <rect x="66" y="13" width="9" height="9" rx="2.5" fill="#D4D0C6"/>
-              <rect x="12" y="56" width="9" height="9" rx="2.5" fill="#D4D0C6"/>
-              <rect x="30" y="56" width="9" height="9" rx="2.5" fill="#D4D0C6"/>
-              <rect x="48" y="56" width="9" height="9" rx="2.5" fill="#D4D0C6"/>
-              <rect x="66" y="56" width="9" height="9" rx="2.5" fill="#D4D0C6"/>
-              <rect x="14" y="24" width="20" height="30" rx="2.5" fill="#E0DDD5"/>
-              <rect x="41" y="24" width="20" height="30" rx="2.5" fill="#E0DDD5"/>
-              <rect x="68" y="24" width="20" height="30" rx="2.5" fill="#E0DDD5"/>
-              <circle cx="80" cy="62" r="12" fill="#FAFAF8" stroke="#D4D0C6" stroke-width="1.5"/>
-              <circle cx="75" cy="57" r="3.5" fill="none" stroke="#B8B4AA" stroke-width="1.8"/>
-              <circle cx="85" cy="67" r="3.5" fill="none" stroke="#B8B4AA" stroke-width="1.8"/>
-              <path d="M73 59l14 14" stroke="#B8B4AA" stroke-width="1.8" stroke-linecap="round"/>
-              <path d="M87 59L73 73" stroke="#B8B4AA" stroke-width="1.8" stroke-linecap="round"/>
-            </svg>
+          <!-- Skeleton loader -->
+          <div id="clips-skeleton" style="display:none; margin-bottom:24px;">
+            <div class="skeleton-card"></div>
+            <div class="skeleton-card"></div>
+            <div class="skeleton-card"></div>
           </div>
-          <h4>Ready to find your best clips</h4>
-          <p>Drop an MP4 above and Claude will scan for quotable moments, high-energy exchanges, and segments that work as short-form content.</p>
-        </div>
 
-        <!-- What Claude looks for card -->
-        <div class="card card-accent fade-up-2" id="what-claude-card">
-          <h3>What Claude looks for</h3>
-          <p>Strong standalone moments that work without context &mdash; quotable statements, emotional peaks, and segments with a clear beginning, middle, and end.</p>
-          <div class="tag-row">
-            <span class="tag tag-blue">Quotable</span>
-            <span class="tag tag-orange">High energy</span>
-            <span class="tag tag-green">Self-contained</span>
-            <span class="tag tag-purple">Narrative arc</span>
-            <span class="tag tag-red">Emotional peak</span>
+          <!-- Candidate cards -->
+          <div id="candidates-section"></div>
+
+        </div><!-- /#clips-stage2 -->
+
+        <!-- ── STAGE 3: Edit ── -->
+        <div id="clips-stage3">
+
+          <button class="stage3-back" onclick="showStage(2)">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+            Back to results
+          </button>
+
+          <div class="editor-clip-label" id="editor-clip-label" style="margin-bottom:16px;">Select a clip</div>
+
+          <video id="edit-video" controls></video>
+
+          <!-- Editable time fields + Play Selection -->
+          <div class="editor-time-row" style="margin-bottom:12px;">
+            <div class="time-field-group">
+              <span class="time-field-label">In</span>
+              <input type="text" id="in-time-field" class="time-input" placeholder="0:00.00" />
+            </div>
+            <div class="time-field-group">
+              <span class="time-field-label">Out</span>
+              <input type="text" id="out-time-field" class="time-input" placeholder="0:30.00" />
+            </div>
+            <button class="btn btn-sm" onclick="playSelection()">
+              <svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+              Play Selection
+            </button>
           </div>
-        </div>
+
+          <!-- Set start/end here -->
+          <div class="editor-btn-row" style="margin-bottom:16px;">
+            <button class="btn-ghost btn-sm" onclick="setStartHere()">Set Start Here</button>
+            <button class="btn-ghost btn-sm" onclick="setEndHere()">Set End Here</button>
+          </div>
+
+          <!-- Word transcript — clip range context -->
+          <div class="transcript-panel-wrap" id="transcript-panel-wrap" style="display:none;">
+            <div id="transcript-panel"></div>
+          </div>
+
+          <!-- Export Clip -->
+          <div class="save-clip-row">
+            <button class="btn" id="btn-save-clip" onclick="saveClip()" style="font-size:15px;padding:12px 32px;">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/>
+                <polyline points="7 10 12 15 17 10"/>
+                <line x1="12" y1="15" x2="12" y2="3"/>
+              </svg>
+              Export Clip
+            </button>
+          </div>
+
+          <div id="export-status" style="display:none; margin-top:12px;"></div>
+
+        </div><!-- /#clips-stage3 -->
 
       </div>
     </div>
@@ -1032,17 +1138,32 @@
 
         <div class="drop-zone fade-up" id="caption-drop" style="margin-bottom:20px;" onclick="document.getElementById('caption-file').click()">
           <div class="dz-icon">🎬</div>
-          <div class="dz-label">Drop MP4 files here or click to browse</div>
-          <div class="dz-sub">Supports .mp4 &mdash; multiple files allowed</div>
-          <input type="file" id="caption-file" accept=".mp4" multiple />
+          <div class="dz-label" id="caption-dz-label">Drop MP4 here or click to browse</div>
+          <div class="dz-sub">.mp4 files only</div>
+          <input type="file" id="caption-file" accept=".mp4" />
         </div>
 
         <div class="card fade-up-1" style="margin-bottom:20px;">
           <h3>Options</h3>
-          <p>Transcript type, font size, and caption style settings will appear here once backend is wired.</p>
+          <div style="margin-top:14px;">
+            <div class="drop-zone-label" style="margin-bottom:8px;">Font size</div>
+            <div class="mode-toggle">
+              <button class="mode-btn active" id="caption-size-small"  onclick="setCaptionSize('small')">Small</button>
+              <button class="mode-btn"        id="caption-size-medium" onclick="setCaptionSize('medium')">Medium</button>
+              <button class="mode-btn"        id="caption-size-large"  onclick="setCaptionSize('large')">Large</button>
+            </div>
+          </div>
         </div>
 
-        <button class="btn fade-up-2" disabled>Generate Captions</button>
+        <button class="btn fade-up-2" id="btn-generate-captions" onclick="generateCaptions()" disabled>
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+            <rect x="2" y="4" width="20" height="16" rx="2"/>
+            <path d="M8 14h8M8 10h4"/>
+          </svg>
+          Generate Captions
+        </button>
+
+        <div id="caption-status" style="display:none; margin-top:14px;"></div>
 
       </div>
     </div>
@@ -1225,72 +1346,222 @@
   checkHealth();
   setInterval(checkHealth, 3000);
 
-  // ── Clips tab — MP4 file load ──
-  let _clipFile = null;
+  // ══════════════════════════════════════════
+  // CLIPS — 3-STAGE FLOW
+  // ══════════════════════════════════════════
 
+  let _clipFile       = null;   // the MP4 File object
+  let _wordsData      = null;   // parsed Words JSON array
+  let _candidates     = [];     // Claude's clip candidates
+  let _editCandidate  = null;   // clip being edited in Stage 3
+  let _currentStage   = 1;
+  let _transcriptWords = [];    // alias kept for transcript highlight helpers
+
+  // ── Stage switching ──
+  function showStage(n) {
+    _currentStage = n;
+    document.getElementById('clips-stage1').style.display = n === 1 ? 'block' : 'none';
+    document.getElementById('clips-stage2').style.display = n === 2 ? 'block' : 'none';
+    document.getElementById('clips-stage3').style.display = n === 3 ? 'block' : 'none';
+  }
+
+  function resetToStage1(e) {
+    if (e) e.preventDefault();
+    _clipFile = null; _wordsData = null; _candidates = [];
+    // Reset video card
+    const clcV = document.getElementById('clc-video');
+    clcV.classList.remove('loaded');
+    document.getElementById('clc-video-value').textContent = 'Drop MP4 here or click to browse';
+    document.getElementById('clc-video-value').className = 'clc-value muted';
+    // Reset JSON card
+    const clcJ = document.getElementById('clc-json');
+    clcJ.className = 'clips-load-card';
+    clcJ.style.cursor = 'default';
+    document.getElementById('clc-json-value').textContent = 'Load a video first';
+    document.getElementById('clc-json-value').className = 'clc-value muted';
+    document.getElementById('clc-json-sub').style.display = 'none';
+    document.getElementById('clc-json-indicator').innerHTML = '';
+    document.getElementById('btn-find-clips').disabled = true;
+    document.getElementById('clips-empty-state').style.display = '';
+    document.getElementById('clips-file').value = '';
+    document.getElementById('clips-video').src = '';
+    showStage(1);
+  }
+
+  // ── Video file load ──
   document.getElementById('clips-file').addEventListener('change', function () {
     const file = this.files[0];
     if (!file) return;
-
-    _clipFile = file;
-
-    const url = URL.createObjectURL(file);
-    const video = document.getElementById('clips-video');
-    const wrap = document.getElementById('clips-player-wrap');
-    const label = document.getElementById('clips-dz-label');
-    const filenameEl = document.getElementById('clips-filename');
-
-    video.src = url;
-    wrap.style.display = 'block';
-    label.textContent = file.name;
-    filenameEl.textContent = file.name;
-    video.load();
-    document.getElementById('clips-dropzone').classList.add('loaded');
-
-    // Capture duration and initialise waveform once metadata is ready
-    video.addEventListener('loadedmetadata', function () {
-      _videoDuration = video.duration || 0;
-      initWaveSurfer();
-    }, { once: true });
+    onVideoLoaded(file);
   });
 
-  // ── Clips tab — Words JSON load → render transcript ──
-  let _transcriptWords = [];
-  let clipMode = 'start';
-  let selStartIdx = null;
-  let selEndIdx = null;
+  // Drag-drop for video card
+  (function () {
+    const card = document.getElementById('clc-video');
+    card.addEventListener('dragover', e => { e.preventDefault(); card.style.borderColor = 'var(--orange)'; });
+    card.addEventListener('dragleave', () => { card.style.borderColor = ''; });
+    card.addEventListener('drop', e => {
+      e.preventDefault(); card.style.borderColor = '';
+      const f = e.dataTransfer.files[0];
+      if (f && f.name.toLowerCase().endsWith('.mp4')) {
+        const dt = new DataTransfer(); dt.items.add(f);
+        document.getElementById('clips-file').files = dt.files;
+        document.getElementById('clips-file').dispatchEvent(new Event('change'));
+      }
+    });
+  })();
 
-  document.getElementById('words-file').addEventListener('change', function () {
+  function onVideoLoaded(file) {
+    _clipFile = file;
+
+    // Update video card
+    const clcV = document.getElementById('clc-video');
+    clcV.classList.add('loaded');
+    const valEl = document.getElementById('clc-video-value');
+    valEl.textContent = file.name;
+    valEl.className = 'clc-value mono';
+
+    // Set hidden video src
+    const vid = document.getElementById('clips-video');
+    vid.src = URL.createObjectURL(file);
+    vid.load();
+
+    // Start JSON auto-detect
+    setJsonStatus('searching');
+    fetch(BACKEND + '/find_json', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ filename: file.name })
+    })
+    .then(r => r.json())
+    .then(d => {
+      if (d.found) {
+        // Fetch and parse the Words JSON
+        fetch(d.json_path.startsWith('http') ? d.json_path : BACKEND + '/read_file?path=' + encodeURIComponent(d.json_path))
+          .catch(() => null)
+          .then(() => {
+            // We have the path; load it via XMLHttpRequest for local files
+            const xhr = new XMLHttpRequest();
+            xhr.open('GET', 'file:///' + d.json_path.replace(/\\/g, '/'));
+            xhr.onload = function () {
+              try {
+                const parsed = JSON.parse(xhr.responseText);
+                setWordsData(extractWords(parsed), d.json_path.split(/[\\/]/).pop());
+              } catch (e) {
+                setJsonStatus('not_found');
+              }
+            };
+            xhr.onerror = function () {
+              // file:// blocked; show path, let user load manually if needed
+              setJsonStatus('found_path', d.json_path.split(/[\\/]/).pop());
+            };
+            xhr.send();
+          });
+      } else {
+        setJsonStatus('not_found');
+      }
+    })
+    .catch(() => setJsonStatus('not_found'));
+  }
+
+  function setJsonStatus(status, filename) {
+    const card = document.getElementById('clc-json');
+    const valEl = document.getElementById('clc-json-value');
+    const subEl = document.getElementById('clc-json-sub');
+    const ind   = document.getElementById('clc-json-indicator');
+    card.className = 'clips-load-card';
+    card.style.cursor = 'default';
+    subEl.style.display = 'none';
+    subEl.innerHTML = '';
+
+    if (status === 'searching') {
+      valEl.textContent = 'Searching for transcript\u2026';
+      valEl.className = 'clc-value muted';
+      ind.innerHTML = '<div class="clc-spinner"></div>';
+    } else if (status === 'found') {
+      card.classList.add('loaded');
+      valEl.textContent = filename || 'Transcript found';
+      valEl.className = 'clc-value mono';
+      ind.innerHTML = '<svg class="clc-check" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>';
+      subEl.style.display = 'block';
+      subEl.innerHTML = '<span class="clc-alt-link" onclick="document.getElementById(\'json-file-override\').click()">Choose a different file</span>';
+      updateFindButton();
+    } else if (status === 'found_path') {
+      // Found path but couldn't read via XHR; show and let user confirm
+      card.classList.add('loaded');
+      valEl.textContent = filename || 'Transcript found';
+      valEl.className = 'clc-value mono';
+      ind.innerHTML = '<svg class="clc-check" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>';
+      subEl.style.display = 'block';
+      subEl.innerHTML = '<span class="clc-alt-link" onclick="document.getElementById(\'json-file-override\').click()">Load it manually</span>';
+      updateFindButton();
+    } else if (status === 'not_found') {
+      card.classList.add('warn');
+      valEl.textContent = 'No transcript found';
+      valEl.className = 'clc-value';
+      valEl.style.color = 'var(--amber)';
+      ind.innerHTML = '';
+      subEl.style.display = 'block';
+      subEl.innerHTML =
+        '<button class="btn btn-sm" style="margin-top:6px;" onclick="generateTranscript()">' +
+        'Generate Transcript</button>' +
+        '<span class="clc-alt-link" style="margin-left:10px;" onclick="document.getElementById(\'json-file-override\').click()">Choose file</span>';
+    }
+  }
+
+  function setWordsData(words, filename) {
+    _wordsData = words;
+    _transcriptWords = words;
+    setJsonStatus('found', filename);
+    updateFindButton();
+  }
+
+  function updateFindButton() {
+    document.getElementById('btn-find-clips').disabled = !(_clipFile && _wordsData && _wordsData.length > 0);
+  }
+
+  // Manual JSON override picker
+  document.getElementById('json-file-override').addEventListener('change', function () {
     const file = this.files[0];
     if (!file) return;
-
-    // Update drop zone state
-    document.getElementById('words-dropzone').classList.add('loaded');
-    document.querySelector('#words-dropzone .dz-label').textContent = file.name;
-
     const reader = new FileReader();
     reader.onload = function (e) {
       try {
         const data = JSON.parse(e.target.result);
-        _transcriptWords = extractWords(data);
-        renderTranscript(_transcriptWords);
-
-        // Show transcript UI, hide empty state
-        document.getElementById('mode-bar').style.display = 'flex';
-        document.getElementById('transcript-panel-wrap').style.display = 'block';
-        document.getElementById('clips-empty-state').style.display = 'none';
-        updateRangeDisplay();
+        setWordsData(extractWords(data), file.name);
       } catch (err) {
-        alert('Could not parse Words JSON: ' + err.message);
+        alert('Could not parse JSON: ' + err.message);
       }
     };
     reader.readAsText(file);
+
   });
 
+  // ── Generate transcript (backend Whisper) ──
+  async function generateTranscript() {
+    if (!_clipFile || !backendOnline) return;
+    setJsonStatus('searching');
+    try {
+      // We can't pass a file-system path from browser; upload the file instead
+      const form = new FormData();
+      form.append('file', _clipFile);
+      const res = await fetch(BACKEND + '/generate_transcript_upload', { method: 'POST', body: form });
+      const d = await res.json();
+      if (d.words) {
+        setWordsData(d.words, _clipFile.name.replace(/\.mp4$/i, '') + ' - Transcript (Words).json');
+      } else {
+        setJsonStatus('not_found');
+        alert('Transcript generation failed: ' + (d.error || 'unknown error'));
+      }
+    } catch (err) {
+      setJsonStatus('not_found');
+      alert('Request failed: ' + err.message);
+    }
+  }
+
+  // ── Helper: extractWords from various Whisper output formats ──
   function extractWords(data) {
-    // Handle Whisper flat array: [{word, start, end}, ...]
     if (Array.isArray(data)) return data;
-    // Handle Whisper nested: {segments: [{words: [{word, start, end}]}]}
     if (data.segments) {
       const words = [];
       for (const seg of data.segments) {
@@ -1298,11 +1569,11 @@
       }
       return words;
     }
-    // Handle flat {words: [...]}
     if (data.words) return data.words;
     return [];
   }
 
+  // ── Helper: render transcript into #transcript-panel ──
   function renderTranscript(words) {
     const panel = document.getElementById('transcript-panel');
     panel.innerHTML = '';
@@ -1311,202 +1582,231 @@
       span.className = 'tx-word';
       span.dataset.idx = i;
       span.dataset.start = w.start ?? 0;
-      span.dataset.end = w.end ?? 0;
-      // Whisper words often have a leading space; preserve it
+      span.dataset.end   = w.end   ?? 0;
       span.textContent = (w.word ?? w.text ?? '') + ' ';
       panel.appendChild(span);
     });
   }
 
-  // ── Transcript word click (event delegation) ──
+  // Transcript word click (Stage 3)
   document.getElementById('transcript-panel').addEventListener('click', function (e) {
     const wordEl = e.target.closest('.tx-word');
     if (!wordEl) return;
-    const idx = parseInt(wordEl.dataset.idx, 10);
-
-    if (clipMode === 'start') {
-      selStartIdx = idx;
-      if (selEndIdx !== null && selEndIdx <= idx) selEndIdx = null;
-      setMode('end'); // auto-advance to end-picking
-    } else {
-      if (idx > (selStartIdx ?? -1)) {
-        selEndIdx = idx;
-      } else {
-        // Clicked before start — treat as new start
-        selStartIdx = idx;
-        selEndIdx = null;
-        setMode('end');
-      }
-    }
-    updateTranscriptHighlights();
+    const t = parseFloat(wordEl.dataset.start);
+    const video = document.getElementById('edit-video');
+    if (video) video.currentTime = t;
+    editorInTime = t;
+    updateTimeFields();
   });
 
-  function setMode(mode) {
-    clipMode = mode;
-    document.getElementById('btn-set-start').classList.toggle('active', mode === 'start');
-    document.getElementById('btn-set-end').classList.toggle('active', mode === 'end');
-  }
-
-  function updateTranscriptHighlights() {
-    const spans = document.querySelectorAll('.tx-word');
-    const lo = selStartIdx !== null && selEndIdx !== null ? Math.min(selStartIdx, selEndIdx) : selStartIdx;
-    const hi = selStartIdx !== null && selEndIdx !== null ? Math.max(selStartIdx, selEndIdx) : null;
-
-    spans.forEach((s, i) => {
-      s.classList.remove('sel-start', 'sel-end', 'in-range');
-      if (hi !== null) {
-        if (i === lo) s.classList.add('sel-start');
-        else if (i === hi) s.classList.add('sel-end');
-        else if (i > lo && i < hi) s.classList.add('in-range');
-      } else if (i === lo) {
-        s.classList.add('sel-start');
-      }
-    });
-    updateRangeDisplay();
-  }
-
-  function updateRangeDisplay() {
-    const display = document.getElementById('mode-range-display');
-    const clearBtn = document.getElementById('btn-clear-range');
-    if (selStartIdx !== null && selEndIdx !== null) {
-      const st = parseFloat(_transcriptWords[selStartIdx]?.start ?? 0);
-      const et = parseFloat(_transcriptWords[selEndIdx]?.end ?? 0);
-      display.textContent = formatTime(st) + ' \u2192 ' + formatTime(et);
-      clearBtn.style.display = 'inline-block';
-    } else if (selStartIdx !== null) {
-      const st = parseFloat(_transcriptWords[selStartIdx]?.start ?? 0);
-      display.textContent = 'From ' + formatTime(st) + ' \u2014 now click Set End then a word';
-      clearBtn.style.display = 'inline-block';
-    } else {
-      display.textContent = 'Click a word to set start';
-      clearBtn.style.display = 'none';
-    }
-  }
-
-  function clearRange() {
-    selStartIdx = null;
-    selEndIdx = null;
-    setMode('start');
-    document.querySelectorAll('.tx-word').forEach(s =>
-      s.classList.remove('sel-start', 'sel-end', 'in-range')
-    );
-    updateRangeDisplay();
-  }
-
-  function formatTime(secs) {
-    const s = Math.floor(secs);
-    return Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0');
-  }
-
-  // ── Find Clips → POST /clips → render candidates ──
+  // ── Find Clips → POST /clips → Stage 2 ──
   async function findClips() {
-    if (!_transcriptWords.length) {
-      alert('Load a Words JSON file first \u2014 drop it in the right-hand zone above.');
+    if (!_wordsData || !_wordsData.length) {
+      alert('Transcript not loaded.');
       return;
     }
     if (!backendOnline) {
-      alert('Backend is not connected. Make sure start_server.bat is running.');
+      alert('Backend is not connected.');
+      return;
+    }
+    if (!_clipFile) {
+      alert('Load a video first.');
       return;
     }
 
-    const transcript = _transcriptWords
-      .map(w => w.word ?? w.text ?? '')
-      .join(' ')
-      .trim();
+    // Build time-stamped transcript for Claude
+    const transcript = _wordsData
+      .map(w => '[' + (w.start ?? 0).toFixed(1) + '] ' + (w.word ?? w.text ?? ''))
+      .join(' ');
 
-    const payload = { transcript };
-    if (selStartIdx !== null) payload.starttime = parseFloat(_transcriptWords[selStartIdx]?.start ?? 0);
-    if (selEndIdx !== null)   payload.endtime   = parseFloat(_transcriptWords[selEndIdx]?.end   ?? 0);
-
-    // UI: show skeleton, hide other states
-    document.getElementById('clips-empty-state').style.display = 'none';
-    document.getElementById('candidates-section').style.display = 'none';
-    document.getElementById('what-claude-card').style.display = 'none';
+    // Show Stage 2 with skeleton
+    document.getElementById('summary-filename').textContent = _clipFile.name;
+    showStage(2);
     document.getElementById('clips-skeleton').style.display = 'block';
+    document.getElementById('candidates-section').innerHTML = '';
 
     try {
       const res = await fetch(BACKEND + '/clips', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload)
+        body: JSON.stringify({ transcript, file_path: _clipFile.name })
       });
       const data = await res.json();
       document.getElementById('clips-skeleton').style.display = 'none';
 
       if (data.error) {
-        document.getElementById('what-claude-card').style.display = 'block';
         alert('Backend error: ' + data.error);
         return;
       }
-      renderCandidates(data.candidates || []);
+      _candidates = data.candidates || [];
+      renderCandidates(_candidates);
     } catch (err) {
       document.getElementById('clips-skeleton').style.display = 'none';
-      document.getElementById('what-claude-card').style.display = 'block';
       alert('Request failed: ' + err.message);
     }
   }
 
+  // ── Render Stage 2 candidate cards ──
   function renderCandidates(candidates) {
     const section = document.getElementById('candidates-section');
     section.innerHTML = '';
-    section.style.display = 'block';
 
     if (!candidates.length) {
       section.innerHTML = '<p style="color:var(--muted);font-size:14px;padding:24px 0;">Claude returned no candidates. Try a longer transcript.</p>';
-      document.getElementById('what-claude-card').style.display = 'block';
       return;
     }
 
     candidates.forEach((c, i) => {
-      const score = c.hookscore ?? 0;
+      const score      = c.hook_score ?? c.hookscore ?? 0;
       const scoreClass = score >= 8 ? 'score-green' : score >= 5 ? 'score-amber' : 'score-grey';
-      const startFmt = formatTime(c.starttime ?? 0);
-      const endFmt   = formatTime(c.endtime   ?? 0);
+      const startFmt   = formatTime(c.starttime ?? 0);
+      const endFmt     = formatTime(c.endtime   ?? 0);
+      const durSec     = Math.round((c.endtime ?? 0) - (c.starttime ?? 0));
+      const whyText    = c.why_it_works ?? c.reason ?? '';
 
       const card = document.createElement('div');
       card.className = 'candidate-card';
       card.style.cssText = 'animation: fadeUp 300ms ' + (i * 60) + 'ms ease both;';
 
-      // Card click → activate mini-editor (ignore clicks on action buttons)
-      card.addEventListener('click', function (e) {
-        if (e.target.closest('button')) return;
-        activateCandidate(c, card);
-      });
-
+      const previewId = 'preview-' + i;
       card.innerHTML =
-        '<div class="candidate-header">' +
-          '<div class="score-badge ' + scoreClass + '">' + score + '</div>' +
-          '<div>' +
-            '<div style="font-size:13px;font-weight:600;color:var(--text);">Clip ' + (i + 1) + '</div>' +
-            '<div class="candidate-ts">' + startFmt + ' &rarr; ' + endFmt + '</div>' +
+        '<div class="score-badge ' + scoreClass + '">' + score + '/10</div>' +
+        '<div class="cand-body">' +
+          '<div class="cand-meta">' +
+            '<span class="cand-ts">' + startFmt + ' \u2014 ' + endFmt + '</span>' +
+            '<span class="cand-dur">' + durSec + 's</span>' +
           '</div>' +
-        '</div>' +
-        '<div class="candidate-hookline">' + escHtml(c.hookline ?? '') + '</div>' +
-        '<div class="candidate-reason">' + escHtml(c.reason ?? '') + '</div>' +
-        '<div class="candidate-actions">' +
-          '<button class="btn-ghost btn-sm" onclick="previewClip(' + (c.starttime ?? 0) + ')">' +
-            '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polygon points="5 3 19 12 5 21 5 3"/></svg>' +
-            ' Preview' +
-          '</button>' +
-          '<button class="btn btn-sm">' +
-            '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>' +
-            ' Select' +
-          '</button>' +
+          '<div class="cand-hookline">' + escHtml(c.hookline ?? '') + '</div>' +
+          '<div class="cand-why">' + escHtml(whyText) + '</div>' +
+          '<div class="candidate-actions">' +
+            '<button class="btn-ghost btn-sm" onclick="togglePreview(event,' + i + ')">' +
+              '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polygon points="5 3 19 12 5 21 5 3"/></svg>' +
+              ' Preview' +
+            '</button>' +
+            '<button class="btn btn-sm" onclick="selectAndEdit(' + i + ')">' +
+              '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>' +
+              ' Select &amp; Edit' +
+            '</button>' +
+          '</div>' +
+          '<div class="inline-preview" id="' + previewId + '">' +
+            '<video controls style="width:100%;max-width:480px;border-radius:8px;background:#111;border:1px solid var(--border);display:block;"></video>' +
+          '</div>' +
         '</div>';
+
       section.appendChild(card);
     });
-
-    document.getElementById('what-claude-card').style.display = 'block';
   }
 
-  function previewClip(startSec) {
-    const video = document.getElementById('clips-video');
+  // ── Inline preview toggle ──
+  function togglePreview(e, idx) {
+    e.stopPropagation();
+    const previewDiv = document.getElementById('preview-' + idx);
+    const vid = previewDiv.querySelector('video');
+    const isOpen = previewDiv.classList.contains('active');
+
+    // Close all other previews
+    document.querySelectorAll('.inline-preview.active').forEach(p => {
+      p.classList.remove('active');
+      const v = p.querySelector('video');
+      v.pause(); v.src = '';
+    });
+
+    if (!isOpen && _clipFile) {
+      previewDiv.classList.add('active');
+      const c = _candidates[idx];
+      vid.src = URL.createObjectURL(_clipFile);
+      vid.load();
+      vid.addEventListener('loadedmetadata', function () {
+        vid.currentTime = c.starttime ?? 0;
+        vid.play().catch(() => {});
+        const dur = (c.endtime ?? 0) - (c.starttime ?? 0);
+        setTimeout(() => vid.pause(), dur * 1000);
+      }, { once: true });
+    }
+  }
+
+  // ── Select & Edit → Stage 3 ──
+  function selectAndEdit(idx) {
+    _editCandidate = _candidates[idx];
+    editorInTime  = _editCandidate.starttime ?? 0;
+    editorOutTime = _editCandidate.endtime   ?? 0;
+
+    // Set up edit-video
+    const vid = document.getElementById('edit-video');
+    vid.src = URL.createObjectURL(_clipFile);
+    vid.load();
+    vid.addEventListener('loadedmetadata', function () {
+      vid.currentTime = editorInTime;
+      vid.play().catch(() => {});
+    }, { once: true });
+
+    document.getElementById('editor-clip-label').textContent =
+      '\u201C' + (_editCandidate.hookline || 'Clip') + '\u201D';
+
+    updateTimeFields();
+
+    // Render transcript panel for this clip context
+    if (_wordsData && _wordsData.length) {
+      renderTranscript(_wordsData);
+      document.getElementById('transcript-panel-wrap').style.display = 'block';
+      // Scroll transcript to near in-point
+      const panel = document.getElementById('transcript-panel');
+      const nearest = panel.querySelector('.tx-word[data-start]');
+      if (nearest) nearest.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
+
+    document.getElementById('export-status').style.display = 'none';
+    document.getElementById('export-status').innerHTML = '';
+    showStage(3);
+  }
+
+  // ── Time field helpers ──
+  let editorInTime  = 0;
+  let editorOutTime = 0;
+  let _playSelTimer = null;
+
+  function updateTimeFields() {
+    document.getElementById('in-time-field').value  = fmtPrecise(editorInTime);
+    document.getElementById('out-time-field').value = fmtPrecise(editorOutTime);
+  }
+
+  document.getElementById('in-time-field').addEventListener('change', function () {
+    const t = parsePrecise(this.value);
+    if (!isNaN(t) && t >= 0 && t < editorOutTime) { editorInTime = t; }
+    updateTimeFields();
+  });
+
+  document.getElementById('out-time-field').addEventListener('change', function () {
+    const t = parsePrecise(this.value);
+    if (!isNaN(t) && t > editorInTime) { editorOutTime = t; }
+    updateTimeFields();
+  });
+
+  function playSelection() {
+    const video = document.getElementById('edit-video');
     if (!video.src) return;
-    video.currentTime = startSec;
-    video.play();
-    document.getElementById('clips-player-wrap').style.display = 'block';
+    if (_playSelTimer) clearTimeout(_playSelTimer);
+    video.currentTime = editorInTime;
+    video.play().catch(() => {});
+    const dur = Math.max(0, editorOutTime - editorInTime);
+    _playSelTimer = setTimeout(() => video.pause(), dur * 1000);
   }
 
+  function setStartHere() {
+    const t = document.getElementById('edit-video').currentTime;
+    editorInTime = t;
+    if (editorInTime >= editorOutTime) editorOutTime = editorInTime + 5;
+    updateTimeFields();
+  }
+
+  function setEndHere() {
+    const t = document.getElementById('edit-video').currentTime;
+    editorOutTime = t;
+    if (editorOutTime <= editorInTime) editorInTime = Math.max(0, editorOutTime - 5);
+    updateTimeFields();
+  }
+
+  // ── Helper: escHtml ──
   function escHtml(s) {
     return String(s)
       .replace(/&/g, '&amp;')
@@ -1515,194 +1815,10 @@
       .replace(/"/g, '&quot;');
   }
 
-  // ══════════════════════════════════════════
-  // MINI-EDITOR — WaveSurfer + in/out handles
-  // ══════════════════════════════════════════
-
-  let ws               = null;   // WaveSurfer instance
-  let _videoDuration   = 0;
-  let editorInTime     = 0;
-  let editorOutTime    = 0;
-  let _playSelTimer    = null;
-
-  // ── WaveSurfer init ──
-  function initWaveSurfer() {
-    if (!window.WaveSurfer) return; // CDN not loaded
-    if (ws) { try { ws.destroy(); } catch(_) {} ws = null; }
-
-    const video = document.getElementById('clips-video');
-    ws = WaveSurfer.create({
-      container:     '#waveform',
-      waveColor:     '#D4D0C6',
-      progressColor: '#E8541A',
-      height:        60,
-      barWidth:      2,
-      barRadius:     1,
-      barGap:        1,
-      normalize:     true,
-      interact:      true,
-      media:         video,          // sync to the <video> element
-    });
-
-    ws.on('ready', () => {
-      if (video.duration && isFinite(video.duration)) _videoDuration = video.duration;
-      updateHandles();
-    });
-
-    // Keep playhead following video timeupdate
-    ws.on('interaction', (newTime) => {
-      video.currentTime = newTime;
-    });
-  }
-
-  // ── Handle positioning ──
-  function updateHandles() {
-    const dur = _videoDuration || 1;
-    const pIn  = Math.max(0, Math.min(100, (editorInTime  / dur) * 100));
-    const pOut = Math.max(0, Math.min(100, (editorOutTime / dur) * 100));
-
-    document.getElementById('handle-in').style.left    = pIn  + '%';
-    document.getElementById('handle-out').style.left   = pOut + '%';
-    document.getElementById('region-fill').style.left  = pIn  + '%';
-    document.getElementById('region-fill').style.width = (pOut - pIn) + '%';
-
-    document.getElementById('in-time-field').value  = fmtPrecise(editorInTime);
-    document.getElementById('out-time-field').value = fmtPrecise(editorOutTime);
-  }
-
-  // ── Draggable handles ──
-  function setupHandleDrag(handleEl, isIn) {
-    handleEl.addEventListener('mousedown', function (e) {
-      e.preventDefault();
-      // Disable CSS transition on handles during drag for instant response
-      document.getElementById('handle-in').style.transition  = 'none';
-      document.getElementById('handle-out').style.transition = 'none';
-      document.getElementById('region-fill').style.transition = 'none';
-
-      const overlay = document.getElementById('handle-overlay');
-
-      function onMove(ev) {
-        const rect = overlay.getBoundingClientRect();
-        const pct  = Math.max(0, Math.min(1, (ev.clientX - rect.left) / rect.width));
-        const t    = pct * (_videoDuration || 1);
-        if (isIn) {
-          editorInTime  = Math.min(t, editorOutTime - 0.05);
-        } else {
-          editorOutTime = Math.max(t, editorInTime  + 0.05);
-        }
-        updateHandles();
-      }
-
-      function onUp() {
-        document.getElementById('handle-in').style.transition  = '';
-        document.getElementById('handle-out').style.transition = '';
-        document.getElementById('region-fill').style.transition = '';
-        document.removeEventListener('mousemove', onMove);
-        document.removeEventListener('mouseup',   onUp);
-      }
-
-      document.addEventListener('mousemove', onMove);
-      document.addEventListener('mouseup',   onUp);
-    });
-  }
-
-  // Wire handles after DOM is ready
-  setupHandleDrag(document.getElementById('handle-in'),  true);
-  setupHandleDrag(document.getElementById('handle-out'), false);
-
-  // ── Time field listeners ──
-  document.getElementById('in-time-field').addEventListener('change', function () {
-    const t = parsePrecise(this.value);
-    if (!isNaN(t) && t >= 0 && t < editorOutTime) {
-      editorInTime = t;
-      updateHandles();
-    } else {
-      this.value = fmtPrecise(editorInTime);
-    }
-  });
-
-  document.getElementById('out-time-field').addEventListener('change', function () {
-    const t = parsePrecise(this.value);
-    if (!isNaN(t) && t > editorInTime) {
-      editorOutTime = t;
-      updateHandles();
-    } else {
-      this.value = fmtPrecise(editorOutTime);
-    }
-  });
-
-  // ── Activate candidate in mini-editor ──
-  function activateCandidate(c, cardEl) {
-    // Highlight selected card
-    document.querySelectorAll('.candidate-card').forEach(el => el.classList.remove('selected'));
-    cardEl.classList.add('selected');
-
-    editorInTime  = c.starttime ?? 0;
-    editorOutTime = c.endtime   ?? 0;
-
-    // Show player + mini-editor
-    document.getElementById('clips-player-wrap').style.display      = 'block';
-    document.getElementById('mini-editor-controls').style.display   = 'block';
-    document.getElementById('editor-clip-label').textContent        = '\u201C' + (c.hookline || 'Clip') + '\u201D';
-
-    // Seek and play
-    const video = document.getElementById('clips-video');
-    if (video.src) {
-      video.currentTime = editorInTime;
-      video.play().catch(() => {});
-      if (video.duration && isFinite(video.duration)) _videoDuration = video.duration;
-    }
-
-    updateHandles();
-
-    // Scroll mini-editor into view
-    document.getElementById('mini-editor-controls').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-
-    // Sync transcript highlights if words are loaded
-    if (_transcriptWords.length) {
-      selStartIdx = findWordNearest(_transcriptWords, editorInTime,  false);
-      selEndIdx   = findWordNearest(_transcriptWords, editorOutTime, true);
-      updateTranscriptHighlights();
-    }
-  }
-
-  // Find word index nearest to a time (start or end timestamp)
-  function findWordNearest(words, time, useEnd) {
-    let best = 0, bestDist = Infinity;
-    for (let i = 0; i < words.length; i++) {
-      const wt   = parseFloat(useEnd ? (words[i].end ?? 0) : (words[i].start ?? 0));
-      const dist = Math.abs(wt - time);
-      if (dist < bestDist) { bestDist = dist; best = i; }
-    }
-    return best;
-  }
-
-  // ── Play Selection ──
-  function playSelection() {
-    const video = document.getElementById('clips-video');
-    if (!video.src) return;
-
-    if (_playSelTimer) clearTimeout(_playSelTimer);
-    video.currentTime = editorInTime;
-    video.play().catch(() => {});
-
-    const clipLen = Math.max(0, editorOutTime - editorInTime);
-    _playSelTimer = setTimeout(() => { video.pause(); }, clipLen * 1000);
-  }
-
-  // ── Set Start/End Here (from current playhead) ──
-  function setStartHere() {
-    const t = document.getElementById('clips-video').currentTime;
-    editorInTime = t;
-    if (editorInTime >= editorOutTime) editorOutTime = editorInTime + 5;
-    updateHandles();
-  }
-
-  function setEndHere() {
-    const t = document.getElementById('clips-video').currentTime;
-    editorOutTime = t;
-    if (editorOutTime <= editorInTime) editorInTime = Math.max(0, editorOutTime - 5);
-    updateHandles();
+  // ── Helper: formatTime M:SS ──
+  function formatTime(secs) {
+    const s = Math.floor(secs);
+    return Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0');
   }
 
   // ── Precise time formatting (M:SS.cc) ──
@@ -1713,13 +1829,104 @@
   }
 
   function parsePrecise(str) {
-    // Accepts M:SS.cc, M:SS, or plain seconds
     str = String(str).trim();
     const parts = str.split(':');
-    if (parts.length === 2) {
-      return parseInt(parts[0], 10) * 60 + parseFloat(parts[1]);
-    }
+    if (parts.length === 2) return parseInt(parts[0], 10) * 60 + parseFloat(parts[1]);
     return parseFloat(str);
+  }
+
+  // ── Caption Videos tab ──
+  let _captionFile    = null;
+  let _captionFontPx  = 18;  // default medium
+
+  const CAPTION_FONT_SIZES = { small: 14, medium: 18, large: 24 };
+
+  document.getElementById('caption-file').addEventListener('change', function () {
+    const file = this.files[0];
+    if (!file) return;
+    _captionFile = file;
+
+    const drop = document.getElementById('caption-drop');
+    drop.classList.add('loaded');
+    document.getElementById('caption-dz-label').textContent = file.name;
+    document.getElementById('btn-generate-captions').disabled = false;
+
+    // Reset status
+    const statusEl = document.getElementById('caption-status');
+    statusEl.style.display = 'none';
+    statusEl.innerHTML = '';
+  });
+
+  // Wire drag-drop for caption zone
+  (function () {
+    const zone = document.getElementById('caption-drop');
+    zone.addEventListener('dragover', e => { e.preventDefault(); zone.classList.add('dragover'); });
+    zone.addEventListener('dragleave', () => zone.classList.remove('dragover'));
+    zone.addEventListener('drop', e => {
+      e.preventDefault(); zone.classList.remove('dragover');
+      const file = e.dataTransfer.files[0];
+      if (file && file.name.toLowerCase().endsWith('.mp4')) {
+        const dt = new DataTransfer(); dt.items.add(file);
+        document.getElementById('caption-file').files = dt.files;
+        document.getElementById('caption-file').dispatchEvent(new Event('change'));
+      }
+    });
+  })();
+
+  function setCaptionSize(size) {
+    _captionFontPx = CAPTION_FONT_SIZES[size] || 18;
+    ['small', 'medium', 'large'].forEach(s => {
+      document.getElementById('caption-size-' + s).classList.toggle('active', s === size);
+    });
+  }
+
+  async function generateCaptions() {
+    if (!_captionFile) { alert('Load an MP4 first.'); return; }
+    if (!backendOnline) { alert('Backend is not connected. Make sure start_server.bat is running.'); return; }
+
+    const statusEl = document.getElementById('caption-status');
+    const btn = document.getElementById('btn-generate-captions');
+
+    btn.disabled = true;
+    statusEl.style.display = 'block';
+    statusEl.innerHTML =
+      '<div class="export-progress-bar"><div class="export-shimmer"></div></div>' +
+      '<p class="export-progress-label">Transcribing with Whisper\u2026 this may take a minute</p>';
+
+    const form = new FormData();
+    form.append('file', _captionFile);
+    form.append('font_size', _captionFontPx);
+
+    try {
+      const res = await fetch(BACKEND + '/caption', { method: 'POST', body: form });
+
+      if (!res.ok) {
+        let errMsg = res.statusText;
+        try { const d = await res.json(); errMsg = d.error || errMsg; } catch (_) {}
+        throw new Error(errMsg);
+      }
+
+      const cd = res.headers.get('Content-Disposition') || '';
+      const nameMatch = cd.match(/filename[^;=\n]*=["']?([^"'\n]+)/i);
+      const baseName = _captionFile.name.replace(/\.mp4$/i, '');
+      const downloadName = nameMatch ? nameMatch[1].trim() : baseName + ' (Captioned).mp4';
+
+      const blob = await res.blob();
+      const blobUrl = URL.createObjectURL(blob);
+
+      statusEl.innerHTML =
+        '<div class="export-success">' +
+          '<svg class="export-success-icon" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>' +
+          '<div class="export-success-text"><strong>Captions ready!</strong><span>' + escHtml(downloadName) + '</span></div>' +
+          '<a href="' + blobUrl + '" download="' + escHtml(downloadName) + '" class="btn btn-sm">Download</a>' +
+        '</div>';
+
+    } catch (err) {
+      statusEl.innerHTML =
+        '<div class="export-error"><strong>Caption failed:</strong> ' + escHtml(err.message) + '</div>';
+    } finally {
+      btn.disabled = false;
+    }
   }
 
   // ── Save Clip → POST /export_clip → download ──

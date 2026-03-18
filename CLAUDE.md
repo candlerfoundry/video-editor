@@ -12,6 +12,24 @@
 - Session log / outstanding tasks: record reca91hvXmEY2mKbI
 - This project's full context doc: record recxrTpbEIoSqacQm
 
+## PRODUCT VISION
+This app replaces Opus Clip for The Candler Foundry. It is faster than Opus Clip because
+it scans the Words JSON transcript — not the video — to identify viral moments. Claude
+ranks and surfaces the best 8-10 clip candidates (30-90 sec each). The UX mirrors Opus
+Clip: load video → auto-detect JSON → Find Viral Clips → ranked cards → preview →
+edit → export.
+
+## DROPBOX ARCHITECTURE
+* All users share one Dropbox account. Dropbox must be installed before the app works.
+* Portable path detection — use this pattern everywhere, never hardcode a username:
+  dropbox_root = os.path.join(os.path.expanduser('~'), 'Dropbox')
+  api_key_path = os.path.join(dropbox_root, '3MB', 'apikey.txt')
+  ffmpeg_exe   = os.path.join(dropbox_root, 'FFMPEG', 'ffmpeg.exe')
+* Videos and their Words JSON are always in the same Dropbox folder, matched by stem:
+  '3MB-1 - What is a Parable - Arnold - Horizontal - Uncaptioned.mp4'
+  → same folder → '3MB-1 - What is a Parable - Arnold - Transcript (Words).json'
+* If JSON not found: offer Generate Transcript button (POST /generate_transcript)
+
 ## CRITICAL ARCHITECTURE RULES
 - ALL frontend code lives in index.html — no separate .js or .css files
 - Netlify serves only index.html as the entire frontend

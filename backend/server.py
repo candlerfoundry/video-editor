@@ -11,6 +11,7 @@ import shutil
 import subprocess
 import tempfile
 import anthropic
+import whisper
 from flask import Flask, jsonify, request, send_file
 from flask_cors import CORS
 
@@ -19,9 +20,42 @@ CORS(app)
 
 CREATE_NO_WINDOW = 0x08000000
 
-# ── API key ──
-API_KEY_PATH = r"C:\Users\esavant\Dropbox\3MB\api_key.txt"
+# ── Dropbox portable paths ──
+dropbox_root   = os.path.join(os.path.expanduser('~'), 'Dropbox')
+API_KEY_PATH   = os.path.join(dropbox_root, '3MB', 'api_key.txt')
+FFMPEG         = os.path.join(dropbox_root, 'FFMPEG', 'ffmpeg.exe')
+FFMPEG_CAPTION = FFMPEG
 
+# ── Whisper model (loaded once on first use) ──
+_WHISPER_MODEL = None
+
+def get_whisper_model():
+    global _WHISPER_MODEL
+    if _WHISPER_MODEL is None:
+        _WHISPER_MODEL = whisper.load_model("medium")
+    return _WHISPER_MODEL
+
+
+# ── SRT helpers ──
+def format_srt_time(seconds):
+    ms = int(round((seconds % 1) * 1000))
+    s  = int(seconds)
+    m  = (s // 60) % 60
+    h  = s // 3600
+    s  = s % 60
+    return f"{h:02d}:{m:02d}:{s:02d},{ms:03d}"
+
+
+def write_srt(segments, path):
+    with open(path, "w", encoding="utf-8") as f:
+        for i, seg in enumerate(segments, 1):
+            start = format_srt_time(seg["start"])
+            end   = format_srt_time(seg["end"])
+            text  = seg["text"].strip()
+            f.write(f"{i}\n{start} --> {end}\n{text}\n\n")
+
+
+# ── API key ──
 def read_api_key():
     try:
         with open(API_KEY_PATH, "r") as f:
@@ -40,21 +74,72 @@ def health():
 @app.route("/caption", methods=["POST"])
 def caption():
     """
-    Accepts: { "file_path": "C:/path/to/video.mp4", "options": {} }
-    Returns: { "status": "ok", "output_path": "...(Captioned).mp4" }
-    Session 2: wire ffmpeg burn here.
+    Accepts multipart/form-data:
+      file       — the source MP4
+      font_size  — integer, caption font size in points (default 18)
+    Returns the captioned MP4 as a download.
     """
-    data = request.get_json(force=True)
-    file_path = data.get("file_path", "")
-    base = os.path.splitext(file_path)[0]
-    output_path = base + " (Captioned).mp4"
+    file = request.files.get("file")
+    if not file:
+        return jsonify({"error": "No file provided"}), 400
 
-    return jsonify({
-        "status": "stub",
-        "message": "Caption burn not yet implemented — wiring in Session 2",
-        "input": file_path,
-        "output_path": output_path,
-    })
+    try:
+        font_size = int(request.form.get("font_size", 18))
+    except (ValueError, TypeError):
+        font_size = 18
+
+    original_name = file.filename or "video.mp4"
+    base_name     = os.path.splitext(os.path.basename(original_name))[0]
+    output_name   = base_name + " (Captioned).mp4"
+
+    tmp_dir = tempfile.mkdtemp()
+    try:
+        input_path  = os.path.join(tmp_dir, "source.mp4")
+        srt_path    = os.path.join(tmp_dir, "captions.srt")
+        output_path = os.path.join(tmp_dir, output_name)
+
+        file.save(input_path)
+
+        # Transcribe with Whisper medium
+        model  = get_whisper_model()
+        result = model.transcribe(input_path)
+        write_srt(result["segments"], srt_path)
+
+        # Burn subtitles with ffmpeg
+        # Use cwd=tmp_dir and relative filename to avoid Windows path escaping issues
+        style = (
+            f"Fontname=Arial,Fontsize={font_size},"
+            "Outline=1,Shadow=0,BorderStyle=1,Spacing=1"
+        )
+        cmd = [
+            FFMPEG_CAPTION, "-y",
+            "-i", input_path,
+            "-vf", f"subtitles=captions.srt:force_style='{style}'",
+            "-c:a", "copy",
+            output_path,
+        ]
+        proc = subprocess.run(
+            cmd,
+            capture_output=True,
+            creationflags=CREATE_NO_WINDOW,
+            cwd=tmp_dir,
+        )
+        if proc.returncode != 0:
+            err = proc.stderr.decode("utf-8", errors="replace")[-800:]
+            return jsonify({"error": "ffmpeg failed: " + err}), 500
+
+        with open(output_path, "rb") as f:
+            video_bytes = f.read()
+
+    finally:
+        shutil.rmtree(tmp_dir, ignore_errors=True)
+
+    return send_file(
+        io.BytesIO(video_bytes),
+        as_attachment=True,
+        download_name=output_name,
+        mimetype="video/mp4",
+    )
 
 
 # ── Transcribe ──
@@ -77,6 +162,140 @@ def transcribe():
         "clean_path": base + " (Clean).txt",
         "words_path": base + " (Words).json",
     })
+
+
+# ── Find JSON ──
+SUFFIX_PATTERNS = [
+    r'\s*-\s*Horizontal\s*-\s*Uncaptioned',
+    r'\s*-\s*Vertical\s*-\s*Uncaptioned',
+    r'\s*\(Uncaptioned\)',
+    r'\s*-\s*Uncaptioned',
+    r'\s*\(Captioned\)',
+    r'\s*-\s*Horizontal',
+    r'\s*-\s*Vertical',
+]
+
+def bare_stem(name):
+    stem = os.path.splitext(name)[0]
+    for pat in SUFFIX_PATTERNS:
+        stem = re.sub(pat, '', stem, flags=re.IGNORECASE).strip()
+    return stem
+
+
+@app.route("/find_json", methods=["POST"])
+def find_json():
+    """
+    Accepts: { "file_path": "..." } OR { "filename": "Video.mp4" }
+    If file_path given and exists: searches same directory.
+    If only filename given: walks Dropbox looking for a matching Words JSON.
+    Returns: { "found": true, "json_path": "..." } or { "found": false }
+    """
+    data = request.get_json(force=True)
+    file_path = data.get("file_path", "").strip()
+    filename  = data.get("filename",  "").strip()
+
+    # Determine search root and stem
+    if file_path and os.path.isfile(file_path):
+        search_dirs = [os.path.dirname(file_path)]
+        target_bare = bare_stem(os.path.basename(file_path)).lower()
+    elif filename:
+        search_dirs = [dropbox_root]
+        target_bare = bare_stem(filename).lower()
+    else:
+        return jsonify({"found": False})
+
+    def search_dir_tree(roots):
+        for root in roots:
+            for dirpath, _dirs, files in os.walk(root):
+                for entry in files:
+                    if not entry.lower().endswith('.json'):
+                        continue
+                    entry_lower = entry.lower()
+                    if target_bare in entry_lower and 'words' in entry_lower:
+                        return os.path.join(dirpath, entry)
+        return None
+
+    result = search_dir_tree(search_dirs)
+    if result:
+        return jsonify({"found": True, "json_path": result})
+    return jsonify({"found": False})
+
+
+# ── Generate Transcript ──
+@app.route("/generate_transcript", methods=["POST"])
+def generate_transcript():
+    """
+    Accepts: { "file_path": "C:/path/to/Video.mp4" }
+    Runs Whisper medium, saves (Words).json alongside source.
+    Returns: { "json_path": "..." }
+    """
+    data = request.get_json(force=True)
+    file_path = data.get("file_path", "").strip()
+    if not file_path or not os.path.isfile(file_path):
+        return jsonify({"error": "file_path not found"}), 400
+
+    directory = os.path.dirname(file_path)
+    stem = os.path.splitext(os.path.basename(file_path))[0]
+    out_path = os.path.join(directory, stem + ' - Transcript (Words).json')
+
+    # Copy to clean temp path to handle special characters
+    tmp_dir = tempfile.mkdtemp()
+    try:
+        clean_input = os.path.join(tmp_dir, 'source.mp4')
+        shutil.copy2(file_path, clean_input)
+
+        model = get_whisper_model()
+        result = model.transcribe(clean_input, word_timestamps=True)
+
+        words = []
+        for seg in result.get('segments', []):
+            for w in seg.get('words', []):
+                words.append({
+                    'word':  w.get('word', ''),
+                    'start': round(w.get('start', 0.0), 3),
+                    'end':   round(w.get('end',   0.0), 3),
+                })
+
+        with open(out_path, 'w', encoding='utf-8') as f:
+            json.dump(words, f, ensure_ascii=False, indent=2)
+
+    finally:
+        shutil.rmtree(tmp_dir, ignore_errors=True)
+
+    return jsonify({"json_path": out_path})
+
+
+# ── Generate Transcript (upload) ──
+@app.route("/generate_transcript_upload", methods=["POST"])
+def generate_transcript_upload():
+    """
+    Accepts multipart/form-data: file (MP4).
+    Runs Whisper medium, returns { "words": [...] }.
+    """
+    file = request.files.get("file")
+    if not file:
+        return jsonify({"error": "No file provided"}), 400
+
+    tmp_dir = tempfile.mkdtemp()
+    try:
+        input_path = os.path.join(tmp_dir, "source.mp4")
+        file.save(input_path)
+
+        model = get_whisper_model()
+        result = model.transcribe(input_path, word_timestamps=True)
+
+        words = []
+        for seg in result.get("segments", []):
+            for w in seg.get("words", []):
+                words.append({
+                    "word":  w.get("word", ""),
+                    "start": round(w.get("start", 0.0), 3),
+                    "end":   round(w.get("end",   0.0), 3),
+                })
+    finally:
+        shutil.rmtree(tmp_dir, ignore_errors=True)
+
+    return jsonify({"words": words})
 
 
 # ── Thumbnails ──
@@ -108,8 +327,6 @@ def clips():
     """
     data = request.get_json(force=True)
     transcript = data.get("transcript", "").strip()
-    starttime  = data.get("starttime")
-    endtime    = data.get("endtime")
 
     if not transcript:
         return jsonify({"error": "No transcript provided"}), 400
@@ -118,42 +335,36 @@ def clips():
     if not api_key:
         return jsonify({"error": f"API key not found at {API_KEY_PATH}"}), 500
 
-    # Optionally focus Claude on a user-selected time range
-    range_note = ""
-    if starttime is not None and endtime is not None:
-        range_note = (
-            f"\n\nThe user has highlighted a range from {starttime:.1f}s to {endtime:.1f}s. "
-            "Prioritise candidates that fall within or near this window, but still return "
-            "the 3-5 best clips overall."
-        )
-
     prompt = (
-        "You are an expert social media video editor. Analyse this transcript and identify "
-        "3-5 segments that would make excellent standalone short-form clips for Instagram, "
-        "TikTok, or YouTube Shorts.\n\n"
+        "You are an expert social media video editor for a seminary and theological education "
+        "organization. Analyse this word-timed transcript and identify the 8-10 best segments "
+        "that would make excellent standalone short-form clips (30-90 seconds each) for "
+        "Instagram, TikTok, or YouTube Shorts.\n\n"
         "Look for:\n"
-        "- Quotable, self-contained statements\n"
+        "- Quotable, self-contained statements with a strong hook\n"
         "- High-energy or emotionally resonant moments\n"
         "- Segments with a clear narrative arc (setup \u2192 payoff)\n"
-        "- Hooks that grab attention in the first 3 seconds\n\n"
-        "TRANSCRIPT:\n"
+        "- Theological insight or wisdom that is accessible to a broad audience\n"
+        "- The single best opening line that grabs attention in the first 3 seconds\n\n"
+        "Each clip must be 30-90 seconds long. Prefer the higher end of that range.\n\n"
+        "TRANSCRIPT (format: [start_seconds] word):\n"
         + transcript
-        + range_note
         + "\n\n"
-        "Return ONLY a valid JSON array with 3-5 objects. Each object must have exactly:\n"
-        '- "starttime": number (seconds)\n'
-        '- "endtime": number (seconds)\n'
-        '- "hookscore": integer 1-10 (10 = highest viral potential)\n'
-        '- "hookline": string (the single strongest sentence from that segment)\n'
-        '- "reason": string (1-2 sentences on why this makes a great clip)\n\n'
+        "Return ONLY a valid JSON array of 8-10 objects sorted by hook_score descending. "
+        "Each object must have exactly:\n"
+        '- "starttime": number (seconds, from transcript timestamps)\n'
+        '- "endtime": number (seconds, from transcript timestamps)\n'
+        '- "hook_score": integer 1-10 (10 = highest viral potential)\n'
+        '- "hookline": string (the single strongest opening sentence from that segment)\n'
+        '- "why_it_works": string (1-2 sentences on why this makes a great clip)\n\n'
         "Return ONLY the JSON array — no markdown fences, no explanation."
     )
 
     try:
         client = anthropic.Anthropic(api_key=api_key)
         message = client.messages.create(
-            model="claude-sonnet-4-5",
-            max_tokens=1500,
+            model="claude-sonnet-4-6",
+            max_tokens=2500,
             messages=[{"role": "user", "content": prompt}]
         )
         response_text = message.content[0].text.strip()
@@ -162,7 +373,19 @@ def clips():
         match = re.search(r'\[[\s\S]*\]', response_text)
         candidates = json.loads(match.group() if match else response_text)
 
-        return jsonify({"candidates": candidates})
+        # Normalise field names: support both old (reason/hookscore) and new schema
+        normalised = []
+        for c in candidates:
+            normalised.append({
+                "starttime":    c.get("starttime", 0),
+                "endtime":      c.get("endtime",   0),
+                "hook_score":   c.get("hook_score", c.get("hookscore", 0)),
+                "hookline":     c.get("hookline", ""),
+                "why_it_works": c.get("why_it_works", c.get("reason", "")),
+            })
+        normalised.sort(key=lambda x: x["hook_score"], reverse=True)
+
+        return jsonify({"candidates": normalised})
 
     except json.JSONDecodeError as e:
         return jsonify({
@@ -174,8 +397,6 @@ def clips():
 
 
 # ── Export Clip ──
-FFMPEG = r"C:\Users\esavant\Dropbox\FFMPEG\ffmpeg.exe"
-
 @app.route("/export_clip", methods=["POST"])
 def export_clip():
     """
