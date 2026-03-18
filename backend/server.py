@@ -22,7 +22,7 @@ CREATE_NO_WINDOW = 0x08000000
 
 # ── Dropbox portable paths ──
 dropbox_root   = os.path.join(os.path.expanduser('~'), 'Dropbox')
-API_KEY_PATH   = os.path.join(dropbox_root, '3MB', 'Captioning Project', 'api_key.txt')
+API_KEY_PATH   = os.path.join(dropbox_root, 'Scripts', 'api_key.txt')
 FFMPEG         = os.path.join(dropbox_root, 'FFMPEG', 'ffmpeg.exe')
 FFMPEG_CAPTION = FFMPEG
 
@@ -350,7 +350,7 @@ def find_clips():
         print(f"Transcript word count: {len(transcript)}")
         print(f"Transcript preview: {transcript_text[:200]}")
 
-        api_key_path = os.path.join(os.path.expanduser('~'), 'Dropbox', '3MB', 'Captioning Project', 'api_key.txt')
+        api_key_path = os.path.join(os.path.expanduser('~'), 'Dropbox', 'Scripts', 'api_key.txt')
         with open(api_key_path, 'r') as f:
             api_key = f.read().strip()
 
