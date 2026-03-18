@@ -336,28 +336,18 @@ def clips():
         return jsonify({"error": f"API key not found at {API_KEY_PATH}"}), 500
 
     prompt = (
-        "You are an expert social media video editor for a seminary and theological education "
-        "organization. Analyse this word-timed transcript and identify the 8-10 best segments "
-        "that would make excellent standalone short-form clips (30-90 seconds each) for "
-        "Instagram, TikTok, or YouTube Shorts.\n\n"
-        "Look for:\n"
-        "- Quotable, self-contained statements with a strong hook\n"
-        "- High-energy or emotionally resonant moments\n"
-        "- Segments with a clear narrative arc (setup \u2192 payoff)\n"
-        "- Theological insight or wisdom that is accessible to a broad audience\n"
-        "- The single best opening line that grabs attention in the first 3 seconds\n\n"
-        "Each clip must be 30-90 seconds long. Prefer the higher end of that range.\n\n"
-        "TRANSCRIPT (format: [start_seconds] word):\n"
-        + transcript
-        + "\n\n"
-        "Return ONLY a valid JSON array of 8-10 objects sorted by hook_score descending. "
-        "Each object must have exactly:\n"
-        '- "starttime": number (seconds, from transcript timestamps)\n'
-        '- "endtime": number (seconds, from transcript timestamps)\n'
-        '- "hook_score": integer 1-10 (10 = highest viral potential)\n'
-        '- "hookline": string (the single strongest opening sentence from that segment)\n'
-        '- "why_it_works": string (1-2 sentences on why this makes a great clip)\n\n'
-        "Return ONLY the JSON array — no markdown fences, no explanation."
+        "You are a social media clip expert. Analyze this transcript and identify 8-10 "
+        "high-impact moments suitable for viral short-form video clips (30-90 seconds each).\n\n"
+        "For each clip, provide:\n"
+        '- "starttime": float (seconds)\n'
+        '- "endtime": float (seconds)\n'
+        '- "hook_score": integer 1-10 (virality potential)\n'
+        '- "hookline": string (the single most compelling sentence from this segment)\n'
+        '- "why_it_works": string (1-2 sentences explaining the viral potential)\n\n'
+        "Rank results by hook_score descending.\n\n"
+        "CRITICAL: Respond with ONLY a valid JSON array. No markdown, no code fences, "
+        "no explanation. Start your response with [ and end with ].\n\n"
+        "Transcript words: " + transcript
     )
 
     try:
@@ -369,9 +359,19 @@ def clips():
         )
         response_text = message.content[0].text.strip()
 
-        # Extract the JSON array even if Claude adds surrounding text
-        match = re.search(r'\[[\s\S]*\]', response_text)
-        candidates = json.loads(match.group() if match else response_text)
+        # Strip markdown code fences if Claude added them despite instructions
+        raw = response_text
+        raw = re.sub(r'^```json\s*', '', raw)
+        raw = re.sub(r'^```\s*', '', raw)
+        raw = re.sub(r'```\s*$', '', raw)
+        raw = raw.strip()
+
+        # Fallback: extract the first [...] array if there is surrounding text
+        if not raw.startswith('['):
+            match = re.search(r'\[[\s\S]*\]', raw)
+            raw = match.group() if match else raw
+
+        candidates = json.loads(raw)
 
         # Normalise field names: support both old (reason/hookscore) and new schema
         normalised = []
