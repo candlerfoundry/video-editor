@@ -1406,38 +1406,50 @@
   }
 
   // ── Folder picker — auto-detects MP4 + Words JSON from selected folder ──
-  document.getElementById('clips-file').addEventListener('change', function () {
-    const files = Array.from(this.files);
-    if (!files.length) return;
-
-    // 1. Find the MP4 (first non-captioned)
-    const mp4File = files.find(f =>
-      f.name.toLowerCase().endsWith('.mp4') &&
-      !f.name.toLowerCase().includes('captioned')
-    );
+  document.getElementById('clips-file').addEventListener('change', function (e) {
+    const files = Array.from(e.target.files);
+    // Debug: log all filenames so we can see exactly what the browser provides
+    console.log('Files seen in folder:', files.map(f => f.name));
+    // Find MP4 — fully case-insensitive, ignore captioned outputs
+    const mp4File = files.find(f => {
+      const name = f.name.toLowerCase();
+      return name.endsWith('.mp4') && !name.includes('captioned');
+    });
     if (!mp4File) {
-      alert('No MP4 found in the selected folder. Make sure you selected the right folder.');
+      const fileList = files.map(f => f.name).join('\n');
+      showError('No MP4 found in folder. Files seen:\n' + fileList);
       return;
     }
+    // Strip folder path prefix if present (webkitdirectory includes it on some browsers)
+    const mp4BaseName = mp4File.name.includes('/')
+      ? mp4File.name.split('/').pop()
+      : mp4File.name;
+    // Strip known suffixes to get base stem for JSON matching
+    let stem = mp4BaseName
+      .replace(/\.mp4$/i, '')
+      .replace(/\s*-\s*horizontal\s*-\s*uncaptioned/i, '')
+      .replace(/\s*\(uncaptioned\)/i, '')
+      .replace(/\s*-\s*horizontal/i, '')
+      .trim();
+    // Find matching Words JSON — case-insensitive
+    const jsonFile = files.find(f => {
+      const name = f.name.toLowerCase();
+      return name.includes('words') &&
+             name.endsWith('.json') &&
+             name.includes(stem.toLowerCase());
+    });
 
     // 2. Load video
     _clipFile = mp4File;
     const clcV = document.getElementById('clc-video');
     clcV.classList.add('loaded');
     const valEl = document.getElementById('clc-video-value');
-    valEl.textContent = mp4File.name;
+    valEl.textContent = mp4BaseName;
     valEl.className = 'clc-value mono';
     valEl.style.color = '';
     const vid = document.getElementById('clips-video');
     vid.src = URL.createObjectURL(mp4File);
     vid.load();
-
-    // 3. Find matching Words JSON by stem in the same FileList
-    const stem = bareStemJS(mp4File.name).toLowerCase();
-    const jsonFile = files.find(f => {
-      const n = f.name.toLowerCase();
-      return n.endsWith('.json') && n.includes(stem) && n.includes('words');
-    });
 
     if (jsonFile) {
       setJsonStatus('searching');
@@ -1800,6 +1812,10 @@
   }
 
   // ── Helper: escHtml ──
+  function showError(msg) {
+    alert(msg);
+  }
+
   function escHtml(s) {
     return String(s)
       .replace(/&/g, '&amp;')
