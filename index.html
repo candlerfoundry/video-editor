@@ -6,7 +6,7 @@
   <title>Foundry Video Editor</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Playfair+Display:wght@600;700&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Inter:wght@400;500;600;700&family=Oswald:wght@400;500;600;700&family=Playfair+Display:wght@600;700&display=swap" rel="stylesheet">
   <script src="https://unpkg.com/wavesurfer.js@7/dist/wavesurfer.min.js"></script>
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
@@ -884,6 +884,86 @@
       box-shadow: 0 1px 4px rgba(0,0,0,0.25);
     }
 
+    /* ─── THUMBNAILS TAB ─── */
+    .thumb-step-list {
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: var(--r); padding: 14px 20px;
+      max-width: 420px; box-shadow: var(--shadow-sm);
+      margin-bottom: 24px;
+    }
+    .thumb-step {
+      display: flex; align-items: center; gap: 10px;
+      padding: 8px 0; font-size: 13.5px; color: var(--muted);
+      border-bottom: 1px solid var(--border);
+    }
+    .thumb-step:last-child { border-bottom: none; }
+    .thumb-step.active { color: var(--orange); font-weight: 600; }
+    .thumb-step.done   { color: var(--green); }
+    .thumb-step-dot {
+      width: 8px; height: 8px; border-radius: 50%;
+      background: var(--border-2); flex-shrink: 0;
+    }
+    .thumb-step.active .thumb-step-dot { background: var(--orange); animation: pulse 1.2s ease-in-out infinite; }
+    .thumb-step.done   .thumb-step-dot { background: var(--green); animation: none; }
+
+    .thumb-canvas-wrap {
+      position: relative; width: 640px; height: 360px;
+      border-radius: var(--r); overflow: hidden;
+      border: 1px solid var(--border);
+      box-shadow: var(--shadow-md);
+      flex-shrink: 0;
+    }
+    #thumb-canvas { display: block; width: 640px; height: 360px; }
+    #thumb-text-drag {
+      position: absolute; cursor: move; user-select: none;
+      padding: 4px 10px;
+      border: 2px dashed rgba(255,255,255,0.55);
+      border-radius: 4px; text-align: center;
+      transform: translate(-50%, -50%);
+      white-space: pre-wrap; max-width: 88%;
+      pointer-events: all;
+    }
+    .title-card {
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: var(--r); padding: 10px 14px;
+      cursor: pointer;
+      transition: border-color 150ms, box-shadow 150ms, background 150ms;
+      font-size: 13.5px; font-weight: 500; line-height: 1.45; color: var(--text);
+      box-shadow: var(--shadow-sm);
+    }
+    .title-card:hover { border-color: var(--orange); }
+    .title-card.selected {
+      border-color: var(--orange); background: var(--orange-tint);
+      box-shadow: 0 0 0 3px var(--orange-tint);
+    }
+    .style-card.selected {
+      border-color: var(--orange);
+      box-shadow: 0 0 0 3px var(--orange-tint);
+    }
+    .thumb-font-select {
+      font-family: var(--font); font-size: 13px; font-weight: 500;
+      border: 1px solid var(--border-2); border-radius: 6px;
+      padding: 6px 10px; background: var(--surface); color: var(--text);
+      outline: none; cursor: pointer; width: 100%;
+    }
+    .thumb-font-select:focus { border-color: var(--orange); }
+    .thumb-size-btn {
+      width: 30px; height: 30px; border-radius: 6px;
+      background: var(--surface); border: 1px solid var(--border-2);
+      color: var(--text-2); font-size: 18px; font-weight: 500;
+      cursor: pointer; display: flex; align-items: center; justify-content: center;
+      transition: border-color 150ms, color 150ms;
+    }
+    .thumb-size-btn:hover { border-color: var(--orange); color: var(--orange); }
+    .thumb-size-val {
+      font-family: var(--font-mono); font-size: 13px; font-weight: 600;
+      color: var(--text); min-width: 32px; text-align: center;
+    }
+    .thumb-control-label {
+      font-size: 11px; font-weight: 700; text-transform: uppercase;
+      letter-spacing: 0.07em; color: var(--muted); margin-bottom: 6px;
+    }
+
     /* ─── TRANSCRIPT CLIP VIEW ─── */
     .tx-word.out-of-clip { opacity: 0.4; }
     .tx-clip-marker {
@@ -1037,9 +1117,9 @@
                 <div class="clc-icon">🎬</div>
                 <div class="clc-body">
                   <div class="clc-value muted" id="clc-video-value">Browse for video</div>
-                  <div style="font-size:11px;color:var(--muted);margin-top:2px;">Select your MP4 &mdash; transcript loads automatically</div>
+                  <div style="font-size:11px;color:var(--muted);margin-top:2px;">Select your MP4 or MOV &mdash; transcript loads automatically</div>
                 </div>
-                <input type="file" accept=".mp4,.MP4,video/mp4" id="clips-file" style="display:none;" />
+                <input type="file" accept=".mp4,.MP4,.mov,.MOV,video/mp4,video/quicktime" id="clips-file" style="display:none;" />
               </div>
             </div>
 
@@ -1191,8 +1271,9 @@
         <div class="drop-zone fade-up" id="caption-drop" style="margin-bottom:20px;" onclick="document.getElementById('caption-file').click()">
           <div class="dz-icon">🎬</div>
           <div class="dz-label" id="caption-dz-label">Drop MP4 here or click to browse</div>
-          <div class="dz-sub">.mp4 files only</div>
-          <input type="file" id="caption-file" accept=".mp4" />
+          <div class="dz-sub">MP4 or MOV files</div>
+          <input type="file" id="caption-file"
+                 accept=".mp4,.MP4,.mov,.MOV,video/mp4,video/quicktime" />
         </div>
 
         <div class="card fade-up-1" style="margin-bottom:20px;">
@@ -1247,34 +1328,153 @@
         <div class="section-hero-bg" style="background-image: url('Graphic_2.png')"></div>
         <div class="section-hero-text fade-up">
           <h1>Thumbnails</h1>
-          <p>Extract key frames, generate title options with Claude, and export a polished thumbnail in your chosen style.</p>
+          <p>AI picks the best speaker frame, generates 8 title options, and lets you drag and resize text before downloading.</p>
         </div>
       </div>
 
       <div class="panel-body">
 
-        <div class="drop-zone fade-up" style="margin-bottom:24px;" onclick="document.getElementById('thumb-file').click()">
-          <div class="dz-icon">🖼</div>
-          <div class="dz-label">Drop an MP4 here to get started</div>
-          <div class="dz-sub">Whisper (tiny model) will transcribe for AI title generation</div>
-          <input type="file" id="thumb-file" accept=".mp4" />
+        <!-- STATE 1: Upload -->
+        <div id="thumb-state-upload">
+          <div class="drop-zone fade-up" id="thumb-drop" style="margin-bottom:20px;"
+               onclick="document.getElementById('thumb-file').click()">
+            <div class="dz-icon">🖼</div>
+            <div class="dz-label" id="thumb-dz-label">Drop an MP4 or MOV here to get started</div>
+            <div class="dz-sub">AI picks best frame &bull; 8 title options &bull; moveable text overlay</div>
+            <input type="file" id="thumb-file"
+                   accept=".mp4,.MP4,.mov,.MOV,video/mp4,video/quicktime" />
+          </div>
+          <button class="btn fade-up-1" id="btn-generate-thumb"
+                  onclick="generateThumbnail()" disabled>
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                 stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+              <rect x="3" y="3" width="18" height="18" rx="2"/>
+              <circle cx="8.5" cy="8.5" r="1.5"/>
+              <path d="M21 15l-5-5L5 21"/>
+            </svg>
+            Generate Thumbnail
+          </button>
         </div>
 
-        <div class="style-grid">
-          <div class="style-card fade-up">
-            <div class="style-preview warm-bar"></div>
-            <div class="style-name">Warm Bar</div>
-            <div class="style-desc">Gradient bar with centered title</div>
+        <!-- STATE 2: Processing -->
+        <div id="thumb-state-processing" style="display:none;">
+          <div class="thumb-step-list">
+            <div class="thumb-step" id="tstep-1"><div class="thumb-step-dot"></div>Extracting frames&hellip;</div>
+            <div class="thumb-step" id="tstep-2"><div class="thumb-step-dot"></div>Finding best shot&hellip;</div>
+            <div class="thumb-step" id="tstep-3"><div class="thumb-step-dot"></div>Generating titles&hellip;</div>
+            <div class="thumb-step" id="tstep-4"><div class="thumb-step-dot"></div>Ready</div>
           </div>
-          <div class="style-card fade-up-1">
-            <div class="style-preview bold-corner"></div>
-            <div class="style-name">Bold Corner</div>
-            <div class="style-desc">High-contrast corner overlay</div>
+          <div class="skeleton-card" style="height:180px;max-width:560px;"></div>
+        </div>
+
+        <!-- STATE 3: Hero + Titles -->
+        <div id="thumb-state-hero" style="display:none;">
+          <div style="display:flex;gap:24px;flex-wrap:wrap;align-items:flex-start;margin-bottom:20px;">
+
+            <!-- Hero frame -->
+            <div style="flex-shrink:0;">
+              <div class="thumb-control-label" style="margin-bottom:8px;">Best Frame</div>
+              <img id="thumb-hero-img"
+                   style="width:320px;height:180px;border-radius:var(--r);object-fit:cover;
+                          border:1px solid var(--border);box-shadow:var(--shadow-md);display:block;"
+                   alt="Best speaker frame" />
+              <button class="btn-ghost btn-sm" id="btn-redo-titles" onclick="redoTitles()"
+                      style="margin-top:10px;">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                     stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                  <polyline points="1 4 1 10 7 10"/>
+                  <path d="M3.51 15a9 9 0 1 0 .49-3.2"/>
+                </svg>
+                Redo Titles
+              </button>
+            </div>
+
+            <!-- Style picker -->
+            <div style="flex:1;min-width:260px;">
+              <div class="thumb-control-label" style="margin-bottom:8px;">Style</div>
+              <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;">
+                <div class="style-card" id="style-warm_bar" onclick="selectThumbStyle('warm_bar')">
+                  <div class="style-preview warm-bar"></div>
+                  <div class="style-name">Warm Bar</div>
+                </div>
+                <div class="style-card" id="style-bold_corner" onclick="selectThumbStyle('bold_corner')">
+                  <div class="style-preview bold-corner"></div>
+                  <div class="style-name">Bold Corner</div>
+                </div>
+                <div class="style-card" id="style-kinetic_slash" onclick="selectThumbStyle('kinetic_slash')">
+                  <div class="style-preview kinetic"></div>
+                  <div class="style-name">Kinetic Slash</div>
+                </div>
+              </div>
+            </div>
+
           </div>
-          <div class="style-card fade-up-2">
-            <div class="style-preview kinetic"></div>
-            <div class="style-name">Kinetic Slash</div>
-            <div class="style-desc">Dynamic diagonal accent</div>
+
+          <!-- Title cards -->
+          <div class="thumb-control-label" style="margin-bottom:10px;">Choose a Title</div>
+          <div id="thumb-titles-grid"
+               style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:20px;"></div>
+        </div>
+
+        <!-- STATE 4: Canvas Editor -->
+        <div id="thumb-state-editor" style="display:none;">
+          <button class="stage3-back" onclick="backToTitles()">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                 stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+              <polyline points="15 18 9 12 15 6"/>
+            </svg>
+            Back to titles
+          </button>
+
+          <div style="display:flex;gap:24px;flex-wrap:wrap;align-items:flex-start;">
+
+            <!-- Canvas -->
+            <div>
+              <div class="thumb-canvas-wrap" id="thumb-canvas-wrap">
+                <canvas id="thumb-canvas" width="1280" height="720"></canvas>
+                <div id="thumb-text-drag"></div>
+              </div>
+              <p style="font-size:12px;color:var(--muted);margin-top:8px;">
+                Drag the title text to reposition it.
+              </p>
+            </div>
+
+            <!-- Controls -->
+            <div style="flex:1;min-width:200px;display:flex;flex-direction:column;gap:12px;">
+              <div class="card">
+                <h3 style="margin-bottom:14px;">Text Style</h3>
+                <div style="display:flex;flex-direction:column;gap:12px;">
+                  <div>
+                    <div class="thumb-control-label">Font</div>
+                    <select class="thumb-font-select" id="thumb-font-select"
+                            onchange="updateThumbText()">
+                      <option value="Inter">Inter</option>
+                      <option value="Oswald">Oswald</option>
+                      <option value="'Playfair Display'">Playfair Display</option>
+                      <option value="'Bebas Neue'">Bebas Neue</option>
+                    </select>
+                  </div>
+                  <div>
+                    <div class="thumb-control-label">Size</div>
+                    <div style="display:flex;align-items:center;gap:8px;">
+                      <button class="thumb-size-btn" onclick="changeThumbFontSize(-4)">&#8722;</button>
+                      <span class="thumb-size-val" id="thumb-size-val">64</span>
+                      <button class="thumb-size-btn" onclick="changeThumbFontSize(+4)">&#43;</button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+              <button class="btn" onclick="downloadThumbPNG()" style="align-self:flex-start;">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                     stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/>
+                  <polyline points="7 10 12 15 17 10"/>
+                  <line x1="12" y1="15" x2="12" y2="3"/>
+                </svg>
+                Download PNG
+              </button>
+            </div>
+
           </div>
         </div>
 
@@ -1656,7 +1856,7 @@
       const res = await fetch(BACKEND + '/generate_transcript_upload', { method: 'POST', body: form });
       const d = await res.json();
       if (d.words) {
-        setWordsData(d.words, _clipFile.name.replace(/\.mp4$/i, '') + ' - Transcript (Words).json');
+        setWordsData(d.words, _clipFile.name.replace(/\.(mp4|mov)$/i, '') + ' - Transcript (Words).json');
       } else {
         setJsonStatus('not_found');
         alert('Transcript generation failed: ' + (d.error || 'unknown error'));
@@ -2106,7 +2306,7 @@
     zone.addEventListener('drop', e => {
       e.preventDefault(); zone.classList.remove('dragover');
       const file = e.dataTransfer.files[0];
-      if (file && file.name.toLowerCase().endsWith('.mp4')) {
+      if (file && /\.(mp4|mov)$/i.test(file.name)) {
         const dt = new DataTransfer(); dt.items.add(file);
         document.getElementById('caption-file').files = dt.files;
         document.getElementById('caption-file').dispatchEvent(new Event('change'));
@@ -2165,7 +2365,7 @@
 
       const cd = res.headers.get('Content-Disposition') || '';
       const nameMatch = cd.match(/filename[^;=\n]*=["']?([^"'\n]+)/i);
-      const baseName = _captionFile.name.replace(/\.mp4$/i, '');
+      const baseName = _captionFile.name.replace(/\.(mp4|mov)$/i, '');
       const downloadName = nameMatch ? nameMatch[1].trim() : baseName + ' (Captioned).mp4';
 
       const blob = await res.blob();
@@ -2186,6 +2386,350 @@
     }
   }
 
+  // ══════════════════════════════════════════
+  // THUMBNAILS TAB
+  // ══════════════════════════════════════════
+
+  let _thumbFile        = null;
+  let _thumbHeroB64     = null;   // base64 JPEG returned by backend
+  let _thumbTitles      = [];
+  let _thumbStyle       = 'warm_bar';
+  let _thumbTitle       = '';
+  let _thumbFontFamily  = 'Inter';
+  let _thumbFontSize    = 64;     // canvas-resolution px (1280-wide)
+  let _thumbCanvasTX    = 640;    // canvas-space X center of text (0-1280)
+  let _thumbCanvasTY    = 590;    // canvas-space Y center of text (0-720)
+
+  // Wire thumb-file input
+  document.getElementById('thumb-file').addEventListener('change', function () {
+    const file = this.files[0];
+    if (!file) return;
+    _thumbFile = file;
+    const drop = document.getElementById('thumb-drop');
+    drop.classList.add('loaded');
+    document.getElementById('thumb-dz-label').textContent = file.name;
+    document.getElementById('btn-generate-thumb').disabled = false;
+  });
+
+  // Drag-drop for thumb zone
+  (function () {
+    const zone = document.getElementById('thumb-drop');
+    zone.addEventListener('dragover',  e => { e.preventDefault(); zone.classList.add('dragover'); });
+    zone.addEventListener('dragleave', ()  => zone.classList.remove('dragover'));
+    zone.addEventListener('drop', e => {
+      e.preventDefault(); zone.classList.remove('dragover');
+      const file = e.dataTransfer.files[0];
+      if (file && /\.(mp4|mov)$/i.test(file.name)) {
+        const dt = new DataTransfer(); dt.items.add(file);
+        document.getElementById('thumb-file').files = dt.files;
+        document.getElementById('thumb-file').dispatchEvent(new Event('change'));
+      }
+    });
+  })();
+
+  function thumbShowState(state) {
+    ['upload', 'processing', 'hero', 'editor'].forEach(s => {
+      const el = document.getElementById('thumb-state-' + s);
+      if (el) el.style.display = s === state ? 'block' : 'none';
+    });
+  }
+
+  function thumbSetStep(n) {
+    for (let i = 1; i <= 4; i++) {
+      const el = document.getElementById('tstep-' + i);
+      if (!el) continue;
+      el.className = 'thumb-step' + (i < n ? ' done' : i === n ? ' active' : '');
+    }
+  }
+
+  async function generateThumbnail() {
+    if (!_thumbFile) { alert('Load a video first.'); return; }
+    if (!backendOnline) { alert('Backend is not connected.'); return; }
+
+    thumbShowState('processing');
+    thumbSetStep(1);
+
+    const t1 = setTimeout(() => thumbSetStep(2), 1500);
+    const t2 = setTimeout(() => thumbSetStep(3), 4500);
+
+    const form = new FormData();
+    form.append('file', _thumbFile);
+
+    try {
+      const res = await fetch(BACKEND + '/thumbnail', { method: 'POST', body: form });
+      clearTimeout(t1); clearTimeout(t2);
+
+      if (!res.ok) {
+        let err = res.statusText;
+        try { const d = await res.json(); err = d.error || err; } catch (_) {}
+        thumbShowState('upload');
+        alert('Thumbnail generation failed: ' + err);
+        return;
+      }
+
+      const data = await res.json();
+      if (data.error) { thumbShowState('upload'); alert(data.error); return; }
+
+      _thumbHeroB64 = data.hero_frame;
+      _thumbTitles  = data.titles || [];
+
+      thumbSetStep(4);
+      setTimeout(() => {
+        buildThumbHeroState();
+        thumbShowState('hero');
+      }, 400);
+
+    } catch (err) {
+      clearTimeout(t1); clearTimeout(t2);
+      thumbShowState('upload');
+      alert('Request failed: ' + err.message);
+    }
+  }
+
+  function buildThumbHeroState() {
+    // Hero image
+    document.getElementById('thumb-hero-img').src = 'data:image/jpeg;base64,' + _thumbHeroB64;
+
+    // Reset style cards
+    _thumbStyle = 'warm_bar';
+    ['warm_bar', 'bold_corner', 'kinetic_slash'].forEach(s => {
+      const el = document.getElementById('style-' + s);
+      if (el) el.classList.toggle('selected', s === _thumbStyle);
+    });
+
+    // Title cards
+    const grid = document.getElementById('thumb-titles-grid');
+    grid.innerHTML = '';
+    _thumbTitles.forEach(t => {
+      const card = document.createElement('div');
+      card.className = 'title-card';
+      card.textContent = t;
+      card.addEventListener('click', () => {
+        document.querySelectorAll('.title-card').forEach(c => c.classList.remove('selected'));
+        card.classList.add('selected');
+        _thumbTitle = t;
+        openThumbEditor();
+      });
+      grid.appendChild(card);
+    });
+  }
+
+  function selectThumbStyle(style) {
+    _thumbStyle = style;
+    ['warm_bar', 'bold_corner', 'kinetic_slash'].forEach(s => {
+      const el = document.getElementById('style-' + s);
+      if (el) el.classList.toggle('selected', s === style);
+    });
+    // Re-draw if editor is visible
+    const ed = document.getElementById('thumb-state-editor');
+    if (ed && ed.style.display !== 'none') drawThumbCanvas();
+  }
+
+  async function redoTitles() {
+    if (!_thumbFile || !backendOnline) return;
+    const btn = document.getElementById('btn-redo-titles');
+    btn.disabled = true;
+    const origHtml = btn.innerHTML;
+    btn.textContent = 'Generating\u2026';
+    try {
+      const form = new FormData();
+      form.append('file', _thumbFile);
+      form.append('titles_only', '1');
+      const res = await fetch(BACKEND + '/thumbnail', { method: 'POST', body: form });
+      const data = await res.json();
+      if (data.titles && data.titles.length) {
+        _thumbTitles = data.titles;
+        buildThumbHeroState();
+      }
+    } catch (_) {}
+    btn.disabled = false;
+    btn.innerHTML = origHtml;
+  }
+
+  function openThumbEditor() {
+    // Default text center position per style
+    if      (_thumbStyle === 'warm_bar')      { _thumbCanvasTX = 640; _thumbCanvasTY = 600; }
+    else if (_thumbStyle === 'bold_corner')   { _thumbCanvasTX = 360; _thumbCanvasTY = 150; }
+    else if (_thumbStyle === 'kinetic_slash') { _thumbCanvasTX = 320; _thumbCanvasTY = 250; }
+
+    thumbShowState('editor');
+    drawThumbCanvas();
+    // Defer text overlay position until DOM is ready
+    requestAnimationFrame(() => updateThumbText());
+  }
+
+  function backToTitles() {
+    thumbShowState('hero');
+  }
+
+  // Draw hero image + style overlay on canvas (text lives in overlay div)
+  function drawThumbCanvas() {
+    const canvas = document.getElementById('thumb-canvas');
+    if (!canvas || !_thumbHeroB64) return;
+    const ctx = canvas.getContext('2d');
+    const W = 1280, H = 720;
+    const img = new Image();
+    img.onload = function () {
+      ctx.clearRect(0, 0, W, H);
+      ctx.drawImage(img, 0, 0, W, H);
+
+      if (_thumbStyle === 'warm_bar') {
+        const grad = ctx.createLinearGradient(0, H * 0.58, 0, H);
+        grad.addColorStop(0, 'rgba(10,5,0,0)');
+        grad.addColorStop(1, 'rgba(10,5,0,0.86)');
+        ctx.fillStyle = grad;
+        ctx.fillRect(0, H * 0.58, W, H * 0.42);
+      } else if (_thumbStyle === 'bold_corner') {
+        ctx.fillStyle = 'rgba(10,10,30,0.82)';
+        ctx.fillRect(0, 0, W * 0.62, H * 0.44);
+      } else if (_thumbStyle === 'kinetic_slash') {
+        ctx.beginPath();
+        ctx.moveTo(0, H * 0.52);
+        ctx.lineTo(W * 0.74, 0);
+        ctx.lineTo(W * 0.82, 0);
+        ctx.lineTo(0, H * 0.64);
+        ctx.closePath();
+        ctx.fillStyle = 'rgba(10,40,20,0.82)';
+        ctx.fill();
+      }
+    };
+    img.src = 'data:image/jpeg;base64,' + _thumbHeroB64;
+  }
+
+  // Update the draggable text overlay div
+  function updateThumbText() {
+    const drag = document.getElementById('thumb-text-drag');
+    if (!drag) return;
+    const font = document.getElementById('thumb-font-select').value;
+    _thumbFontFamily = font;
+    const displayPx = Math.round(_thumbFontSize / 2);  // canvas 1280 → display 640
+
+    drag.style.fontFamily   = font + ', Inter, sans-serif';
+    drag.style.fontSize     = displayPx + 'px';
+    drag.style.fontWeight   = '700';
+    drag.style.color        = '#ffffff';
+    drag.style.textShadow   = '2px 2px 8px rgba(0,0,0,0.9), 0 0 24px rgba(0,0,0,0.6)';
+    drag.style.lineHeight   = '1.25';
+    drag.style.letterSpacing = '-0.01em';
+    drag.textContent        = _thumbTitle;
+    document.getElementById('thumb-size-val').textContent = _thumbFontSize;
+
+    // Position: canvas-space / 2 → display px, centered via transform translate(-50%,-50%)
+    drag.style.left = (_thumbCanvasTX / 2) + 'px';
+    drag.style.top  = (_thumbCanvasTY / 2) + 'px';
+  }
+
+  function changeThumbFontSize(delta) {
+    _thumbFontSize = Math.max(24, Math.min(120, _thumbFontSize + delta));
+    updateThumbText();
+  }
+
+  // Drag logic for text overlay
+  (function () {
+    let dragging = false, startX, startY, origTX, origTY;
+
+    document.addEventListener('mousedown', function (e) {
+      if (!e.target.closest('#thumb-text-drag')) return;
+      dragging = true;
+      startX   = e.clientX;
+      startY   = e.clientY;
+      origTX   = _thumbCanvasTX;
+      origTY   = _thumbCanvasTY;
+      e.preventDefault();
+    });
+
+    document.addEventListener('mousemove', function (e) {
+      if (!dragging) return;
+      const dx = (e.clientX - startX) * 2;   // display px → canvas px (2× scale)
+      const dy = (e.clientY - startY) * 2;
+      _thumbCanvasTX = Math.max(60, Math.min(1220, origTX + dx));
+      _thumbCanvasTY = Math.max(40, Math.min(680,  origTY + dy));
+      const drag = document.getElementById('thumb-text-drag');
+      if (drag) {
+        drag.style.left = (_thumbCanvasTX / 2) + 'px';
+        drag.style.top  = (_thumbCanvasTY / 2) + 'px';
+      }
+    });
+
+    document.addEventListener('mouseup', function () { dragging = false; });
+  })();
+
+  // Download PNG — redraw canvas with text, then blob download
+  function downloadThumbPNG() {
+    const canvas = document.getElementById('thumb-canvas');
+    if (!canvas || !_thumbHeroB64) return;
+    const ctx = canvas.getContext('2d');
+    const W = 1280, H = 720;
+    const img = new Image();
+    img.onload = function () {
+      ctx.clearRect(0, 0, W, H);
+      ctx.drawImage(img, 0, 0, W, H);
+
+      // Style overlay
+      if (_thumbStyle === 'warm_bar') {
+        const grad = ctx.createLinearGradient(0, H * 0.58, 0, H);
+        grad.addColorStop(0, 'rgba(10,5,0,0)');
+        grad.addColorStop(1, 'rgba(10,5,0,0.86)');
+        ctx.fillStyle = grad;
+        ctx.fillRect(0, H * 0.58, W, H * 0.42);
+      } else if (_thumbStyle === 'bold_corner') {
+        ctx.fillStyle = 'rgba(10,10,30,0.82)';
+        ctx.fillRect(0, 0, W * 0.62, H * 0.44);
+      } else if (_thumbStyle === 'kinetic_slash') {
+        ctx.beginPath();
+        ctx.moveTo(0, H * 0.52);
+        ctx.lineTo(W * 0.74, 0);
+        ctx.lineTo(W * 0.82, 0);
+        ctx.lineTo(0, H * 0.64);
+        ctx.closePath();
+        ctx.fillStyle = 'rgba(10,40,20,0.82)';
+        ctx.fill();
+      }
+
+      // Text
+      ctx.save();
+      ctx.textAlign    = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.shadowColor  = 'rgba(0,0,0,0.9)';
+      ctx.shadowBlur   = 16;
+      ctx.shadowOffsetX = 3;
+      ctx.shadowOffsetY = 3;
+      ctx.fillStyle    = '#ffffff';
+      ctx.font         = `700 ${_thumbFontSize}px ${_thumbFontFamily}, Inter, sans-serif`;
+
+      // Word wrap
+      const maxW = W * 0.8;
+      const words = (_thumbTitle || '').split(' ');
+      const lines = [];
+      let ln = '';
+      for (const w of words) {
+        const test = (ln ? ln + ' ' : '') + w;
+        if (ctx.measureText(test).width > maxW && ln) { lines.push(ln); ln = w; }
+        else ln = test;
+      }
+      if (ln) lines.push(ln);
+
+      const lineH = _thumbFontSize * 1.25;
+      let ty = _thumbCanvasTY - (lines.length - 1) * lineH / 2;
+      for (const l of lines) {
+        ctx.fillText(l, _thumbCanvasTX, ty);
+        ty += lineH;
+      }
+      ctx.restore();
+
+      const stem = _thumbFile ? _thumbFile.name.replace(/\.(mp4|mov)$/i, '') : 'thumbnail';
+      canvas.toBlob(blob => {
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = stem + ' - Thumbnail.png';
+        a.click();
+        setTimeout(() => URL.revokeObjectURL(url), 5000);
+      }, 'image/png');
+    };
+    img.src = 'data:image/jpeg;base64,' + _thumbHeroB64;
+  }
+
   // ── Save Clip → POST /export_clip → download ──
   async function saveClip() {
     if (!_clipFile) {
@@ -2203,7 +2747,7 @@
       '<div class="export-progress-bar"><div class="export-shimmer"></div></div>' +
       '<p class="export-progress-label">Cutting clip with ffmpeg\u2026</p>';
 
-    const baseName     = _clipFile.name.replace(/\.mp4$/i, '');
+    const baseName     = _clipFile.name.replace(/\.(mp4|mov)$/i, '');
     const startFmt     = editorInTime.toFixed(1);
     const endFmt       = editorOutTime.toFixed(1);
     const suggestedName = baseName + ' - Clip (' + startFmt + '-' + endFmt + ').mp4';
