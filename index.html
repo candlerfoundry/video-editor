@@ -855,6 +855,51 @@
       font-size: 13px; color: #CC2200; line-height: 1.6;
     }
     .export-error strong { font-weight: 600; }
+
+    /* ─── CUSTOM TIMELINE RANGE ─── */
+    #timeline-range {
+      width: 100%; height: 8px;
+      border-radius: 4px;
+      outline: none; cursor: pointer;
+      -webkit-appearance: none; appearance: none;
+      border: none;
+      background: rgba(0,0,0,0.12);
+      display: block; margin-bottom: 14px;
+    }
+    #timeline-range::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      width: 16px; height: 16px;
+      border-radius: 50%;
+      background: var(--orange);
+      cursor: pointer;
+      border: 2px solid #fff;
+      box-shadow: 0 1px 4px rgba(0,0,0,0.25);
+    }
+    #timeline-range::-moz-range-thumb {
+      width: 16px; height: 16px;
+      border-radius: 50%;
+      background: var(--orange);
+      cursor: pointer;
+      border: 2px solid #fff;
+      box-shadow: 0 1px 4px rgba(0,0,0,0.25);
+    }
+
+    /* ─── TRANSCRIPT CLIP VIEW ─── */
+    .tx-word.out-of-clip { opacity: 0.4; }
+    .tx-clip-marker {
+      display: block;
+      font-size: 10px; font-weight: 700;
+      text-transform: uppercase; letter-spacing: 0.08em;
+      color: var(--orange);
+      margin: 8px 0 4px;
+    }
+    #transcript-toggle {
+      background: none; border: none;
+      color: var(--orange); font-size: 12px; font-weight: 500;
+      cursor: pointer; font-family: var(--font); padding: 0;
+      text-decoration: underline;
+    }
+    #transcript-toggle:hover { color: var(--orange-hover); }
   </style>
 </head>
 <body>
@@ -1078,6 +1123,9 @@
 
           <video id="edit-video" controls></video>
 
+          <!-- Timeline with clip region highlight -->
+          <input type="range" id="timeline-range" min="0" max="100" step="0.01" value="0" />
+
           <!-- Editable time fields + Play Selection -->
           <div class="editor-time-row" style="margin-bottom:12px;">
             <div class="time-field-group">
@@ -1103,6 +1151,9 @@
           <!-- Word transcript — clip range context -->
           <div class="transcript-panel-wrap" id="transcript-panel-wrap" style="display:none;">
             <div id="transcript-panel"></div>
+            <div style="margin-top:8px;padding-top:8px;border-top:1px solid var(--border);text-align:right;">
+              <button id="transcript-toggle" onclick="toggleTranscriptView()">Show full transcript</button>
+            </div>
           </div>
 
           <!-- Export Clip -->
@@ -1347,6 +1398,28 @@
   checkHealth();
   setInterval(checkHealth, 3000);
 
+  // Fix 3: global video tracking for #edit-video (listeners set once at init)
+  (function () {
+    const editVid = document.getElementById('edit-video');
+    editVid.addEventListener('play', () => {
+      if (activeVideo && activeVideo !== editVid) activeVideo.pause();
+      activeVideo = editVid;
+    });
+    editVid.addEventListener('pause', () => { if (activeVideo === editVid) activeVideo = null; });
+    editVid.addEventListener('ended', () => { if (activeVideo === editVid) activeVideo = null; });
+    // Fix 4: sync timeline range thumb with playhead
+    editVid.addEventListener('timeupdate', () => {
+      const rangeEl = document.getElementById('timeline-range');
+      if (rangeEl) rangeEl.value = editVid.currentTime;
+    });
+  })();
+
+  // Fix 4: scrubbing via timeline range updates video currentTime
+  document.getElementById('timeline-range').addEventListener('input', function () {
+    const vid = document.getElementById('edit-video');
+    if (vid) vid.currentTime = parseFloat(this.value);
+  });
+
   // ══════════════════════════════════════════
   // CLIPS — 3-STAGE FLOW
   // ══════════════════════════════════════════
@@ -1357,13 +1430,26 @@
   let _editCandidate  = null;   // clip being edited in Stage 3
   let _currentStage   = 1;
   let _transcriptWords = [];    // alias kept for transcript highlight helpers
+  let savedScrollY     = 0;    // Fix 1: scroll restore
+  let activeVideo      = null; // Fix 3: global active video tracker
+  let _transcriptFull  = false; // Fix 5: false = clip-only, true = full
 
   // ── Stage switching ──
   function showStage(n) {
+    // Fix 2: pause & reset edit-video when leaving stage 3
+    if (_currentStage === 3 && n !== 3) {
+      const editVid = document.getElementById('edit-video');
+      if (editVid) { editVid.pause(); editVid.currentTime = 0; }
+    }
     _currentStage = n;
     document.getElementById('clips-stage1').style.display = n === 1 ? 'block' : 'none';
     document.getElementById('clips-stage2').style.display = n === 2 ? 'block' : 'none';
     document.getElementById('clips-stage3').style.display = n === 3 ? 'block' : 'none';
+    // Fix 1: restore scroll position when returning to stage 2
+    if (n === 2) {
+      const mc = document.querySelector('.main-content');
+      if (mc) mc.scrollTop = savedScrollY;
+    }
   }
 
   function resetToStage1(e) {
@@ -1718,6 +1804,18 @@
       const c = _candidates[idx];
       vid.src = URL.createObjectURL(_clipFile);
       vid.load();
+
+      // Fix 3: attach global tracking listeners once per video element
+      if (!vid._trackingSetup) {
+        vid._trackingSetup = true;
+        vid.addEventListener('play', () => {
+          if (activeVideo && activeVideo !== vid) activeVideo.pause();
+          activeVideo = vid;
+        });
+        vid.addEventListener('pause', () => { if (activeVideo === vid) activeVideo = null; });
+        vid.addEventListener('ended', () => { if (activeVideo === vid) activeVideo = null; });
+      }
+
       vid.addEventListener('loadedmetadata', function () {
         vid.currentTime = c.start_time ?? 0;
         vid.play().catch(() => {});
@@ -1729,6 +1827,10 @@
 
   // ── Select & Edit → Stage 3 ──
   function selectAndEdit(idx) {
+    // Fix 1: save scroll position before entering stage 3
+    const mc = document.querySelector('.main-content');
+    savedScrollY = mc ? mc.scrollTop : 0;
+
     _editCandidate = _candidates[idx];
     editorInTime  = _editCandidate.start_time ?? 0;
     editorOutTime = _editCandidate.end_time   ?? 0;
@@ -1739,6 +1841,9 @@
     vid.load();
     vid.addEventListener('loadedmetadata', function () {
       vid.currentTime = editorInTime;
+      const rangeEl = document.getElementById('timeline-range');
+      if (rangeEl) { rangeEl.max = vid.duration; rangeEl.value = editorInTime; }
+      updateTimelineGradient();
       vid.play().catch(() => {});
     }, { once: true });
 
@@ -1747,14 +1852,11 @@
 
     updateTimeFields();
 
-    // Render transcript panel for this clip context
+    // Fix 5: render clip-only transcript by default
+    _transcriptFull = false;
     if (_wordsData && _wordsData.length) {
-      renderTranscript(_wordsData);
+      renderClipTranscript();
       document.getElementById('transcript-panel-wrap').style.display = 'block';
-      // Scroll transcript to near in-point
-      const panel = document.getElementById('transcript-panel');
-      const nearest = panel.querySelector('.tx-word[data-start]');
-      if (nearest) nearest.scrollIntoView({ behavior: 'smooth', block: 'center' });
     }
 
     document.getElementById('export-status').style.display = 'none';
@@ -1776,12 +1878,16 @@
     const t = parsePrecise(this.value);
     if (!isNaN(t) && t >= 0 && t < editorOutTime) { editorInTime = t; }
     updateTimeFields();
+    updateTimelineGradient();
+    updateClipTranscriptHighlight();
   });
 
   document.getElementById('out-time-field').addEventListener('change', function () {
     const t = parsePrecise(this.value);
     if (!isNaN(t) && t > editorInTime) { editorOutTime = t; }
     updateTimeFields();
+    updateTimelineGradient();
+    updateClipTranscriptHighlight();
   });
 
   function playSelection() {
@@ -1799,6 +1905,8 @@
     editorInTime = t;
     if (editorInTime >= editorOutTime) editorOutTime = editorInTime + 5;
     updateTimeFields();
+    updateTimelineGradient();
+    updateClipTranscriptHighlight();
   }
 
   function setEndHere() {
@@ -1806,6 +1914,8 @@
     editorOutTime = t;
     if (editorOutTime <= editorInTime) editorInTime = Math.max(0, editorOutTime - 5);
     updateTimeFields();
+    updateTimelineGradient();
+    updateClipTranscriptHighlight();
   }
 
   // ── Helper: escHtml ──
@@ -1839,6 +1949,109 @@
     const parts = str.split(':');
     if (parts.length === 2) return parseInt(parts[0], 10) * 60 + parseFloat(parts[1]);
     return parseFloat(str);
+  }
+
+  // ── Fix 4: Timeline gradient — orange = clip region, gray = outside ──
+  function updateTimelineGradient() {
+    const rangeEl = document.getElementById('timeline-range');
+    const vid = document.getElementById('edit-video');
+    if (!rangeEl || !vid || !vid.duration) return;
+    const dur = vid.duration;
+    const x = Math.min(100, (editorInTime  / dur) * 100).toFixed(2);
+    const y = Math.min(100, (editorOutTime / dur) * 100).toFixed(2);
+    const gray   = 'rgba(0,0,0,0.18)';
+    const orange = '#E8541A';
+    rangeEl.style.background =
+      `linear-gradient(to right, ${gray} 0%, ${gray} ${x}%, ${orange} ${x}%, ${orange} ${y}%, ${gray} ${y}%, ${gray} 100%)`;
+  }
+
+  // ── Fix 5: Clip-only transcript rendering ──
+  function renderClipTranscript() {
+    const panel = document.getElementById('transcript-panel');
+    const toggleBtn = document.getElementById('transcript-toggle');
+    const wrap = document.getElementById('transcript-panel-wrap');
+    panel.innerHTML = '';
+    if (!_wordsData) return;
+
+    if (!_transcriptFull) {
+      // Show only words within the clip window
+      const clipWords = _wordsData.filter(w =>
+        (w.start ?? 0) < editorOutTime && (w.end ?? w.start ?? 0) >= editorInTime
+      );
+      clipWords.forEach(w => {
+        const origIdx = _wordsData.indexOf(w);
+        const span = document.createElement('span');
+        span.className = 'tx-word';
+        span.dataset.idx   = origIdx;
+        span.dataset.start = w.start ?? 0;
+        span.dataset.end   = w.end   ?? 0;
+        span.textContent   = (w.word ?? w.text ?? '') + ' ';
+        panel.appendChild(span);
+      });
+      if (toggleBtn) toggleBtn.textContent = 'Show full transcript';
+      if (wrap) wrap.scrollTop = 0;
+    } else {
+      // Full transcript — dim out-of-clip words, show markers
+      let clipStartAdded = false;
+      let clipEndAdded   = false;
+
+      _wordsData.forEach((w, i) => {
+        const wStart = w.start ?? 0;
+        const wEnd   = w.end   ?? wStart;
+        const inClip = wStart < editorOutTime && wEnd >= editorInTime;
+
+        if (!clipStartAdded && inClip) {
+          const marker = document.createElement('span');
+          marker.className  = 'tx-clip-marker';
+          marker.textContent = '— CLIP START —';
+          panel.appendChild(marker);
+          clipStartAdded = true;
+        }
+
+        const span = document.createElement('span');
+        span.className   = 'tx-word' + (inClip ? '' : ' out-of-clip');
+        span.dataset.idx   = i;
+        span.dataset.start = wStart;
+        span.dataset.end   = wEnd;
+        span.textContent   = (w.word ?? w.text ?? '') + ' ';
+        panel.appendChild(span);
+
+        if (clipStartAdded && !clipEndAdded && !inClip && wStart >= editorOutTime) {
+          const marker = document.createElement('span');
+          marker.className  = 'tx-clip-marker';
+          marker.textContent = '— CLIP END —';
+          panel.appendChild(marker);
+          clipEndAdded = true;
+        }
+      });
+
+      if (clipStartAdded && !clipEndAdded) {
+        const marker = document.createElement('span');
+        marker.className  = 'tx-clip-marker';
+        marker.textContent = '— CLIP END —';
+        panel.appendChild(marker);
+      }
+
+      if (toggleBtn) toggleBtn.textContent = 'Show clip only';
+
+      // Scroll to first in-clip word
+      const firstClipWord = panel.querySelector('.tx-word:not(.out-of-clip)');
+      if (firstClipWord && wrap) {
+        wrap.scrollTop = firstClipWord.offsetTop - 20;
+      }
+    }
+  }
+
+  function toggleTranscriptView() {
+    _transcriptFull = !_transcriptFull;
+    renderClipTranscript();
+  }
+
+  // Re-render transcript when clip boundaries change
+  function updateClipTranscriptHighlight() {
+    if (document.getElementById('transcript-panel-wrap').style.display !== 'none') {
+      renderClipTranscript();
+    }
   }
 
   // ── Caption Videos tab ──
