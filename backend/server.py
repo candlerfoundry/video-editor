@@ -6,6 +6,7 @@ Runs on localhost:5000
 import io
 import os
 import json
+import platform
 import re
 import shutil
 import subprocess
@@ -18,7 +19,9 @@ from flask_cors import CORS
 app = Flask(__name__)
 CORS(app)
 
-CREATE_NO_WINDOW = 0x08000000
+CREATE_NO_WINDOW = 0x08000000 if platform.system() == 'Windows' else 0
+
+STYLE_STR = "Fontname=Arial,Outline=1,Shadow=0,BorderStyle=1,Spacing=1"
 
 # ── Dropbox portable paths ──
 dropbox_root   = os.path.join(os.path.expanduser('~'), 'Dropbox')
@@ -88,6 +91,20 @@ def caption():
     except (ValueError, TypeError):
         font_size = 18
 
+    position   = request.form.get("position",   "bottom")
+    text_color = request.form.get("text_color", "white")
+
+    # Alignment: bottom-center=2, top-center=8 (ASS numpad layout)
+    alignment = 8 if position == "top" else 2
+    # PrimaryColour in ASS format (&HAABBGGRR)
+    color_map = {"white": "&H00FFFFFF", "yellow": "&H0000FFFF"}
+    primary_colour = color_map.get(text_color, "&H00FFFFFF")
+
+    style = (
+        f"Fontsize={font_size},{STYLE_STR},"
+        f"Alignment={alignment},PrimaryColour={primary_colour}"
+    )
+
     original_name = file.filename or "video.mp4"
     base_name     = os.path.splitext(os.path.basename(original_name))[0]
     output_name   = base_name + " (Captioned).mp4"
@@ -107,10 +124,6 @@ def caption():
 
         # Burn subtitles with ffmpeg
         # Use cwd=tmp_dir and relative filename to avoid Windows path escaping issues
-        style = (
-            f"Fontname=Arial,Fontsize={font_size},"
-            "Outline=1,Shadow=0,BorderStyle=1,Spacing=1"
-        )
         cmd = [
             FFMPEG_CAPTION, "-y",
             "-i", input_path,

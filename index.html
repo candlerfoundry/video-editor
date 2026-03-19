@@ -1197,13 +1197,33 @@
 
         <div class="card fade-up-1" style="margin-bottom:20px;">
           <h3>Options</h3>
-          <div style="margin-top:14px;">
-            <div class="drop-zone-label" style="margin-bottom:8px;">Font size</div>
-            <div class="mode-toggle">
-              <button class="mode-btn active" id="caption-size-small"  onclick="setCaptionSize('small')">Small</button>
-              <button class="mode-btn"        id="caption-size-medium" onclick="setCaptionSize('medium')">Medium</button>
-              <button class="mode-btn"        id="caption-size-large"  onclick="setCaptionSize('large')">Large</button>
+          <div style="margin-top:14px;display:flex;flex-direction:column;gap:14px;">
+
+            <div>
+              <div class="drop-zone-label" style="margin-bottom:8px;">Font size</div>
+              <div class="mode-toggle">
+                <button class="mode-btn"        id="caption-size-small"  onclick="setCaptionSize('small')">Small</button>
+                <button class="mode-btn active" id="caption-size-medium" onclick="setCaptionSize('medium')">Medium</button>
+                <button class="mode-btn"        id="caption-size-large"  onclick="setCaptionSize('large')">Large</button>
+              </div>
             </div>
+
+            <div>
+              <div class="drop-zone-label" style="margin-bottom:8px;">Position</div>
+              <div class="mode-toggle">
+                <button class="mode-btn active" id="caption-pos-bottom" onclick="setCaptionPosition('bottom')">Bottom</button>
+                <button class="mode-btn"        id="caption-pos-top"    onclick="setCaptionPosition('top')">Top</button>
+              </div>
+            </div>
+
+            <div>
+              <div class="drop-zone-label" style="margin-bottom:8px;">Text color</div>
+              <div class="mode-toggle">
+                <button class="mode-btn active" id="caption-color-white"  onclick="setCaptionColor('white')">White</button>
+                <button class="mode-btn"        id="caption-color-yellow" onclick="setCaptionColor('yellow')">Yellow</button>
+              </div>
+            </div>
+
           </div>
         </div>
 
@@ -2055,8 +2075,10 @@
   }
 
   // ── Caption Videos tab ──
-  let _captionFile    = null;
-  let _captionFontPx  = 18;  // default medium
+  let _captionFile     = null;
+  let _captionFontPx   = 18;   // default medium (matches HTML)
+  let _captionPosition = 'bottom';
+  let _captionColor    = 'white';
 
   const CAPTION_FONT_SIZES = { small: 14, medium: 18, large: 24 };
 
@@ -2099,6 +2121,20 @@
     });
   }
 
+  function setCaptionPosition(pos) {
+    _captionPosition = pos;
+    ['bottom', 'top'].forEach(p => {
+      document.getElementById('caption-pos-' + p).classList.toggle('active', p === pos);
+    });
+  }
+
+  function setCaptionColor(color) {
+    _captionColor = color;
+    ['white', 'yellow'].forEach(c => {
+      document.getElementById('caption-color-' + c).classList.toggle('active', c === color);
+    });
+  }
+
   async function generateCaptions() {
     if (!_captionFile) { alert('Load an MP4 first.'); return; }
     if (!backendOnline) { alert('Backend is not connected. Make sure start_server.bat is running.'); return; }
@@ -2115,6 +2151,8 @@
     const form = new FormData();
     form.append('file', _captionFile);
     form.append('font_size', _captionFontPx);
+    form.append('position',   _captionPosition);
+    form.append('text_color', _captionColor);
 
     try {
       const res = await fetch(BACKEND + '/caption', { method: 'POST', body: form });
