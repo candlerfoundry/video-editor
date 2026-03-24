@@ -4,3 +4,4 @@ openai-whisper
 anthropic
 Pillow
 opencv-python
+dropbox

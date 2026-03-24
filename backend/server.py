@@ -596,66 +596,199 @@ Transcript: {transcript_text}"""
 def export_clip():
     """
     Accepts multipart/form-data:
-      file          — the source MP4
-      starttime     — float, in-point seconds
-      endtime       — float, out-point seconds
-      suggested_name — desired output filename (e.g. "Talk - Clip (12.5-45.0).mp4")
-    Returns the clipped MP4 as a download.
+      file            — source MP4 or MOV
+      starttime       — float, in-point seconds
+      endtime         — float, out-point seconds
+      suggested_name  — desired output filename
+      clip_type       — "Podcast Clip" | "3MB Clip" | "TheoEd Clip" | etc.
+      hook_line       — clip title / hook sentence
+      clip_transcript — plain text transcript of the clip
+      item_code       — source video item code (for Airtable linking)
+      thumbnail       — PNG file (optional)
+
+    Steps: 9:16 reframe → Dropbox save → shared links → Airtable record
+    Returns: { success, clip_dropbox_url, thumbnail_dropbox_url,
+               airtable_record_id, airtable_url }
     """
+    import urllib.request
+    import urllib.parse
+    import dropbox as dbx_module
+
     file = request.files.get("file")
     if not file:
         return jsonify({"error": "No file provided"}), 400
 
     try:
-        starttime      = float(request.form.get("starttime", 0))
-        endtime        = float(request.form.get("endtime",   0))
-        suggested_name = request.form.get("suggested_name", "clip.mp4")
+        starttime       = float(request.form.get("starttime", 0))
+        endtime         = float(request.form.get("endtime",   0))
+        suggested_name  = request.form.get("suggested_name",  "clip.mp4")
+        clip_type       = request.form.get("clip_type",       "Podcast Clip")
+        hook_line       = request.form.get("hook_line",       "")
+        clip_transcript = request.form.get("clip_transcript", "")
+        item_code       = request.form.get("item_code",       "")
     except (ValueError, TypeError) as e:
         return jsonify({"error": f"Invalid parameters: {e}"}), 400
 
     if endtime <= starttime:
         return jsonify({"error": "endtime must be greater than starttime"}), 400
 
-    # Write source to a clean temp path (avoids special characters in filename)
+    thumbnail_file = request.files.get("thumbnail")
+
+    # Normalise output filename to .mp4
+    output_name = suggested_name if suggested_name.lower().endswith(".mp4") else suggested_name + ".mp4"
+    base_name   = os.path.splitext(output_name)[0]
+
+    # Destination: ~/Dropbox/Social Media Clips/
+    clips_folder = os.path.join(dropbox_root, "Social Media Clips")
+    os.makedirs(clips_folder, exist_ok=True)
+    output_path  = os.path.join(clips_folder, output_name)
+
     tmp_dir = tempfile.mkdtemp()
     try:
-        src_ext     = os.path.splitext(file.filename or 'video.mp4')[1].lower() or '.mp4'
-        input_path  = os.path.join(tmp_dir, 'source' + src_ext)
-        output_name = suggested_name if suggested_name.lower().endswith(".mp4") else suggested_name + ".mp4"
-        output_path = os.path.join(tmp_dir, output_name)
-
+        src_ext    = os.path.splitext(file.filename or 'video.mp4')[1].lower() or '.mp4'
+        input_path = os.path.join(tmp_dir, 'source' + src_ext)
+        temp_clip  = os.path.join(tmp_dir, 'temp_clip.mp4')
         file.save(input_path)
 
-        cmd = [
-            FFMPEG, "-y",
-            "-ss", str(starttime),
-            "-to", str(endtime),
-            "-i", input_path,
-            "-c", "copy",
-            output_path,
-        ]
-        result = subprocess.run(
-            cmd,
-            capture_output=True,
-            creationflags=CREATE_NO_WINDOW,
+        # ── Step A: 9:16 vertical reframe ──
+        # Pass 1: extract the in/out segment (stream copy, fast)
+        r1 = subprocess.run(
+            [FFMPEG, "-y",
+             "-ss", str(starttime), "-to", str(endtime),
+             "-i", input_path, "-c", "copy", temp_clip],
+            capture_output=True, creationflags=CREATE_NO_WINDOW,
         )
-        if result.returncode != 0:
-            err = result.stderr.decode("utf-8", errors="replace")[-600:]
-            return jsonify({"error": "ffmpeg failed: " + err}), 500
+        if r1.returncode != 0:
+            err = r1.stderr.decode("utf-8", errors="replace")[-800:]
+            return jsonify({"error": "ffmpeg extract failed: " + err}), 500
 
-        # Read into memory so we can clean up temp files immediately
-        with open(output_path, "rb") as f:
-            clip_bytes = f.read()
+        # Pass 2: crop centre 9:16 and scale to 1080×1920
+        r2 = subprocess.run(
+            [FFMPEG, "-y",
+             "-i", temp_clip,
+             "-vf", "crop=ih*9/16:ih,scale=1080:1920",
+             "-c:v", "libx264", "-crf", "18", "-preset", "fast",
+             "-c:a", "aac",
+             output_path],
+            capture_output=True, creationflags=CREATE_NO_WINDOW,
+        )
+        if r2.returncode != 0:
+            err = r2.stderr.decode("utf-8", errors="replace")[-800:]
+            return jsonify({"error": "ffmpeg reframe failed: " + err}), 500
+
+        # ── Step B: Save thumbnail (if provided) ──
+        thumb_local_path  = None
+        thumb_dbx_path    = None
+        if thumbnail_file and thumbnail_file.filename:
+            thumb_name       = base_name + " - Thumbnail.png"
+            thumb_local_path = os.path.join(clips_folder, thumb_name)
+            thumbnail_file.save(thumb_local_path)
+            thumb_dbx_path   = "/Social Media Clips/" + thumb_name
 
     finally:
         shutil.rmtree(tmp_dir, ignore_errors=True)
 
-    return send_file(
-        io.BytesIO(clip_bytes),
-        as_attachment=True,
-        download_name=output_name,
-        mimetype="video/mp4",
-    )
+    # ── Step C: Dropbox shared links ──
+    clip_url  = None
+    thumb_url = None
+    try:
+        creds_path = os.path.join(dropbox_root, "Scripts", "dropbox_credentials.json")
+        with open(creds_path, "r") as f:
+            creds = json.load(f)
+
+        dbx = dbx_module.Dropbox(
+            oauth2_refresh_token=creds["refresh_token"],
+            app_key=creds.get("app_key") or creds.get("appkey"),
+            app_secret=creds.get("app_secret") or creds.get("appsecret"),
+        )
+
+        def get_shared_link(dbx_path):
+            try:
+                result = dbx.sharing_create_shared_link_with_settings(dbx_path)
+                return result.url
+            except dbx_module.exceptions.ApiError:
+                # Link already exists — retrieve it
+                links = dbx.sharing_list_shared_links(path=dbx_path)
+                if links.links:
+                    return links.links[0].url
+                return None
+
+        clip_url  = get_shared_link("/Social Media Clips/" + output_name)
+        if thumb_dbx_path:
+            thumb_url = get_shared_link(thumb_dbx_path)
+
+    except FileNotFoundError:
+        print("dropbox_credentials.json not found — skipping Dropbox link generation")
+    except Exception as de:
+        print(f"Dropbox error: {de}")
+
+    # ── Step D: Search source video record in Airtable ──
+    api_key          = read_api_key()
+    source_record_id = None
+
+    if api_key and item_code and clip_type != "Podcast Clip":
+        formula  = '{{Code}}="{}"'.format(item_code)
+        params   = urllib.parse.urlencode({"filterByFormula": formula})
+        at_url   = "https://api.airtable.com/v0/appiL0Z2RilcAT2Cw/tblS1Bk29cXyGGUdo?" + params
+        at_req   = urllib.request.Request(
+            at_url, headers={"Authorization": "Bearer " + api_key}
+        )
+        try:
+            with urllib.request.urlopen(at_req, timeout=10) as resp:
+                records = json.loads(resp.read()).get("records", [])
+                if records:
+                    source_record_id = records[0]["id"]
+        except Exception as ae:
+            print(f"Airtable source lookup failed: {ae}")
+
+    # ── Step E: Create Airtable record (Video Shorts & Social) ──
+    airtable_record_id = None
+    airtable_url       = None
+
+    if api_key:
+        # Only include writable fields — never lookup/rollup/formula/AI/button
+        fields = {"Status": "Draft", "Type": clip_type}
+        if hook_line:
+            fields["Content Title"] = hook_line
+        if clip_url:
+            fields["Clip - Dropbox URL"] = clip_url
+        if thumb_url:
+            fields["Thumbnail - Dropbox URL"] = thumb_url
+        if clip_transcript:
+            fields["Clip Transcript"] = clip_transcript
+        if source_record_id:
+            fields["Full-Length Video"] = [source_record_id]
+
+        payload = json.dumps({"fields": fields}).encode("utf-8")
+        at_req  = urllib.request.Request(
+            "https://api.airtable.com/v0/appiL0Z2RilcAT2Cw/tbll0KDqmrAlwQuAx",
+            data=payload,
+            headers={
+                "Authorization": "Bearer " + api_key,
+                "Content-Type":  "application/json",
+            },
+            method="POST",
+        )
+        try:
+            with urllib.request.urlopen(at_req, timeout=15) as resp:
+                at_resp = json.loads(resp.read())
+                airtable_record_id = at_resp.get("id")
+                if airtable_record_id:
+                    airtable_url = (
+                        "https://airtable.com/appiL0Z2RilcAT2Cw"
+                        "/tbll0KDqmrAlwQuAx/" + airtable_record_id
+                    )
+        except Exception as ae:
+            print(f"Airtable record creation failed: {ae}")
+
+    return jsonify({
+        "success":               True,
+        "output_filename":       output_name,
+        "clip_dropbox_url":      clip_url,
+        "thumbnail_dropbox_url": thumb_url,
+        "airtable_record_id":    airtable_record_id,
+        "airtable_url":          airtable_url,
+    })
 
 
 if __name__ == "__main__":
