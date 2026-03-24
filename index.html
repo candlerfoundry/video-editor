@@ -1581,25 +1581,27 @@
       <div class="panel-body">
 
         <div class="caption-toolbar fade-up">
-          <button class="btn-ghost">
+          <input type="file" id="srt-file-input" accept=".srt" style="display:none;"
+                 onchange="loadSRTFile(this)" />
+          <button class="btn-ghost" onclick="document.getElementById('srt-file-input').click()">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
               <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/>
               <polyline points="14 2 14 8 20 8"/>
             </svg>
             Open Caption File
           </button>
-          <button class="btn">
+          <button class="btn" id="btn-save-srt" onclick="saveSRT()" disabled>
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
               <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/>
               <polyline points="7 10 12 15 17 10"/>
               <line x1="12" y1="15" x2="12" y2="3"/>
             </svg>
-            Download Edited Captions
+            Save SRT
           </button>
         </div>
 
         <!-- Empty state (shown when no SRT loaded) -->
-        <div class="caption-empty fade-up-1">
+        <div class="caption-empty fade-up-1" id="caption-empty-state">
           <svg width="56" height="56" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round">
             <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/>
             <polyline points="14 2 14 8 20 8"/>
@@ -1609,7 +1611,7 @@
           </svg>
           <h4>No caption file open yet</h4>
           <p>Click &ldquo;Open Caption File&rdquo; to load an SRT and start editing.</p>
-          <button class="btn">Open Caption File</button>
+          <button class="btn" onclick="document.getElementById('srt-file-input').click()">Open Caption File</button>
         </div>
 
         <!-- Caption entry list (populated by JS when SRT loads) -->
@@ -3148,30 +3150,37 @@
     form.append('endtime', editorOutTime);
     form.append('suggested_name', filename);
     form.append('clip_type', clipType);
+    if (_editCandidate && _editCandidate.hook_line)
+      form.append('hook_line', _editCandidate.hook_line);
+    if (_wordsData) {
+      const clipWords = _wordsData
+        .filter(w => (w.start ?? 0) < editorOutTime && (w.end ?? w.start ?? 0) >= editorInTime)
+        .map(w => w.word).join(' ').trim();
+      if (clipWords) form.append('clip_transcript', clipWords);
+    }
     if (thumbnailBlob) {
       form.append('thumbnail', thumbnailBlob, filename.replace(/\.mp4$/i, '') + ' - Thumbnail.png');
     }
 
     try {
-      const res = await fetch(BACKEND + '/export_clip', { method: 'POST', body: form });
+      const res  = await fetch(BACKEND + '/export_clip', { method: 'POST', body: form });
       clearTimeout(t1); clearTimeout(t2);
-      if (!res.ok) {
-        let errMsg = res.statusText;
-        try { const d = await res.json(); errMsg = d.error || errMsg; } catch (_) {}
-        throw new Error(errMsg);
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        throw new Error(data.error || 'Export failed \u2014 check backend logs');
       }
-      const cd = res.headers.get('Content-Disposition') || '';
-      const nameMatch = cd.match(/filename[^;=\n]*=["']?([^"'\n]+)/i);
-      const downloadName = nameMatch ? nameMatch[1].trim() : filename;
-      const blob = await res.blob();
-      const blobUrl = URL.createObjectURL(blob);
-      statusEl.innerHTML =
-        '<div style="padding:0;">' +
+      // Close dialog, show success banner in the edit panel
+      document.getElementById('dialog-export').close();
+      const panelStatus = document.getElementById('export-status');
+      panelStatus.style.display = 'block';
+      panelStatus.innerHTML =
         '<div class="export-success">' +
           '<svg class="export-success-icon" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>' +
-          '<div class="export-success-text"><strong>Clip saved!</strong><span>' + escHtml(downloadName) + '</span></div>' +
-          '<a href="' + blobUrl + '" download="' + escHtml(downloadName) + '" class="btn btn-sm">Download</a>' +
-        '</div></div>';
+          '<div class="export-success-text"><strong>Clip saved to Dropbox!</strong><span>' + escHtml(filename) + '</span></div>' +
+          (data.airtable_url
+            ? '<a href="' + escHtml(data.airtable_url) + '" target="_blank" rel="noopener" class="btn btn-sm">View in Airtable \u2192</a>'
+            : '') +
+        '</div>';
     } catch (err) {
       clearTimeout(t1); clearTimeout(t2);
       statusEl.innerHTML =
@@ -3179,6 +3188,75 @@
         '<div class="export-error"><strong>Export failed:</strong> ' + escHtml(err.message) + '</div></div>';
       btn.disabled = false;
     }
+  }
+
+  // ── Edit Captions ──
+  let _srtBlocks   = [];
+  let _srtFilename = 'captions-edited.srt';
+
+  function loadSRTFile(input) {
+    const f = input.files[0];
+    if (!f) return;
+    _srtFilename = f.name.replace(/\.srt$/i, '') + ' (Edited).srt';
+    const reader = new FileReader();
+    reader.onload = e => {
+      _srtBlocks = parseSRT(e.target.result);
+      renderSRT();
+      input.value = '';
+    };
+    reader.readAsText(f, 'utf-8');
+  }
+
+  function parseSRT(text) {
+    const blocks  = [];
+    const cleaned = text.replace(/\r\n/g, '\n').replace(/\r/g, '\n').trim();
+    const entries = cleaned.split(/\n\n+/);
+    for (const entry of entries) {
+      const lines = entry.trim().split('\n');
+      if (lines.length < 3) continue;
+      const idx = lines[0].trim();
+      const ts  = lines[1].trim();
+      const txt = lines.slice(2).join('\n').trim();
+      if (/-->/.test(ts)) blocks.push({ index: idx, ts: ts, text: txt });
+    }
+    return blocks;
+  }
+
+  function renderSRT() {
+    const emptyEl = document.getElementById('caption-empty-state');
+    const listEl  = document.getElementById('srt-body');
+    const saveBtn = document.getElementById('btn-save-srt');
+    if (!_srtBlocks.length) {
+      emptyEl.style.display = '';
+      listEl.style.display  = 'none';
+      saveBtn.disabled      = true;
+      return;
+    }
+    emptyEl.style.display = 'none';
+    listEl.style.display  = 'flex';
+    saveBtn.disabled      = false;
+    listEl.innerHTML = _srtBlocks.map((b, i) =>
+      '<div class="caption-row">' +
+        '<span class="caption-ts">' + escHtml(b.ts) + '</span>' +
+        '<input class="caption-input" type="text" value="' +
+          escHtml(b.text.replace(/\n/g, ' ')) + '" ' +
+          'oninput="_srtBlocks[' + i + '].text = this.value" />' +
+      '</div>'
+    ).join('');
+  }
+
+  function saveSRT() {
+    if (!_srtBlocks.length) return;
+    const content = _srtBlocks.map((b, i) =>
+      (i + 1) + '\n' + b.ts + '\n' + b.text
+    ).join('\n\n') + '\n';
+    const blob = new Blob([content], { type: 'text/plain;charset=utf-8' });
+    const url  = URL.createObjectURL(blob);
+    const a    = document.createElement('a');
+    a.href = url; a.download = _srtFilename;
+    document.body.appendChild(a); a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
   }
 
   // ── Save Clip → POST /export_clip → download ──
