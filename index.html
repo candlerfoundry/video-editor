@@ -1646,11 +1646,18 @@
   });
 
   // ── Backend health poll ──
+  // fve_setup_complete: stored in localStorage after first successful connection.
+  // Returning users skip the full wizard and see a "reconnecting" state instead.
+  const setupComplete = localStorage.getItem('fve_setup_complete') === 'true';
+
   function setConnected() {
     if (backendOnline) return;
     backendOnline = true;
 
-    // Update wizard status
+    // Mark setup as complete permanently
+    try { localStorage.setItem('fve_setup_complete', 'true'); } catch (_) {}
+
+    // Update wizard status dot (only visible if wizard is showing for a new user)
     const wizDot = document.getElementById('wiz-dot');
     const wizLabel = document.getElementById('wiz-label');
     wizDot.className = 'dot connected';
@@ -1680,8 +1687,12 @@
 
     if (backendOnline) {
       backendOnline = false;
-      document.getElementById('app-view').classList.remove('active');
-      document.getElementById('setup-view').classList.add('active');
+      // Returning users (setup already done): stay in app-view with header "Connecting…"
+      // Only boot to setup-view for brand new users who have never connected.
+      if (!localStorage.getItem('fve_setup_complete')) {
+        document.getElementById('app-view').classList.remove('active');
+        document.getElementById('setup-view').classList.add('active');
+      }
     }
   }
 
@@ -1699,8 +1710,13 @@
     setDisconnected();
   }
 
-  // Initial view: show setup wizard
-  document.getElementById('setup-view').classList.add('active');
+  // Initial view: returning users go straight to app-view (backend poll will confirm connection).
+  // New users (no localStorage flag) see the setup wizard.
+  if (setupComplete) {
+    document.getElementById('app-view').classList.add('active');
+  } else {
+    document.getElementById('setup-view').classList.add('active');
+  }
 
   // Poll immediately, then every 3 seconds
   checkHealth();
