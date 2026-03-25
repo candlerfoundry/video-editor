@@ -21,7 +21,7 @@ if errorlevel 1 (
 
 REM ── Install / update dependencies ──
 echo Checking dependencies...
-C:\Python314\python.exe -m pip install --quiet flask flask-cors openai-whisper anthropic Pillow
+C:\Python314\python.exe -m pip install --quiet -r requirements.txt
 if errorlevel 1 (
     echo.
     echo WARNING: Could not install dependencies. Server may not start.

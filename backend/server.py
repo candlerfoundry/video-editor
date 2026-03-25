@@ -522,19 +522,17 @@ def thumbnail():
 def find_clips():
     try:
         data = request.json
-        transcript = data.get('transcript', [])
+        transcript = data.get('transcript', '')
 
         if not transcript or len(transcript) < 10:
             return jsonify({'error': 'Transcript too short', 'candidates': []})
 
-        # Build plain text from words array
-        if isinstance(transcript[0], dict):
-            transcript_text = ' '.join(w.get('word', '') for w in transcript)
-        else:
-            transcript_text = ' '.join(str(w) for w in transcript)
+        # transcript is already a pre-formatted timestamped string from the frontend:
+        # "[0.0] word [0.4] another [0.9] word ..."
+        transcript_text = transcript if isinstance(transcript, str) else ' '.join(str(w) for w in transcript)
 
         # Log what we received
-        print(f"Transcript word count: {len(transcript)}")
+        print(f"Transcript length: {len(transcript_text)} chars")
         print(f"Transcript preview: {transcript_text[:200]}")
 
         api_key_path = os.path.join(os.path.expanduser('~'), 'Dropbox', 'Scripts', 'api_key.txt')
@@ -545,23 +543,48 @@ def find_clips():
 
         message = client.messages.create(
             model="claude-sonnet-4-6",
-            max_tokens=2000,
+            max_tokens=3000,
             messages=[{
                 "role": "user",
-                "content": f"""You are a social media clip expert. Analyze this transcript and identify 8-10 high-impact moments for viral short-form video clips (30-90 seconds each).
+                "content": f"""You are an expert short-form video editor for a faith-based educational media organization called The Candler Foundry at Emory University. Your job is to find the best clip moments from theological talks and personal testimonials for Instagram Reels, YouTube Shorts, and TikTok.
 
-Return ONLY a valid JSON array. No markdown. No code fences. No explanation. Start your response with [ and end with ].
+The transcript below uses the format: [timestamp_in_seconds] word [timestamp] word ...
+Use these timestamps directly as start_time and end_time values — do not calculate or estimate them.
 
-Each item must have exactly these fields:
-- start_time: float (seconds from start of video)
-- end_time: float (seconds from start of video)
-- hook_score: integer 1-10
-- hook_line: string (most compelling sentence from this segment)
-- why_it_works: string (1-2 sentences)
+WHAT PERFORMS WELL ON THESE PLATFORMS for this content type:
+- Personal turning points: a moment where someone's faith, perspective, or life changed
+- Surprising or counterintuitive statements about God, Scripture, or spiritual life
+- Vulnerable admissions or honest struggles ("I used to think...", "I never expected...")
+- A single, quotable sentence that stands alone without context
+- Emotional peaks — grief, joy, conviction, humor
+- Provocative questions that make a viewer stop scrolling
+- Strong opening hooks that don't require setup (viewer should be hooked within 3 seconds)
 
-Rank by hook_score descending.
+AVOID:
+- Clips that begin mid-sentence or require prior context to understand
+- Academic or overly technical theological language with no emotional anchor
+- Transitions ("and so," "as I was saying," "moving on to")
+- Clips that trail off or end without a clear conclusion
 
-Transcript: {transcript_text}"""
+DIVERSITY RULE — this is critical:
+- Spread clips across the full duration of the video — do not cluster them
+- Each clip must start at least 45 seconds after the previous clip's start_time
+- Find moments from the beginning, middle, AND end of the video
+- Vary the emotional tone: mix conviction, humor, vulnerability, insight
+
+Return ONLY a valid JSON array. No markdown, no code fences, no explanation. Start with [ and end with ].
+
+Each object must have exactly these fields:
+- start_time: float (copy the timestamp number directly from the transcript — e.g. if the segment starts at [143.2], use 143.2)
+- end_time: float (timestamp of the last word in the segment)
+- hook_score: integer 1-10 (10 = most likely to stop a scroll)
+- hook_line: string (the single most compelling sentence in this segment, quoted verbatim from the transcript)
+- why_it_works: string (1 sentence — name the specific technique: vulnerability, surprise, strong hook, emotional peak, etc.)
+
+Find 8 clips. Rank by hook_score descending.
+
+Transcript:
+{transcript_text}"""
             }]
         )
 
