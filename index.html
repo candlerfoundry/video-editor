@@ -981,6 +981,79 @@
     }
     #transcript-toggle:hover { color: var(--orange-hover); }
 
+    /* ─── STAGE 3 TWO-COLUMN EDITOR LAYOUT ─── */
+    .editor-two-col {
+      display: grid; grid-template-columns: 1fr 1fr; gap: 24px;
+      align-items: start; margin-bottom: 16px;
+    }
+    @media (max-width: 760px) { .editor-two-col { grid-template-columns: 1fr; } }
+    .editor-left-zone, .editor-right-zone { min-width: 0; }
+
+    /* ─── CUSTOM CLIP TIMELINE BAR ─── */
+    .clip-timeline-wrap { margin-bottom: 14px; user-select: none; }
+    .clip-tl-track {
+      position: relative; height: 10px; border-radius: 5px;
+      background: #E8E8E4; cursor: pointer; overflow: visible; margin-top: 14px;
+    }
+    .clip-tl-region {
+      position: absolute; top: 0; bottom: 0; background: #E8541A; pointer-events: none;
+    }
+    .clip-tl-handle {
+      position: absolute; top: 50%; transform: translate(-50%, -50%);
+      width: 18px; height: 28px; background: #E8541A; border-radius: 4px;
+      cursor: ew-resize; display: flex; align-items: center; justify-content: center;
+      font-size: 9px; color: #fff; font-weight: 700;
+      z-index: 4; box-shadow: 0 1px 4px rgba(0,0,0,0.25); touch-action: none;
+    }
+    .clip-tl-tooltip {
+      position: absolute; bottom: calc(100% + 8px); left: 50%; transform: translateX(-50%);
+      background: #1A1A1A; color: #fff; font-size: 11px; font-weight: 600;
+      padding: 3px 7px; border-radius: 4px; white-space: nowrap; pointer-events: none; display: none;
+    }
+    .clip-tl-handle:hover .clip-tl-tooltip,
+    .clip-tl-handle.dragging .clip-tl-tooltip { display: block; }
+    .clip-tl-ai-tick {
+      position: absolute; top: -5px; bottom: -5px; width: 0;
+      border-left: 2px dashed #AAAAAA; pointer-events: none; z-index: 2;
+    }
+    .clip-tl-playhead {
+      position: absolute; top: -6px; bottom: -6px; width: 2px;
+      background: #333; pointer-events: none; z-index: 5; border-radius: 1px;
+    }
+    .clip-tl-ai-labels { position: relative; height: 18px; margin-top: 4px; }
+    .clip-tl-ai-label {
+      position: absolute; font-size: 11px; color: #6B6B6B;
+      transform: translateX(-50%); white-space: nowrap;
+    }
+    .btn-reset-ai {
+      display: none; background: none; border: 1px solid #BBBBBB;
+      color: #6B6B6B; font-size: 12px; font-weight: 500;
+      padding: 4px 10px; border-radius: 5px; cursor: pointer; margin-top: 8px;
+      font-family: var(--font); transition: border-color 150ms, color 150ms;
+    }
+    .btn-reset-ai.visible { display: inline-block; }
+    .btn-reset-ai:hover { border-color: var(--orange); color: var(--orange); }
+
+    /* ─── ALWAYS-ON TRANSCRIPT ─── */
+    .tx-always-wrap {
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: var(--r); padding: 14px 18px;
+      max-height: 400px; overflow-y: auto; box-shadow: var(--shadow-sm);
+    }
+    .tx-always-header {
+      display: block; font-size: 10px; font-weight: 700;
+      text-transform: uppercase; letter-spacing: 0.09em; color: var(--muted); margin-bottom: 10px;
+    }
+    .tx-word.tx-out-pre,
+    .tx-word.tx-out-post { color: #BBBBBB; }
+    .tx-word.tx-in-clip  { color: #1A1A1A; }
+    .tx-boundary-marker  { color: var(--orange); font-weight: 700; }
+    @keyframes txFlash {
+      0%   { background: rgba(232,84,26,0.38); border-radius: 3px; }
+      100% { background: transparent; }
+    }
+    .tx-word.tx-flash { animation: txFlash 1s ease-out forwards; }
+
     /* ─── DIALOG / MODAL SYSTEM ─── */
     dialog {
       border: none; border-radius: var(--r-lg); padding: 0;
@@ -1279,40 +1352,61 @@
 
           <div class="editor-clip-label" id="editor-clip-label" style="margin-bottom:16px;">Select a clip</div>
 
-          <video id="edit-video" controls></video>
+          <div class="editor-two-col">
 
-          <!-- Timeline with clip region highlight -->
-          <input type="range" id="timeline-range" min="0" max="100" step="0.01" value="0" />
+            <!-- LEFT: video + draggable timeline -->
+            <div class="editor-left-zone">
+              <video id="edit-video" controls></video>
 
-          <!-- Editable time fields + Play Selection -->
-          <div class="editor-time-row" style="margin-bottom:12px;">
-            <div class="time-field-group">
-              <span class="time-field-label">In</span>
-              <input type="text" id="in-time-field" class="time-input" placeholder="0:00.00" />
-            </div>
-            <div class="time-field-group">
-              <span class="time-field-label">Out</span>
-              <input type="text" id="out-time-field" class="time-input" placeholder="0:30.00" />
-            </div>
-            <button class="btn btn-sm" onclick="playSelection()">
-              <svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"/></svg>
-              Play Selection
-            </button>
-          </div>
+              <!-- Custom draggable timeline bar -->
+              <div class="clip-timeline-wrap">
+                <div class="clip-tl-track" id="clip-tl-track">
+                  <div class="clip-tl-region"   id="clip-tl-region"></div>
+                  <div class="clip-tl-ai-tick"  id="clip-tl-ai-in"></div>
+                  <div class="clip-tl-ai-tick"  id="clip-tl-ai-out"></div>
+                  <div class="clip-tl-playhead" id="clip-tl-playhead"></div>
+                  <div class="clip-tl-handle" id="clip-tl-handle-in" data-handle="in">
+                    &#9654;
+                    <div class="clip-tl-tooltip" id="clip-tl-tip-in">0:00</div>
+                  </div>
+                  <div class="clip-tl-handle" id="clip-tl-handle-out" data-handle="out">
+                    &#9664;
+                    <div class="clip-tl-tooltip" id="clip-tl-tip-out">0:00</div>
+                  </div>
+                </div>
+                <div class="clip-tl-ai-labels">
+                  <span class="clip-tl-ai-label" id="clip-tl-label-in">AI start</span>
+                  <span class="clip-tl-ai-label" id="clip-tl-label-out">AI end</span>
+                </div>
+                <button class="btn-reset-ai" id="btn-reset-ai" onclick="resetToAISuggestion()">&#8634; Reset to suggested</button>
+              </div>
 
-          <!-- Set start/end here -->
-          <div class="editor-btn-row" style="margin-bottom:16px;">
-            <button class="btn-ghost btn-sm" onclick="setStartHere()">Set Start Here</button>
-            <button class="btn-ghost btn-sm" onclick="setEndHere()">Set End Here</button>
-          </div>
+              <!-- Editable time fields + Play Selection -->
+              <div class="editor-time-row" style="margin-bottom:12px;">
+                <div class="time-field-group">
+                  <span class="time-field-label">Start</span>
+                  <input type="text" id="in-time-field" class="time-input" placeholder="0:00.00" />
+                </div>
+                <div class="time-field-group">
+                  <span class="time-field-label">End</span>
+                  <input type="text" id="out-time-field" class="time-input" placeholder="0:30.00" />
+                </div>
+                <button class="btn btn-sm" onclick="playSelection()">
+                  <svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+                  Play Selection
+                </button>
+              </div>
+            </div><!-- /.editor-left-zone -->
 
-          <!-- Word transcript — clip range context -->
-          <div class="transcript-panel-wrap" id="transcript-panel-wrap" style="display:none;">
-            <div id="transcript-panel"></div>
-            <div style="margin-top:8px;padding-top:8px;border-top:1px solid var(--border);text-align:right;">
-              <button id="transcript-toggle" onclick="toggleTranscriptView()">Show full transcript</button>
-            </div>
-          </div>
+            <!-- RIGHT: always-on transcript -->
+            <div class="editor-right-zone">
+              <div class="tx-always-wrap" id="tx-always-wrap">
+                <span class="tx-always-header">TRANSCRIPT &#8212; click outside words to extend or trim</span>
+                <div id="transcript-panel"></div>
+              </div>
+            </div><!-- /.editor-right-zone -->
+
+          </div><!-- /.editor-two-col -->
 
           <!-- Done Editing Video -->
           <div class="save-clip-row">
@@ -1731,18 +1825,13 @@
     });
     editVid.addEventListener('pause', () => { if (activeVideo === editVid) activeVideo = null; });
     editVid.addEventListener('ended', () => { if (activeVideo === editVid) activeVideo = null; });
-    // Fix 4: sync timeline range thumb with playhead
+    // Sync playhead line with video currentTime
     editVid.addEventListener('timeupdate', () => {
-      const rangeEl = document.getElementById('timeline-range');
-      if (rangeEl) rangeEl.value = editVid.currentTime;
+      updatePlayhead();
     });
   })();
 
-  // Fix 4: scrubbing via timeline range updates video currentTime
-  document.getElementById('timeline-range').addEventListener('input', function () {
-    const vid = document.getElementById('edit-video');
-    if (vid) vid.currentTime = parseFloat(this.value);
-  });
+  // Scrubbing is handled by clip-tl-track click and handle drag logic below.
 
   // ══════════════════════════════════════════
   // CLIPS — 3-STAGE FLOW
@@ -1756,7 +1845,8 @@
   let _transcriptWords = [];    // alias kept for transcript highlight helpers
   let savedScrollY     = 0;    // Fix 1: scroll restore
   let activeVideo      = null; // Fix 3: global active video tracker
-  let _transcriptFull  = false; // Fix 5: false = clip-only, true = full
+  let origInTime  = 0; // AI-suggested in-point — never overwritten after editor loads
+  let origOutTime = 0; // AI-suggested out-point — never overwritten after editor loads
 
   // ── Stage switching ──
   function showStage(n) {
@@ -2004,11 +2094,23 @@
   document.getElementById('transcript-panel').addEventListener('click', function (e) {
     const wordEl = e.target.closest('.tx-word');
     if (!wordEl) return;
-    const t = parseFloat(wordEl.dataset.start);
+    const t    = parseFloat(wordEl.dataset.start);
+    const tEnd = parseFloat(wordEl.dataset.end);
     const video = document.getElementById('edit-video');
     if (video) video.currentTime = t;
-    editorInTime = t;
-    updateTimeFields();
+
+    if (wordEl.classList.contains('tx-out-pre')) {
+      // Pre-clip word → set new in-point
+      editorInTime = t;
+      updateAllEditorUI();
+      flashWord(wordEl);
+    } else if (wordEl.classList.contains('tx-out-post')) {
+      // Post-clip word → set new out-point
+      editorOutTime = isNaN(tEnd) ? t : tEnd;
+      updateAllEditorUI();
+      flashWord(wordEl);
+    }
+    // In-clip words: just scrub, no boundary change
   });
 
   // ── Find Clips → POST /clips → Stage 2 ──
@@ -2151,23 +2253,21 @@
 
   // ── Select & Edit → Stage 3 ──
   function selectAndEdit(idx) {
-    // Fix 1: save scroll position before entering stage 3
     const mc = document.querySelector('.main-content');
     savedScrollY = mc ? mc.scrollTop : 0;
 
     _editCandidate = _candidates[idx];
     editorInTime  = _editCandidate.start_time ?? 0;
     editorOutTime = _editCandidate.end_time   ?? 0;
+    origInTime    = editorInTime;   // stored once — never overwritten
+    origOutTime   = editorOutTime;
 
-    // Set up edit-video
     const vid = document.getElementById('edit-video');
     vid.src = URL.createObjectURL(_clipFile);
     vid.load();
     vid.addEventListener('loadedmetadata', function () {
       vid.currentTime = editorInTime;
-      const rangeEl = document.getElementById('timeline-range');
-      if (rangeEl) { rangeEl.max = vid.duration; rangeEl.value = editorInTime; }
-      updateTimelineGradient();
+      renderTimelineBar();
       vid.play().catch(() => {});
     }, { once: true });
 
@@ -2175,12 +2275,8 @@
       '\u201C' + (_editCandidate.hook_line || 'Clip') + '\u201D';
 
     updateTimeFields();
-
-    // Fix 5: render clip-only transcript by default
-    _transcriptFull = false;
     if (_wordsData && _wordsData.length) {
-      renderClipTranscript();
-      document.getElementById('transcript-panel-wrap').style.display = 'block';
+      renderTranscriptAlways(true); // true = auto-scroll to clip region
     }
 
     document.getElementById('export-status').style.display = 'none';
@@ -2224,23 +2320,6 @@
     _playSelTimer = setTimeout(() => video.pause(), dur * 1000);
   }
 
-  function setStartHere() {
-    const t = document.getElementById('edit-video').currentTime;
-    editorInTime = t;
-    if (editorInTime >= editorOutTime) editorOutTime = editorInTime + 5;
-    updateTimeFields();
-    updateTimelineGradient();
-    updateClipTranscriptHighlight();
-  }
-
-  function setEndHere() {
-    const t = document.getElementById('edit-video').currentTime;
-    editorOutTime = t;
-    if (editorOutTime <= editorInTime) editorInTime = Math.max(0, editorOutTime - 5);
-    updateTimeFields();
-    updateTimelineGradient();
-    updateClipTranscriptHighlight();
-  }
 
   // ── Helper: escHtml ──
   function showError(msg) {
@@ -2275,107 +2354,191 @@
     return parseFloat(str);
   }
 
-  // ── Fix 4: Timeline gradient — orange = clip region, gray = outside ──
-  function updateTimelineGradient() {
-    const rangeEl = document.getElementById('timeline-range');
+  // ── Custom timeline bar ──
+  function renderTimelineBar() {
+    const track  = document.getElementById('clip-tl-track');
+    const region = document.getElementById('clip-tl-region');
+    const hIn    = document.getElementById('clip-tl-handle-in');
+    const hOut   = document.getElementById('clip-tl-handle-out');
+    const tipIn  = document.getElementById('clip-tl-tip-in');
+    const tipOut = document.getElementById('clip-tl-tip-out');
+    const aiIn   = document.getElementById('clip-tl-ai-in');
+    const aiOut  = document.getElementById('clip-tl-ai-out');
+    const lblIn  = document.getElementById('clip-tl-label-in');
+    const lblOut = document.getElementById('clip-tl-label-out');
+    const vid    = document.getElementById('edit-video');
+    if (!track || !vid || !vid.duration) return;
+
+    const dur  = vid.duration;
+    const pIn  = Math.max(0, Math.min(100, (editorInTime  / dur) * 100));
+    const pOut = Math.max(0, Math.min(100, (editorOutTime / dur) * 100));
+    const pAIn = Math.max(0, Math.min(100, (origInTime    / dur) * 100));
+    const pAOut= Math.max(0, Math.min(100, (origOutTime   / dur) * 100));
+
+    if (region) { region.style.left = pIn + '%'; region.style.right = (100 - pOut) + '%'; }
+    if (hIn)    hIn.style.left   = pIn  + '%';
+    if (hOut)   hOut.style.left  = pOut + '%';
+    if (tipIn)  tipIn.textContent  = formatTime(editorInTime);
+    if (tipOut) tipOut.textContent = formatTime(editorOutTime);
+    if (aiIn)   aiIn.style.left  = pAIn  + '%';
+    if (aiOut)  aiOut.style.left = pAOut + '%';
+    if (lblIn)  lblIn.style.left = pAIn  + '%';
+    if (lblOut) lblOut.style.left= pAOut + '%';
+    updateResetBtn();
+  }
+
+  function updatePlayhead() {
     const vid = document.getElementById('edit-video');
-    if (!rangeEl || !vid || !vid.duration) return;
-    const dur = vid.duration;
-    const x = Math.min(100, (editorInTime  / dur) * 100).toFixed(2);
-    const y = Math.min(100, (editorOutTime / dur) * 100).toFixed(2);
-    const gray   = 'rgba(0,0,0,0.18)';
-    const orange = '#E8541A';
-    rangeEl.style.background =
-      `linear-gradient(to right, ${gray} 0%, ${gray} ${x}%, ${orange} ${x}%, ${orange} ${y}%, ${gray} ${y}%, ${gray} 100%)`;
+    const ph  = document.getElementById('clip-tl-playhead');
+    if (!vid || !ph || !vid.duration) return;
+    ph.style.left = ((vid.currentTime / vid.duration) * 100) + '%';
   }
 
-  // ── Fix 5: Clip-only transcript rendering ──
-  function renderClipTranscript() {
+  function updateResetBtn() {
+    const btn = document.getElementById('btn-reset-ai');
+    if (!btn) return;
+    const changed = Math.abs(editorInTime - origInTime) > 0.01 ||
+                    Math.abs(editorOutTime - origOutTime) > 0.01;
+    btn.classList.toggle('visible', changed);
+  }
+
+  function resetToAISuggestion() {
+    editorInTime  = origInTime;
+    editorOutTime = origOutTime;
+    updateAllEditorUI();
+  }
+
+  function updateAllEditorUI() {
+    updateTimeFields();
+    renderTimelineBar();
+    renderTranscriptAlways(false);
+  }
+
+  // Shims for time-field change handlers that call these names
+  function updateTimelineGradient()        { renderTimelineBar(); }
+  function updateClipTranscriptHighlight() { renderTranscriptAlways(false); }
+
+  // ── Timeline track: click to scrub (does NOT move handles) ──
+  (function () {
+    const track = document.getElementById('clip-tl-track');
+    if (!track) return;
+    track.addEventListener('click', function (e) {
+      if (e.target.closest('.clip-tl-handle')) return;
+      const rect = track.getBoundingClientRect();
+      const pct  = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
+      const vid  = document.getElementById('edit-video');
+      if (vid && vid.duration) vid.currentTime = pct * vid.duration;
+    });
+  })();
+
+  // ── Handle drag logic ──
+  (function () {
+    let _dragging = null;
+
+    function onMousedown(e, which) {
+      e.preventDefault();
+      _dragging = which;
+      document.getElementById('clip-tl-handle-' + which).classList.add('dragging');
+      document.addEventListener('mousemove', onMove);
+      document.addEventListener('mouseup',   onUp);
+    }
+
+    function onMove(e) {
+      if (!_dragging) return;
+      const track = document.getElementById('clip-tl-track');
+      const vid   = document.getElementById('edit-video');
+      if (!track || !vid || !vid.duration) return;
+      const rect = track.getBoundingClientRect();
+      const pct  = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
+      const t    = pct * vid.duration;
+      const MIN  = 2; // seconds minimum clip width
+      if (_dragging === 'in') {
+        editorInTime = Math.max(0, Math.min(t, editorOutTime - MIN));
+      } else {
+        editorOutTime = Math.min(vid.duration, Math.max(t, editorInTime + MIN));
+      }
+      updateAllEditorUI();
+    }
+
+    function onUp() {
+      if (_dragging) {
+        document.getElementById('clip-tl-handle-' + _dragging).classList.remove('dragging');
+      }
+      _dragging = null;
+      document.removeEventListener('mousemove', onMove);
+      document.removeEventListener('mouseup',   onUp);
+    }
+
+    const hIn  = document.getElementById('clip-tl-handle-in');
+    const hOut = document.getElementById('clip-tl-handle-out');
+    if (hIn)  hIn.addEventListener('mousedown',  e => onMousedown(e, 'in'));
+    if (hOut) hOut.addEventListener('mousedown', e => onMousedown(e, 'out'));
+  })();
+
+  // ── Always-on transcript rendering ──
+  function renderTranscriptAlways(scrollToClip) {
     const panel = document.getElementById('transcript-panel');
-    const toggleBtn = document.getElementById('transcript-toggle');
-    const wrap = document.getElementById('transcript-panel-wrap');
+    const wrap  = document.getElementById('tx-always-wrap');
+    if (!panel || !_wordsData) return;
     panel.innerHTML = '';
-    if (!_wordsData) return;
 
-    if (!_transcriptFull) {
-      // Show only words within the clip window
-      const clipWords = _wordsData.filter(w =>
-        (w.start ?? 0) < editorOutTime && (w.end ?? w.start ?? 0) >= editorInTime
-      );
-      clipWords.forEach(w => {
-        const origIdx = _wordsData.indexOf(w);
-        const span = document.createElement('span');
-        span.className = 'tx-word';
-        span.dataset.idx   = origIdx;
-        span.dataset.start = w.start ?? 0;
-        span.dataset.end   = w.end   ?? 0;
-        span.textContent   = (w.word ?? w.text ?? '') + ' ';
-        panel.appendChild(span);
-      });
-      if (toggleBtn) toggleBtn.textContent = 'Show full transcript';
-      if (wrap) wrap.scrollTop = 0;
-    } else {
-      // Full transcript — dim out-of-clip words, show markers
-      let clipStartAdded = false;
-      let clipEndAdded   = false;
+    let firstInClipEl  = null;
+    let clipEndAdded   = false;
 
-      _wordsData.forEach((w, i) => {
-        const wStart = w.start ?? 0;
-        const wEnd   = w.end   ?? wStart;
-        const inClip = wStart < editorOutTime && wEnd >= editorInTime;
+    _wordsData.forEach((w, i) => {
+      const wStart = w.start ?? 0;
+      const wEnd   = w.end   ?? wStart;
+      const isPre  = wEnd   <= editorInTime;
+      const isPost = wStart >= editorOutTime;
+      const inClip = !isPre && !isPost;
 
-        if (!clipStartAdded && inClip) {
-          const marker = document.createElement('span');
-          marker.className  = 'tx-clip-marker';
-          marker.textContent = '— CLIP START —';
-          panel.appendChild(marker);
-          clipStartAdded = true;
-        }
-
-        const span = document.createElement('span');
-        span.className   = 'tx-word' + (inClip ? '' : ' out-of-clip');
-        span.dataset.idx   = i;
-        span.dataset.start = wStart;
-        span.dataset.end   = wEnd;
-        span.textContent   = (w.word ?? w.text ?? '') + ' ';
-        panel.appendChild(span);
-
-        if (clipStartAdded && !clipEndAdded && !inClip && wStart >= editorOutTime) {
-          const marker = document.createElement('span');
-          marker.className  = 'tx-clip-marker';
-          marker.textContent = '— CLIP END —';
-          panel.appendChild(marker);
-          clipEndAdded = true;
-        }
-      });
-
-      if (clipStartAdded && !clipEndAdded) {
-        const marker = document.createElement('span');
-        marker.className  = 'tx-clip-marker';
-        marker.textContent = '— CLIP END —';
-        panel.appendChild(marker);
+      // [ marker before first in-clip word
+      if (!firstInClipEl && inClip) {
+        const m = document.createElement('span');
+        m.className = 'tx-boundary-marker';
+        m.textContent = '[ ';
+        panel.appendChild(m);
       }
 
-      if (toggleBtn) toggleBtn.textContent = 'Show clip only';
-
-      // Scroll to first in-clip word
-      const firstClipWord = panel.querySelector('.tx-word:not(.out-of-clip)');
-      if (firstClipWord && wrap) {
-        wrap.scrollTop = firstClipWord.offsetTop - 20;
+      // ] marker before first post-clip word
+      if (!clipEndAdded && isPost && firstInClipEl) {
+        const m = document.createElement('span');
+        m.className = 'tx-boundary-marker';
+        m.textContent = ' ] ';
+        panel.appendChild(m);
+        clipEndAdded = true;
       }
+
+      const span = document.createElement('span');
+      span.className = 'tx-word' + (isPre ? ' tx-out-pre' : isPost ? ' tx-out-post' : ' tx-in-clip');
+      span.dataset.idx   = i;
+      span.dataset.start = wStart;
+      span.dataset.end   = wEnd;
+      span.textContent   = (w.word ?? w.text ?? '') + ' ';
+      panel.appendChild(span);
+
+      if (inClip && !firstInClipEl) firstInClipEl = span;
+    });
+
+    // ] at end if clip extends to last word
+    if (firstInClipEl && !clipEndAdded) {
+      const m = document.createElement('span');
+      m.className = 'tx-boundary-marker';
+      m.textContent = ' ]';
+      panel.appendChild(m);
+    }
+
+    // Auto-scroll to first in-clip word (only on initial load)
+    if (scrollToClip && firstInClipEl && wrap) {
+      wrap.scrollTop = firstInClipEl.offsetTop - 20;
     }
   }
 
-  function toggleTranscriptView() {
-    _transcriptFull = !_transcriptFull;
-    renderClipTranscript();
-  }
-
-  // Re-render transcript when clip boundaries change
-  function updateClipTranscriptHighlight() {
-    if (document.getElementById('transcript-panel-wrap').style.display !== 'none') {
-      renderClipTranscript();
-    }
+  function flashWord(el) {
+    el.classList.remove('tx-flash');
+    void el.offsetWidth; // force reflow to restart animation
+    el.classList.add('tx-flash');
+    setTimeout(() => el.classList.remove('tx-flash'), 1100);
   }
 
   // ── Caption Videos tab ──
