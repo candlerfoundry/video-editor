@@ -24,10 +24,31 @@ CREATE_NO_WINDOW = 0x08000000 if platform.system() == 'Windows' else 0
 STYLE_STR = "Fontname=Arial,Outline=1,Shadow=0,BorderStyle=1,Spacing=1"
 
 # ── Dropbox portable paths ──
-dropbox_root   = os.path.join(os.path.expanduser('~'), 'Dropbox')
-API_KEY_PATH   = os.path.join(dropbox_root, 'Scripts', 'api_key.txt')
-FFMPEG         = os.path.join(dropbox_root, 'FFMPEG', 'ffmpeg.exe')
-FFMPEG_CAPTION = FFMPEG
+dropbox_root = os.path.join(os.path.expanduser('~'), 'Dropbox')
+API_KEY_PATH = os.path.join(dropbox_root, 'Scripts', 'api_key.txt')
+
+
+def find_ffmpeg():
+    candidates = [
+        os.path.join(dropbox_root, 'Scripts', 'FFMPEG', 'ffmpeg.exe'),
+        os.path.join(dropbox_root, 'Scripts', 'FFMPEG', 'bin', 'ffmpeg.exe'),
+        os.path.join(dropbox_root, 'FFMPEG', 'ffmpeg.exe'),
+        os.path.join(dropbox_root, 'ffmpeg', 'bin', 'ffmpeg.exe'),
+        'ffmpeg',
+    ]
+    for path in candidates:
+        try:
+            result = subprocess.run([path, '-version'], capture_output=True,
+                timeout=5, creationflags=CREATE_NO_WINDOW)
+            if result.returncode == 0:
+                print(f'[ffmpeg] Found at: {path}')
+                return path
+        except Exception:
+            continue
+    print('[ffmpeg] ERROR: ffmpeg not found in any expected location')
+    return None
+
+FFMPEG_EXE = find_ffmpeg()
 
 # ── Whisper models (loaded once on first use) ──
 _WHISPER_MODEL      = None
@@ -89,6 +110,9 @@ def caption():
       font_size  — integer, caption font size in points (default 18)
     Returns the captioned MP4 as a download.
     """
+    if not FFMPEG_EXE:
+        return jsonify({'error': 'ffmpeg not found'}), 500
+
     file = request.files.get("file")
     if not file:
         return jsonify({"error": "No file provided"}), 400
@@ -133,7 +157,7 @@ def caption():
         # Burn subtitles with ffmpeg
         # Use cwd=tmp_dir and relative filename to avoid Windows path escaping issues
         cmd = [
-            FFMPEG_CAPTION, "-y",
+            FFMPEG_EXE, "-y",
             "-i", input_path,
             "-vf", f"subtitles=captions.srt:force_style='{style}'",
             "-c:a", "copy",
@@ -349,6 +373,9 @@ def thumbnail():
     import base64
     from PIL import Image as PILImage
 
+    if not FFMPEG_EXE:
+        return jsonify({'error': 'ffmpeg not found'}), 500
+
     file = request.files.get("file")
     if not file:
         return jsonify({"error": "No file provided"}), 400
@@ -387,7 +414,7 @@ def thumbnail():
             for i, ts in enumerate(timestamps):
                 fp = os.path.join(tmp_dir, f'frame_{i:03d}.jpg')
                 subprocess.run(
-                    [FFMPEG, '-y', '-ss', str(ts), '-i', input_path,
+                    [FFMPEG_EXE, '-y', '-ss', str(ts), '-i', input_path,
                      '-frames:v', '1', '-q:v', '3', fp],
                     capture_output=True, creationflags=CREATE_NO_WINDOW
                 )
@@ -637,6 +664,9 @@ def export_clip():
     import urllib.parse
     import dropbox as dbx_module
 
+    if not FFMPEG_EXE:
+        return jsonify({'error': 'ffmpeg not found'}), 500
+
     file = request.files.get("file")
     if not file:
         return jsonify({"error": "No file provided"}), 400
@@ -676,7 +706,7 @@ def export_clip():
         # ── Step A: 9:16 vertical reframe ──
         # Pass 1: extract the in/out segment (stream copy, fast)
         r1 = subprocess.run(
-            [FFMPEG, "-y",
+            [FFMPEG_EXE, "-y",
              "-ss", str(starttime), "-to", str(endtime),
              "-i", input_path, "-c", "copy", temp_clip],
             capture_output=True, creationflags=CREATE_NO_WINDOW,
@@ -687,7 +717,7 @@ def export_clip():
 
         # Pass 2: crop centre 9:16 and scale to 1080×1920
         r2 = subprocess.run(
-            [FFMPEG, "-y",
+            [FFMPEG_EXE, "-y",
              "-i", temp_clip,
              "-vf", "crop=ih*9/16:ih,scale=1080:1920",
              "-c:v", "libx264", "-crf", "18", "-preset", "fast",
