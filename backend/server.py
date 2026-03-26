@@ -380,11 +380,12 @@ def thumbnail():
     if not file:
         return jsonify({"error": "No file provided"}), 400
 
-    titles_only = request.form.get("titles_only", "0") == "1"
+    titles_only              = request.form.get("titles_only", "0") == "1"
+    incoming_clip_transcript = request.form.get("clip_transcript", "")
 
-    src_ext   = os.path.splitext(file.filename or 'video.mp4')[1].lower() or '.mp4'
-    tmp_dir   = tempfile.mkdtemp()
-    hero_b64  = None
+    src_ext    = os.path.splitext(file.filename or 'video.mp4')[1].lower() or '.mp4'
+    tmp_dir    = tempfile.mkdtemp()
+    frame_b64s = None
 
     try:
         input_path = os.path.join(tmp_dir, 'source' + src_ext)
@@ -443,8 +444,8 @@ def thumbnail():
                     continue
                 good.append((lap_var, fp))
 
-            # Relax threshold if fewer than 4
-            if len(good) < 4:
+            # Relax threshold if fewer than 5
+            if len(good) < 5:
                 good = []
                 for fp in frame_files:
                     img_cv = cv2.imread(fp)
@@ -454,13 +455,14 @@ def thumbnail():
                     lap_var = cv2.Laplacian(gray, cv2.CV_64F).var()
                     good.append((lap_var, fp))
                 good.sort(reverse=True)
-                good = good[:5]
+                good = good[:8]
 
             if not good:
                 return jsonify({"error": "Could not extract usable frames from video"}), 500
 
-            # Sort by sharpness so frame_b64s[0] is the sharpest fallback
+            # Sort by sharpness (fallback order) and cap at 8
             good.sort(reverse=True)
+            good = good[:8]
 
             # ── Encode frames as 640×360 JPEG base64 ──
             frame_b64s = []
@@ -470,9 +472,7 @@ def thumbnail():
                 pil.save(buf, "JPEG", quality=85)
                 frame_b64s.append(base64.b64encode(buf.getvalue()).decode())
 
-            hero_b64 = frame_b64s[0]   # sharpest frame = fallback
-
-            # ── Step B: Claude Vision ranking ──
+            # ── Step B: Claude Vision ranking — reorder frame_b64s best-first ──
             try:
                 content = []
                 for i, b64 in enumerate(frame_b64s):
@@ -487,57 +487,81 @@ def thumbnail():
                         "Rank these frames best to worst for a YouTube thumbnail. "
                         "Prefer: eyes open and engaged, mouth not wide open mid-word, "
                         "warm/confident expression, good posture, sharp focus. "
-                        "Return ONLY a JSON array of 0-based indices, best first. "
+                        f"There are {len(frame_b64s)} frames (0-indexed). "
+                        "Return ONLY a JSON array of ALL indices, best first. "
                         "Example: [2,0,3,1]"
                     )
                 })
                 rank_msg = client.messages.create(
                     model="claude-sonnet-4-6",
-                    max_tokens=80,
+                    max_tokens=120,
                     messages=[{"role": "user", "content": content}]
                 )
                 rank_text = rank_msg.content[0].text.strip()
                 s = rank_text.find('['); e = rank_text.rfind(']')
                 if s != -1 and e != -1:
                     ranks = json.loads(rank_text[s:e+1])
-                    if ranks and 0 <= ranks[0] < len(frame_b64s):
-                        hero_b64 = frame_b64s[ranks[0]]
+                    seen    = set()
+                    ordered = []
+                    for idx in ranks:
+                        if isinstance(idx, int) and 0 <= idx < len(frame_b64s) and idx not in seen:
+                            ordered.append(frame_b64s[idx])
+                            seen.add(idx)
+                    for idx in range(len(frame_b64s)):
+                        if idx not in seen:
+                            ordered.append(frame_b64s[idx])
+                    frame_b64s = ordered
             except Exception as ve:
-                print(f"Vision ranking failed (using sharpest frame): {ve}")
+                print(f"Vision ranking failed (using sharpness order): {ve}")
 
         # ── Step C: Whisper tiny + Claude title generation ──
         tiny     = get_whisper_tiny()
         w_result = tiny.transcribe(input_path)
-        transcript = (w_result.get("text") or "")[:3000]
+        full_transcript = (w_result.get("text") or "")[:3000]
 
         titles = []
         try:
+            context_parts = [f"Full video transcript:\n{full_transcript}"]
+            if incoming_clip_transcript:
+                context_parts.append(
+                    f"Clip transcript (focus segment):\n{incoming_clip_transcript[:1000]}"
+                )
+            context = "\n\n".join(context_parts)
+
             title_msg = client.messages.create(
                 model="claude-sonnet-4-6",
-                max_tokens=600,
+                max_tokens=800,
                 messages=[{
                     "role": "user",
                     "content": (
-                        "Generate exactly 8 compelling YouTube titles for this talk/sermon/"
-                        "presentation. Make them specific, curiosity-driven, and compelling "
-                        "— no empty clickbait. Vary the styles: question, bold statement, "
-                        "how-to, emotional hook, etc. "
+                        "The Candler Foundry produces faith-based video content for clergy, scholars, "
+                        "and the spiritually curious public. The best thumbnail titles are short, "
+                        "surprising, and emotionally resonant — a question or statement that makes "
+                        "someone stop scrolling. Avoid jargon, church-speak, or academic language. "
+                        "Aim for human, honest, direct.\n\n"
+                        "Generate exactly 8 title options. Rules:\n"
+                        "- MAX 60 characters each — strip any over 60 chars\n"
+                        "- Short, punchy, emotionally direct: a provocative question or bold statement\n"
+                        "- No filler phrases, no colons that only pad length\n"
                         "Return ONLY a JSON array of 8 strings, no markdown.\n\n"
-                        f"Transcript: {transcript}"
+                        f"{context}"
                     )
                 }]
             )
             raw = title_msg.content[0].text.strip()
             s = raw.find('['); e = raw.rfind(']')
             if s != -1 and e != -1:
-                titles = json.loads(raw[s:e+1])[:8]
+                parsed = json.loads(raw[s:e+1])
+                titles = [t for t in parsed if len(str(t)) <= 60][:8]
+                if len(titles) < 5:
+                    titles = [str(t)[:60] for t in parsed[:8]]
         except Exception as te:
             print(f"Title generation failed: {te}")
             titles = ["Add Your Title Here"] * 8
 
-        result = {"titles": titles}
-        if hero_b64:
-            result["hero_frame"] = hero_b64
+        result = {"titles": titles, "clip_transcript": full_transcript}
+        if frame_b64s:
+            result["frames"] = frame_b64s
         return jsonify(result)
 
     finally:
