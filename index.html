@@ -1138,20 +1138,28 @@
       grid-template-columns: repeat(4, 1fr);
       gap: 6px;
       width: 320px;
+      margin-bottom: 12px;
     }
     .frame-cell {
-      aspect-ratio: 16/9;
-      border-radius: 6px;
+      position: relative;
+      width: 100%;
+      padding-bottom: 56.25%;
+      border-radius: 5px;
       border: 2px solid var(--border);
-      cursor: pointer;
       overflow: hidden;
-      transition: border-color 150ms, box-shadow 150ms;
+      cursor: pointer;
+      transition: border-color 150ms;
+    }
+    .frame-cell img {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      display: block;
     }
     .frame-cell:hover { border-color: var(--orange); }
-    .frame-cell.selected {
-      border-color: var(--orange);
-      box-shadow: 0 0 0 2px var(--orange-tint);
-    }
+    .frame-cell.selected { border: 3px solid #E8541A; box-shadow: 0 0 0 2px rgba(232,84,26,0.25); }
 
     /* ─── COLOR SWATCH ─── */
     .color-swatch {
@@ -1159,11 +1167,12 @@
       border-radius: 50%;
       border: 2px solid transparent;
       cursor: pointer;
-      flex-shrink: 0;
       transition: border-color 150ms, transform 150ms;
+      flex-shrink: 0;
+      padding: 0;
     }
     .color-swatch:hover { transform: scale(1.12); }
-    .color-swatch.selected { border-color: var(--orange); }
+    .color-swatch.selected { border-color: var(--orange) !important; }
   </style>
 </head>
 <body>
@@ -1593,7 +1602,7 @@
             <div style="flex-shrink:0;">
               <div class="thumb-control-label" style="margin-bottom:8px;">CHOOSE YOUR BEST FRAME</div>
               <div id="thumb-frame-grid" class="frame-grid"></div>
-              <div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap;">
+              <div style="display:flex;gap:8px;margin-top:8px;flex-wrap:wrap;">
                 <button class="btn-ghost btn-sm" id="btn-redo-frames" onclick="redoFrames()">
                   <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor"
                        stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
@@ -1666,9 +1675,10 @@
               <div class="card">
                 <h3 style="margin-bottom:14px;">Text Style</h3>
                 <div style="display:flex;flex-direction:column;gap:14px;">
+
                   <div>
                     <div class="thumb-control-label">Font</div>
-                    <select class="thumb-font-select" id="thumb-font-select" onchange="updateThumbText()">
+                    <select class="thumb-font-select" id="thumb-font-select" onchange="updateThumbText();renderThumbCanvas()">
                       <option value="Montserrat" style="font-family:'Montserrat'">Montserrat</option>
                       <option value="Barlow" style="font-family:'Barlow'">Barlow</option>
                       <option value="Spectral" style="font-family:'Spectral'">Spectral</option>
@@ -1678,37 +1688,42 @@
                       <option value="'DM Sans'" style="font-family:'DM Sans'">DM Sans</option>
                     </select>
                   </div>
+
                   <div>
                     <div class="thumb-control-label">Text Color</div>
-                    <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-top:4px;">
+                    <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;">
                       <button class="color-swatch selected" style="background:#FFFFFF;border-color:#ccc;" onclick="setThumbColor('#ffffff',this)" title="White"></button>
                       <button class="color-swatch" style="background:#111111;" onclick="setThumbColor('#111111',this)" title="Black"></button>
                       <button class="color-swatch" style="background:#E8541A;" onclick="setThumbColor('#E8541A',this)" title="CF Orange"></button>
                       <button class="color-swatch" style="background:#F5A623;" onclick="setThumbColor('#F5A623',this)" title="CF Amber"></button>
                       <button class="color-swatch" style="background:#2D6A4F;" onclick="setThumbColor('#2D6A4F',this)" title="CF Green"></button>
                       <input type="color" id="thumb-color-custom" value="#ffffff"
-                             style="width:28px;height:28px;border:1px solid var(--border);border-radius:50%;cursor:pointer;padding:0;flex-shrink:0;"
+                             style="width:28px;height:28px;border:1px solid var(--border);border-radius:4px;cursor:pointer;padding:0;flex-shrink:0;"
                              oninput="setThumbColorFree(this.value)">
                     </div>
                   </div>
+
                   <div>
                     <div class="thumb-control-label">Size &nbsp;<span id="thumb-size-val">64</span>px</div>
                     <input type="range" id="thumb-size-slider" min="24" max="120" value="64"
-                           style="width:100%;accent-color:var(--orange);margin-top:4px;"
+                           style="width:100%;accent-color:var(--orange);"
                            oninput="setThumbFontSize(this.value)">
                   </div>
+
                   <div style="display:flex;align-items:center;gap:10px;">
                     <div class="thumb-control-label" style="margin-bottom:0;">Text Shadow</div>
                     <input type="checkbox" id="thumb-shadow-toggle" checked
                            style="accent-color:var(--orange);width:16px;height:16px;cursor:pointer;"
-                           onchange="updateThumbText()">
+                           onchange="updateThumbText();renderThumbCanvas()">
                   </div>
+
                   <div>
                     <div class="thumb-control-label">Text Background &nbsp;<span id="thumb-overlay-val">0</span>%</div>
                     <input type="range" id="thumb-overlay-slider" min="0" max="80" value="0"
-                           style="width:100%;accent-color:var(--orange);margin-top:4px;"
+                           style="width:100%;accent-color:var(--orange);"
                            oninput="setThumbOverlay(this.value)">
                   </div>
+
                 </div>
               </div>
               <button class="btn" onclick="downloadThumbPNG()" style="align-self:flex-start;">
@@ -2725,18 +2740,18 @@
   // ══════════════════════════════════════════
 
   let _thumbFile           = null;
-  let _thumbFrames         = [];        // array of base64 JPEGs from backend
-  let _thumbSelectedFrame  = 0;         // index into _thumbFrames
+  let _thumbFrames         = [];     // array of base64 JPEGs from backend (up to 8)
+  let _thumbSelectedFrame  = 0;      // index into _thumbFrames
   let _thumbTitles         = [];
   let _thumbStyle          = 'warm_bar';
   let _thumbTitle          = '';
   let _thumbFontFamily     = 'Montserrat';
-  let _thumbFontSize       = 64;        // canvas-resolution px (1280-wide)
-  let _thumbCanvasTX       = 640;       // canvas-space X center of text (0-1280)
-  let _thumbCanvasTY       = 590;       // canvas-space Y center of text (0-720)
+  let _thumbFontSize       = 64;     // canvas-resolution px (1280-wide canvas)
+  let _thumbCanvasTX       = 640;    // text center X in canvas-space (0-1280)
+  let _thumbCanvasTY       = 590;    // text center Y in canvas-space (0-720)
   let _thumbTextColor      = '#ffffff';
   let _thumbShadowOn       = true;
-  let _thumbOverlayOpacity = 0;         // 0–80
+  let _thumbOverlayOpacity = 0;      // 0-80
 
   // Wire thumb-file input
   document.getElementById('thumb-file').addEventListener('change', function () {
@@ -2834,7 +2849,7 @@
       cell.className = 'frame-cell' + (i === _thumbSelectedFrame ? ' selected' : '');
       const img = document.createElement('img');
       img.src = 'data:image/jpeg;base64,' + b64;
-      img.style.cssText = 'width:100%;height:100%;object-fit:cover;display:block;';
+      img.alt = 'Frame ' + (i + 1);
       cell.appendChild(img);
       cell.addEventListener('click', () => selectThumbFrame(i));
       fg.appendChild(cell);
@@ -2847,17 +2862,18 @@
       if (el) el.classList.toggle('selected', s === _thumbStyle);
     });
 
-    // Title cards
+    // Title cards — enforce 60-char display cap
     const grid = document.getElementById('thumb-titles-grid');
     grid.innerHTML = '';
     _thumbTitles.forEach(t => {
+      const display = t.length > 60 ? t.slice(0, 60) : t;
       const card = document.createElement('div');
       card.className = 'title-card';
-      card.textContent = t.length > 60 ? t.slice(0, 60) : t;
+      card.textContent = display;
       card.addEventListener('click', () => {
         document.querySelectorAll('#thumb-titles-grid .title-card').forEach(c => c.classList.remove('selected'));
         card.classList.add('selected');
-        _thumbTitle = t;
+        _thumbTitle = display;
         openThumbEditor();
       });
       grid.appendChild(card);
@@ -2869,8 +2885,9 @@
     document.querySelectorAll('#thumb-frame-grid .frame-cell').forEach((c, i) => {
       c.classList.toggle('selected', i === idx);
     });
+    // Re-render canvas if editor is open
     const ed = document.getElementById('thumb-state-editor');
-    if (ed && ed.style.display !== 'none') drawThumbCanvas();
+    if (ed && ed.style.display !== 'none') renderThumbCanvas();
   }
 
   function selectThumbStyle(style) {
@@ -2879,9 +2896,8 @@
       const el = document.getElementById('style-' + s);
       if (el) el.classList.toggle('selected', s === style);
     });
-    // Re-draw if editor is visible
     const ed = document.getElementById('thumb-state-editor');
-    if (ed && ed.style.display !== 'none') drawThumbCanvas();
+    if (ed && ed.style.display !== 'none') renderThumbCanvas();
   }
 
   async function redoFrames() {
@@ -2928,7 +2944,7 @@
   }
 
   function openThumbEditor() {
-    // Reset text style controls
+    // Reset controls to defaults
     _thumbFontFamily     = 'Montserrat';
     _thumbFontSize       = 64;
     _thumbTextColor      = '#ffffff';
@@ -2945,6 +2961,8 @@
     if (overlaySlider) overlaySlider.value = 0;
     const overlayVal = document.getElementById('thumb-overlay-val');
     if (overlayVal) overlayVal.textContent = '0';
+    const sizeVal = document.getElementById('thumb-size-val');
+    if (sizeVal) sizeVal.textContent = '64';
     const customColor = document.getElementById('thumb-color-custom');
     if (customColor) customColor.value = '#ffffff';
     document.querySelectorAll('#thumb-state-editor .color-swatch').forEach((b, i) => {
@@ -2957,16 +2975,36 @@
     else if (_thumbStyle === 'kinetic_slash') { _thumbCanvasTX = 320; _thumbCanvasTY = 250; }
 
     thumbShowState('editor');
-    drawThumbCanvas();
+    renderThumbCanvas();
     requestAnimationFrame(() => updateThumbText());
   }
 
-  function backToTitles() {
-    thumbShowState('hero');
+  function backToTitles() { thumbShowState('hero'); }
+
+  // ── Canvas rendering (object-fit cover + style overlay) ──
+  function renderThumbCanvas() {
+    const canvas = document.getElementById('thumb-canvas');
+    const b64 = _thumbFrames[_thumbSelectedFrame];
+    if (!canvas || !b64) return;
+    const ctx = canvas.getContext('2d');
+    const W = 1280, H = 720;
+    const img = new Image();
+    img.onload = function () {
+      ctx.clearRect(0, 0, W, H);
+
+      // object-fit: cover — fill 16:9 without stretching or cropping aspect ratio
+      const scale = Math.max(W / img.naturalWidth, H / img.naturalHeight);
+      const sw = img.naturalWidth * scale, sh = img.naturalHeight * scale;
+      ctx.drawImage(img, (W - sw) / 2, (H - sh) / 2, sw, sh);
+
+      // Style overlay
+      applyThumbStyleOverlay(ctx, W, H, _thumbStyle);
+    };
+    img.src = 'data:image/jpeg;base64,' + b64;
   }
 
-  // Shared style overlay renderer (used by both live canvas and download)
-  function applyStyleOverlay(ctx, W, H, style) {
+  // Shared style overlay helper — used by renderThumbCanvas + downloadThumbPNG
+  function applyThumbStyleOverlay(ctx, W, H, style) {
     if (style === 'warm_bar') {
       const grad = ctx.createLinearGradient(0, H * 0.58, 0, H);
       grad.addColorStop(0, 'rgba(10,5,0,0)');
@@ -2988,38 +3026,27 @@
     }
   }
 
-  // Cover-fit draw helper
+  // Keep applyStyleOverlay as alias so dialog canvas code still works
+  function applyStyleOverlay(ctx, W, H, style) { applyThumbStyleOverlay(ctx, W, H, style); }
+
+  // Keep drawCoverFit as alias so dialog canvas code still works
   function drawCoverFit(ctx, img, W, H) {
     const scale = Math.max(W / img.naturalWidth, H / img.naturalHeight);
     const sw = img.naturalWidth * scale, sh = img.naturalHeight * scale;
     ctx.drawImage(img, (W - sw) / 2, (H - sh) / 2, sw, sh);
   }
 
-  // Draw hero image + style overlay on canvas (text lives in overlay div)
-  function drawThumbCanvas() {
-    const canvas = document.getElementById('thumb-canvas');
-    const b64 = _thumbFrames[_thumbSelectedFrame];
-    if (!canvas || !b64) return;
-    const ctx = canvas.getContext('2d');
-    const W = 1280, H = 720;
-    const img = new Image();
-    img.onload = function () {
-      ctx.clearRect(0, 0, W, H);
-      drawCoverFit(ctx, img, W, H);
-      applyStyleOverlay(ctx, W, H, _thumbStyle);
-    };
-    img.src = 'data:image/jpeg;base64,' + b64;
-  }
-
-  // Update the draggable text overlay div
+  // ── Draggable text overlay div ──
   function updateThumbText() {
     const drag = document.getElementById('thumb-text-drag');
     if (!drag) return;
+
     const fontSel   = document.getElementById('thumb-font-select');
     const shadowChk = document.getElementById('thumb-shadow-toggle');
     if (fontSel)   _thumbFontFamily = fontSel.value;
     if (shadowChk) _thumbShadowOn   = shadowChk.checked;
-    const displayPx = Math.round(_thumbFontSize / 2);  // canvas 1280 → display 640
+
+    const displayPx = Math.round(_thumbFontSize / 2);  // 1280-wide canvas → 640-wide display
 
     drag.style.fontFamily    = _thumbFontFamily + ', sans-serif';
     drag.style.fontSize      = displayPx + 'px';
@@ -3028,11 +3055,19 @@
     drag.style.textShadow    = _thumbShadowOn ? '2px 2px 8px rgba(0,0,0,0.8)' : 'none';
     drag.style.lineHeight    = '1.25';
     drag.style.letterSpacing = '-0.01em';
+
     const alpha = _thumbOverlayOpacity / 100;
-    drag.style.background    = alpha > 0 ? `rgba(17,17,17,${alpha})` : 'transparent';
-    drag.style.padding       = alpha > 0 ? '6px 14px' : '4px 10px';
-    drag.style.borderRadius  = alpha > 0 ? '4px' : '';
-    drag.textContent         = _thumbTitle;
+    if (alpha > 0) {
+      drag.style.background   = `rgba(17,17,17,${alpha})`;
+      drag.style.padding      = '6px 14px';
+      drag.style.borderRadius = '4px';
+    } else {
+      drag.style.background   = 'transparent';
+      drag.style.padding      = '4px 10px';
+      drag.style.borderRadius = '';
+    }
+
+    drag.textContent = _thumbTitle;
     const sizeVal = document.getElementById('thumb-size-val');
     if (sizeVal) sizeVal.textContent = _thumbFontSize;
 
@@ -3040,10 +3075,11 @@
     drag.style.top  = (_thumbCanvasTY / 2) + 'px';
   }
 
+  // ── Control change handlers ──
   function setThumbFontSize(val) {
     _thumbFontSize = Math.max(24, Math.min(120, parseInt(val)));
-    const slider = document.getElementById('thumb-size-slider');
-    if (slider) slider.value = _thumbFontSize;
+    const sizeVal = document.getElementById('thumb-size-val');
+    if (sizeVal) sizeVal.textContent = _thumbFontSize;
     updateThumbText();
   }
 
@@ -3054,12 +3090,14 @@
     const custom = document.getElementById('thumb-color-custom');
     if (custom) custom.value = hex;
     updateThumbText();
+    renderThumbCanvas();
   }
 
   function setThumbColorFree(hex) {
     _thumbTextColor = hex;
     document.querySelectorAll('#thumb-state-editor .color-swatch').forEach(b => b.classList.remove('selected'));
     updateThumbText();
+    renderThumbCanvas();
   }
 
   function setThumbOverlay(val) {
@@ -3069,23 +3107,21 @@
     updateThumbText();
   }
 
-  // Drag logic for text overlay
+  // ── Drag logic for text overlay ──
   (function () {
     let dragging = false, startX, startY, origTX, origTY;
 
     document.addEventListener('mousedown', function (e) {
       if (!e.target.closest('#thumb-text-drag')) return;
       dragging = true;
-      startX   = e.clientX;
-      startY   = e.clientY;
-      origTX   = _thumbCanvasTX;
-      origTY   = _thumbCanvasTY;
+      startX = e.clientX; startY = e.clientY;
+      origTX = _thumbCanvasTX; origTY = _thumbCanvasTY;
       e.preventDefault();
     });
 
     document.addEventListener('mousemove', function (e) {
       if (!dragging) return;
-      const dx = (e.clientX - startX) * 2;   // display px → canvas px (2× scale)
+      const dx = (e.clientX - startX) * 2;
       const dy = (e.clientY - startY) * 2;
       _thumbCanvasTX = Math.max(60, Math.min(1220, origTX + dx));
       _thumbCanvasTY = Math.max(40, Math.min(680,  origTY + dy));
@@ -3096,24 +3132,10 @@
       }
     });
 
-    document.addEventListener('mouseup', function () { dragging = false; });
+    document.addEventListener('mouseup', () => { dragging = false; });
   })();
 
-  // Shared word-wrap helper
-  function wrapText(ctx, text, maxW) {
-    const words = (text || '').split(' ');
-    const lines = [];
-    let ln = '';
-    for (const w of words) {
-      const test = (ln ? ln + ' ' : '') + w;
-      if (ctx.measureText(test).width > maxW && ln) { lines.push(ln); ln = w; }
-      else ln = test;
-    }
-    if (ln) lines.push(ln);
-    return lines;
-  }
-
-  // Download PNG — redraw canvas with text, then blob download
+  // ── Download PNG — bake canvas + text into final image ──
   function downloadThumbPNG() {
     const canvas = document.getElementById('thumb-canvas');
     const b64 = _thumbFrames[_thumbSelectedFrame];
@@ -3123,19 +3145,37 @@
     const img = new Image();
     img.onload = function () {
       ctx.clearRect(0, 0, W, H);
-      drawCoverFit(ctx, img, W, H);
-      applyStyleOverlay(ctx, W, H, _thumbStyle);
 
-      // Text background overlay
+      // Cover-fit draw
+      const scale = Math.max(W / img.naturalWidth, H / img.naturalHeight);
+      const sw = img.naturalWidth * scale, sh = img.naturalHeight * scale;
+      ctx.drawImage(img, (W - sw) / 2, (H - sh) / 2, sw, sh);
+
+      applyThumbStyleOverlay(ctx, W, H, _thumbStyle);
+
+      // Dark text background overlay
       if (_thumbOverlayOpacity > 0) {
+        const alpha = _thumbOverlayOpacity / 100;
         ctx.font = `700 ${_thumbFontSize}px ${_thumbFontFamily}, sans-serif`;
-        const lines = wrapText(ctx, _thumbTitle, W * 0.82);
+        const maxW = W * 0.85;
+        const words = (_thumbTitle || '').split(' ');
+        const lines = []; let ln = '';
+        for (const w of words) {
+          const test = (ln ? ln + ' ' : '') + w;
+          if (ctx.measureText(test).width > maxW && ln) { lines.push(ln); ln = w; } else ln = test;
+        }
+        if (ln) lines.push(ln);
         const lineH = _thumbFontSize * 1.25;
-        const boxH  = lines.length * lineH + 28;
-        const boxW  = Math.min(W * 0.88, W * 0.9);
-        ctx.fillStyle = `rgba(17,17,17,${_thumbOverlayOpacity / 100})`;
+        const boxH  = lines.length * lineH + 24;
+        const boxW  = Math.min(maxW + 28, W * 0.9);
+        const boxY  = _thumbCanvasTY - lines.length * lineH / 2 - 12;
+        ctx.fillStyle = `rgba(17,17,17,${alpha})`;
         ctx.beginPath();
-        ctx.roundRect(_thumbCanvasTX - boxW / 2, _thumbCanvasTY - lines.length * lineH / 2 - 14, boxW, boxH, 8);
+        if (ctx.roundRect) {
+          ctx.roundRect(_thumbCanvasTX - boxW / 2, boxY, boxW, boxH, 8);
+        } else {
+          ctx.rect(_thumbCanvasTX - boxW / 2, boxY, boxW, boxH);
+        }
         ctx.fill();
       }
 
@@ -3151,7 +3191,15 @@
       }
       ctx.fillStyle = _thumbTextColor;
       ctx.font = `700 ${_thumbFontSize}px ${_thumbFontFamily}, sans-serif`;
-      const lines = wrapText(ctx, _thumbTitle, W * 0.8);
+
+      const maxW = W * 0.8;
+      const words = (_thumbTitle || '').split(' ');
+      const lines = []; let ln = '';
+      for (const w of words) {
+        const test = (ln ? ln + ' ' : '') + w;
+        if (ctx.measureText(test).width > maxW && ln) { lines.push(ln); ln = w; } else ln = test;
+      }
+      if (ln) lines.push(ln);
       const lineH = _thumbFontSize * 1.25;
       let ty = _thumbCanvasTY - (lines.length - 1) * lineH / 2;
       for (const l of lines) { ctx.fillText(l, _thumbCanvasTX, ty); ty += lineH; }
@@ -3166,6 +3214,20 @@
       }, 'image/png');
     };
     img.src = 'data:image/jpeg;base64,' + b64;
+  }
+
+  // Shared word-wrap helper (still used by dialog canvas code)
+  function wrapText(ctx, text, maxW) {
+    const words = (text || '').split(' ');
+    const lines = [];
+    let ln = '';
+    for (const w of words) {
+      const test = (ln ? ln + ' ' : '') + w;
+      if (ctx.measureText(test).width > maxW && ln) { lines.push(ln); ln = w; }
+      else ln = test;
+    }
+    if (ln) lines.push(ln);
+    return lines;
   }
 
   // ══════════════════════════════════════════

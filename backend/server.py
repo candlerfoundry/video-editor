@@ -233,38 +233,33 @@ def find_json():
     filename = request.json.get('filename', '')
     dropbox_root_local = os.path.join(os.path.expanduser('~'), 'Dropbox')
 
+    print(f'[find_json] Searching for video: {filename}')
+
     # Find the video file anywhere in Dropbox by exact filename
     video_matches = glob_module.glob(
         os.path.join(dropbox_root_local, '**', filename), recursive=True
     )
     if not video_matches:
+        print('[find_json] Video not found in Dropbox')
         return jsonify({'found': False, 'reason': 'Could not locate video in Dropbox'})
 
-    video_dir = os.path.dirname(video_matches[0])
+    video_path = video_matches[0]
+    video_folder = os.path.dirname(video_path)
+    print(f'[find_json] Found video at: {video_path}')
+    print(f'[find_json] Video folder: {video_folder}')
 
-    # Look for Words JSON in the same folder — no naming convention required
-    json_matches = glob_module.glob(os.path.join(video_dir, '*Words*.json'))
-
-    # Fallback: case-insensitive 'words' anywhere in filename
-    if not json_matches:
-        json_matches = [
-            f for f in glob_module.glob(os.path.join(video_dir, '*.json'))
-            if 'words' in os.path.basename(f).lower()
-        ]
-
-    # Last resort: any JSON in the folder
-    if not json_matches:
-        json_matches = glob_module.glob(os.path.join(video_dir, '*.json'))
+    # Search for Words JSON using glob pattern only — no prefix matching
+    json_matches = glob_module.glob(os.path.join(video_folder, '*Transcript (Words).json'))
+    print(f'[find_json] JSON search result (same folder): {json_matches}')
 
     if not json_matches:
-        return jsonify({'found': False, 'reason': 'No transcript JSON found in video folder'})
+        # Try one level up
+        parent = os.path.dirname(video_folder)
+        json_matches = glob_module.glob(os.path.join(parent, '*Transcript (Words).json'))
+        print(f'[find_json] JSON search result (parent folder): {json_matches}')
 
-    # If multiple, pick most similar to video filename
-    if len(json_matches) > 1:
-        video_stem = os.path.splitext(filename)[0].lower()
-        def similarity(path):
-            return sum(1 for c in video_stem if c in os.path.basename(path).lower())
-        json_matches.sort(key=similarity, reverse=True)
+    if not json_matches:
+        return jsonify({'found': False, 'reason': 'No transcript found near this video'})
 
     json_path = json_matches[0]
     with open(json_path, 'r', encoding='utf-8') as f:
@@ -358,20 +353,21 @@ def generate_transcript_upload():
 
 
 # ── Thumbnails ──
-@app.route("/thumbnail", methods=["POST"])
+@app.route('/thumbnail', methods=['POST'])
 def thumbnail():
     """
     Accepts multipart/form-data:
-      file         — MP4 or MOV
-      titles_only  — "1" to skip frame extraction and just redo titles
+      file             — MP4 or MOV
+      titles_only      — "1" to skip frame extraction and just redo titles
+      clip_transcript  — optional clip text to augment title generation
 
     Returns JSON:
-      { "hero_frame": "<base64 JPEG>", "titles": ["...", ...8] }
-      or if titles_only=1: { "titles": [...] }
+      { "frames": ["base64...", ...up to 8], "titles": [...8], "clip_transcript": str }
+      or if titles_only=1: { "titles": [...], "clip_transcript": str }
     """
-    import cv2
     import base64
     from PIL import Image as PILImage
+    import numpy as np
 
     if not FFMPEG_EXE:
         return jsonify({'error': 'ffmpeg not found'}), 500
@@ -391,88 +387,74 @@ def thumbnail():
         input_path = os.path.join(tmp_dir, 'source' + src_ext)
         file.save(input_path)
 
-        # Read API key + Anthropic client (used for both paths)
+        # Read API key + Anthropic client
         api_key_path = os.path.join(os.path.expanduser('~'), 'Dropbox', 'Scripts', 'api_key.txt')
         with open(api_key_path, 'r') as fk:
             api_key = fk.read().strip()
         client = anthropic.Anthropic(api_key=api_key)
 
         if not titles_only:
-            # ── Step A: extract 20 frames (skip first 17 s) with ffmpeg ──
-            cap  = cv2.VideoCapture(input_path)
-            fps  = cap.get(cv2.CAP_PROP_FPS) or 25
-            tot  = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
-            cap.release()
-            duration = (tot / fps) if fps > 0 and tot > 0 else 90
+            # ── Step A: get video duration via ffprobe ──
+            ffprobe_exe = FFMPEG_EXE.replace('ffmpeg.exe', 'ffprobe.exe')
+            if not os.path.isfile(ffprobe_exe):
+                ffprobe_exe = 'ffprobe'
+            probe = subprocess.run(
+                [ffprobe_exe, '-v', 'error', '-show_entries', 'format=duration',
+                 '-of', 'default=noprint_wrappers=1:nokey=1', input_path],
+                capture_output=True, text=True, creationflags=CREATE_NO_WINDOW
+            )
+            try:
+                duration = float(probe.stdout.strip())
+            except Exception:
+                duration = 90.0
 
-            skip     = 17
-            end_ts   = max(skip + 5, duration - 3)
-            usable   = end_ts - skip
+            skip     = 17.0
+            usable   = max(duration - skip - 3.0, 10.0)
             n_sample = 20
-            timestamps = [skip + (i * usable / n_sample) for i in range(n_sample)]
+            timestamps = [skip + i * usable / n_sample for i in range(n_sample)]
 
-            frame_files = []
+            # ── Step B: extract frames via ffmpeg (PIL + numpy only, no OpenCV) ──
+            scored = []
             for i, ts in enumerate(timestamps):
                 fp = os.path.join(tmp_dir, f'frame_{i:03d}.jpg')
                 subprocess.run(
                     [FFMPEG_EXE, '-y', '-ss', str(ts), '-i', input_path,
-                     '-frames:v', '1', '-q:v', '3', fp],
+                     '-frames:v', '1', '-q:v', '2', fp],
                     capture_output=True, creationflags=CREATE_NO_WINDOW
                 )
-                if os.path.isfile(fp):
-                    frame_files.append(fp)
-
-            # ── Load Haar cascade ──
-            face_cascade = cv2.CascadeClassifier(
-                cv2.data.haarcascades + 'haarcascade_frontalface_default.xml'
-            )
-
-            # ── Filter: sharp + face ──
-            good = []   # (sharpness, path)
-            for fp in frame_files:
-                img_cv = cv2.imread(fp)
-                if img_cv is None:
+                if not os.path.isfile(fp):
                     continue
-                gray    = cv2.cvtColor(img_cv, cv2.COLOR_BGR2GRAY)
-                lap_var = cv2.Laplacian(gray, cv2.CV_64F).var()
-                if lap_var < 100:
-                    continue
-                faces = face_cascade.detectMultiScale(
-                    gray, scaleFactor=1.1, minNeighbors=4, minSize=(50, 50)
-                )
-                if len(faces) == 0:
-                    continue
-                good.append((lap_var, fp))
+                try:
+                    img = PILImage.open(fp).convert('L')
+                    arr = np.array(img, dtype=np.float32)
+                    sharpness = float(arr.var())
+                    print(f'[thumbnail] frame {i} ts={ts:.1f}s sharpness={sharpness:.0f}')
+                    scored.append((sharpness, fp))
+                except Exception as fe:
+                    print(f'[thumbnail] frame {i} load error: {fe}')
 
-            # Relax threshold if fewer than 5
-            if len(good) < 5:
-                good = []
-                for fp in frame_files:
-                    img_cv = cv2.imread(fp)
-                    if img_cv is None:
-                        continue
-                    gray    = cv2.cvtColor(img_cv, cv2.COLOR_BGR2GRAY)
-                    lap_var = cv2.Laplacian(gray, cv2.CV_64F).var()
-                    good.append((lap_var, fp))
-                good.sort(reverse=True)
-                good = good[:8]
-
-            if not good:
+            if not scored:
                 return jsonify({"error": "Could not extract usable frames from video"}), 500
 
-            # Sort by sharpness (fallback order) and cap at 8
-            good.sort(reverse=True)
-            good = good[:8]
+            # Sort best-first, cap at 8
+            scored.sort(reverse=True)
+            scored = scored[:8]
 
-            # ── Encode frames as 640×360 JPEG base64 ──
+            # Encode as 640×360 JPEG base64
             frame_b64s = []
-            for _, fp in good:
-                pil = PILImage.open(fp).convert("RGB").resize((640, 360), PILImage.LANCZOS)
-                buf = io.BytesIO()
-                pil.save(buf, "JPEG", quality=85)
-                frame_b64s.append(base64.b64encode(buf.getvalue()).decode())
+            for _, fp in scored:
+                try:
+                    pil = PILImage.open(fp).convert('RGB').resize((640, 360), PILImage.LANCZOS)
+                    buf = io.BytesIO()
+                    pil.save(buf, 'JPEG', quality=85)
+                    frame_b64s.append(base64.b64encode(buf.getvalue()).decode())
+                except Exception as ee:
+                    print(f'[thumbnail] encode error: {ee}')
 
-            # ── Step B: Claude Vision ranking — reorder frame_b64s best-first ──
+            if not frame_b64s:
+                return jsonify({"error": "Frame encoding failed"}), 500
+
+            # ── Step C: Claude Vision ranking — reorder frame_b64s best-first ──
             try:
                 content = []
                 for i, b64 in enumerate(frame_b64s):
@@ -512,9 +494,9 @@ def thumbnail():
                             ordered.append(frame_b64s[idx])
                     frame_b64s = ordered
             except Exception as ve:
-                print(f"Vision ranking failed (using sharpness order): {ve}")
+                print(f'[thumbnail] Vision ranking failed (using sharpness order): {ve}')
 
-        # ── Step C: Whisper tiny + Claude title generation ──
+        # ── Step D: Whisper tiny + Claude title generation ──
         tiny     = get_whisper_tiny()
         w_result = tiny.transcribe(input_path)
         full_transcript = (w_result.get("text") or "")[:3000]
@@ -535,10 +517,9 @@ def thumbnail():
                     "role": "user",
                     "content": (
                         "The Candler Foundry produces faith-based video content for clergy, scholars, "
-                        "and the spiritually curious public. The best thumbnail titles are short, "
-                        "surprising, and emotionally resonant — a question or statement that makes "
-                        "someone stop scrolling. Avoid jargon, church-speak, or academic language. "
-                        "Aim for human, honest, direct.\n\n"
+                        "and the spiritually curious public. The best thumbnail titles are short, surprising, "
+                        "and emotionally resonant — a question or statement that makes someone stop scrolling. "
+                        "Avoid jargon, church-speak, or academic language. Aim for human, honest, direct.\n\n"
                         "Generate exactly 8 title options. Rules:\n"
                         "- MAX 60 characters each — strip any over 60 chars\n"
                         "- Short, punchy, emotionally direct: a provocative question or bold statement\n"
@@ -552,11 +533,11 @@ def thumbnail():
             s = raw.find('['); e = raw.rfind(']')
             if s != -1 and e != -1:
                 parsed = json.loads(raw[s:e+1])
-                titles = [t for t in parsed if len(str(t)) <= 60][:8]
+                titles = [str(t) for t in parsed if len(str(t)) <= 60][:8]
                 if len(titles) < 5:
                     titles = [str(t)[:60] for t in parsed[:8]]
         except Exception as te:
-            print(f"Title generation failed: {te}")
+            print(f'[thumbnail] Title generation failed: {te}')
             titles = ["Add Your Title Here"] * 8
 
         result = {"titles": titles, "clip_transcript": full_transcript}
