@@ -3,6 +3,7 @@ Foundry Video Editor — Local Flask Backend
 Runs on localhost:5000
 """
 
+import glob
 import io
 import os
 import json
@@ -229,44 +230,50 @@ def bare_stem(name):
 
 @app.route('/find_json', methods=['POST'])
 def find_json():
-    import glob as glob_module
-    filename = request.json.get('filename', '')
-    dropbox_root_local = os.path.join(os.path.expanduser('~'), 'Dropbox')
+    data = request.json
+    filename = data.get('filename', '')
+    print(f'[find_json] Looking for video: {filename}')
 
-    print(f'[find_json] Searching for video: {filename}')
+    dropbox_root = os.path.join(os.path.expanduser('~'), 'Dropbox')
+    video_path = None
 
-    # Find the video file anywhere in Dropbox by exact filename
-    video_matches = glob_module.glob(
-        os.path.join(dropbox_root_local, '**', filename), recursive=True
-    )
-    if not video_matches:
-        print('[find_json] Video not found in Dropbox')
-        return jsonify({'found': False, 'reason': 'Could not locate video in Dropbox'})
+    # Walk Dropbox to find video by exact filename
+    for root, dirs, files in os.walk(dropbox_root):
+        if filename in files:
+            video_path = os.path.join(root, filename)
+            break
 
-    video_path = video_matches[0]
+    if not video_path:
+        print(f'[find_json] ERROR: video file not found in Dropbox')
+        return jsonify({'json_found': False, 'error': 'Video file not found in Dropbox'})
+
     video_folder = os.path.dirname(video_path)
     print(f'[find_json] Found video at: {video_path}')
-    print(f'[find_json] Video folder: {video_folder}')
+    print(f'[find_json] Searching folder: {video_folder}')
+    print(f'[find_json] Files in folder: {os.listdir(video_folder)}')
 
-    # Search for Words JSON using glob pattern only — no prefix matching
-    json_matches = glob_module.glob(os.path.join(video_folder, '*Transcript (Words).json'))
-    print(f'[find_json] JSON search result (same folder): {json_matches}')
+    # Search same folder for Words JSON
+    matches = glob.glob(os.path.join(video_folder, '*Transcript (Words).json'))
+    print(f'[find_json] Glob matches in same folder: {matches}')
 
-    if not json_matches:
-        # Try one level up
-        parent = os.path.dirname(video_folder)
-        json_matches = glob_module.glob(os.path.join(parent, '*Transcript (Words).json'))
-        print(f'[find_json] JSON search result (parent folder): {json_matches}')
+    if not matches:
+        # Try parent folder one level up
+        parent_folder = os.path.dirname(video_folder)
+        matches = glob.glob(os.path.join(parent_folder, '*Transcript (Words).json'))
+        print(f'[find_json] Glob matches in parent folder: {matches}')
 
-    if not json_matches:
-        return jsonify({'found': False, 'reason': 'No transcript found near this video'})
+    if not matches:
+        print(f'[find_json] FAILED: no Words JSON found near {video_folder}')
+        return jsonify({'json_found': False, 'error': 'No transcript found near this video'})
 
-    json_path = json_matches[0]
+    json_path = matches[0]
+    print(f'[find_json] SUCCESS: {json_path}')
+
     with open(json_path, 'r', encoding='utf-8') as f:
         content = json.load(f)
 
     return jsonify({
-        'found': True,
+        'json_found': True,
         'json_path': json_path,
         'json_filename': os.path.basename(json_path),
         'json_content': content

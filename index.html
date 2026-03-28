@@ -1826,64 +1826,60 @@
   // Returning users skip the full wizard and see a "reconnecting" state instead.
   const setupComplete = localStorage.getItem('fve_setup_complete') === 'true';
 
-  function setConnected() {
-    if (backendOnline) return;
-    backendOnline = true;
-
-    // Mark setup as complete permanently
-    try { localStorage.setItem('fve_setup_complete', 'true'); } catch (_) {}
-
-    // Update wizard status dot (only visible if wizard is showing for a new user)
-    const wizDot = document.getElementById('wiz-dot');
+  function setConnectionStatus(state) {
+    const hdrDot   = document.getElementById('hdr-dot');
+    const hdrLabel = document.getElementById('hdr-label');
+    const wizDot   = document.getElementById('wiz-dot');
     const wizLabel = document.getElementById('wiz-label');
-    wizDot.className = 'dot connected';
-    wizLabel.textContent = 'Connected!';
-    wizLabel.style.color = '#166534';
 
-    // Update header
-    const hdrDot = document.getElementById('hdr-dot');
-    const hdrLabel = document.getElementById('hdr-label');
-    hdrDot.className = 'dot connected';
-    hdrLabel.textContent = 'Backend connected';
-    hdrLabel.style.color = '#2D6A4F';
+    if (state === 'connected') {
+      // Always update dot and label — no early-return guard
+      hdrDot.className = 'dot connected';
+      hdrLabel.textContent = 'Backend connected';
+      hdrLabel.style.color = '#2D6A4F';
 
-    // Transition views smoothly
-    setTimeout(() => {
-      document.getElementById('setup-view').classList.remove('active');
-      document.getElementById('app-view').classList.add('active');
-    }, 600);
-  }
+      if (!backendOnline) {
+        // First successful connection — one-time setup
+        backendOnline = true;
+        try { localStorage.setItem('fve_setup_complete', 'true'); } catch (_) {}
+        wizDot.className = 'dot connected';
+        wizLabel.textContent = 'Connected!';
+        wizLabel.style.color = '#166534';
+        setTimeout(() => {
+          document.getElementById('setup-view').classList.remove('active');
+          document.getElementById('app-view').classList.add('active');
+        }, 600);
+      }
+    } else {
+      // Always update dot and label
+      hdrDot.className = 'dot waiting';
+      hdrLabel.textContent = 'Connecting\u2026';
+      hdrLabel.style.color = '';
 
-  function setDisconnected() {
-    const hdrDot = document.getElementById('hdr-dot');
-    const hdrLabel = document.getElementById('hdr-label');
-    hdrDot.className = 'dot waiting';
-    hdrLabel.textContent = 'Connecting\u2026';
-    hdrLabel.style.color = '';
-
-    if (backendOnline) {
-      backendOnline = false;
-      // Returning users (setup already done): stay in app-view with header "Connecting…"
-      // Only boot to setup-view for brand new users who have never connected.
-      if (!localStorage.getItem('fve_setup_complete')) {
-        document.getElementById('app-view').classList.remove('active');
-        document.getElementById('setup-view').classList.add('active');
+      if (backendOnline) {
+        backendOnline = false;
+        // Returning users stay in app-view; only new users get booted to wizard
+        if (!localStorage.getItem('fve_setup_complete')) {
+          document.getElementById('app-view').classList.remove('active');
+          document.getElementById('setup-view').classList.add('active');
+        }
       }
     }
   }
 
-  async function checkHealth() {
+  async function pollHealth() {
     try {
-      const ctrl = new AbortController();
-      const timer = setTimeout(() => ctrl.abort(), 3000);
-      const res = await fetch(BACKEND + '/health', { signal: ctrl.signal });
-      clearTimeout(timer);
+      const res = await fetch('http://localhost:5000/health', {
+        signal: AbortSignal.timeout(2500)
+      });
       if (res.ok) {
-        setConnected();
-        return;
+        setConnectionStatus('connected');
+      } else {
+        setConnectionStatus('connecting');
       }
-    } catch (_) {}
-    setDisconnected();
+    } catch {
+      setConnectionStatus('connecting');
+    }
   }
 
   // Initial view: returning users go straight to app-view (backend poll will confirm connection).
@@ -1894,9 +1890,9 @@
     document.getElementById('setup-view').classList.add('active');
   }
 
-  // Poll immediately, then every 3 seconds
-  checkHealth();
-  setInterval(checkHealth, 3000);
+  // Call immediately on load, then every 3 seconds
+  pollHealth();
+  setInterval(pollHealth, 3000);
 
   // Fix 3: global video tracking for #edit-video (listeners set once at init)
   (function () {
@@ -2009,7 +2005,7 @@
         body: JSON.stringify({filename: file.name})
       });
       const data = await res.json();
-      if (data.found) {
+      if (data.json_found) {
         window.clipsWordsData = data.json_content;
         showJsonLoaded(data.json_filename);
         enableFindClips();
