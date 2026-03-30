@@ -63,6 +63,20 @@ print(f'[startup] ffmpeg: {FFMPEG_EXE}', flush=True)
 # ── Thumbnail async job store ──
 thumbnail_jobs = {}  # {job_id: {status, result, error, created_at}}
 
+# ── Video path cache (populated by /find_json, reused by /thumbnail) ──
+video_path_cache = {}  # {filename: full_absolute_path}
+
+
+def find_video_in_dropbox(filename):
+    """Walk Dropbox to find a video file by exact filename. Returns full path or None."""
+    for root, dirs, files in os.walk(dropbox_root):
+        if filename in files:
+            found = os.path.join(root, filename)
+            print(f'[find_video] Found "{filename}" at {found}', flush=True)
+            return found
+    print(f'[find_video] "{filename}" not found in Dropbox', flush=True)
+    return None
+
 # ── Whisper models (loaded once on first use) ──
 _WHISPER_MODEL      = None
 _WHISPER_TINY_MODEL = None
@@ -312,18 +326,22 @@ def find_json():
     filename = data.get('filename', '')
     print(f'[find_json] Looking for video: {filename}')
 
-    dropbox_root = os.path.join(os.path.expanduser('~'), 'Dropbox')
-    video_path = None
+    # Check cache first; fall back to os.walk
+    video_path = video_path_cache.get(filename)
+    if video_path and not os.path.exists(video_path):
+        print(f'[find_json] Cached path stale, re-walking: {video_path}')
+        video_path = None
 
-    # Walk Dropbox to find video by exact filename
-    for root, dirs, files in os.walk(dropbox_root):
-        if filename in files:
-            video_path = os.path.join(root, filename)
-            break
+    if not video_path:
+        video_path = find_video_in_dropbox(filename)
 
     if not video_path:
         print(f'[find_json] ERROR: video file not found in Dropbox')
         return jsonify({'json_found': False, 'error': 'Video file not found in Dropbox'})
+
+    # Cache for later use by /thumbnail and other routes
+    video_path_cache[filename] = video_path
+    print(f'[cache] Stored path for {filename}', flush=True)
 
     video_folder = os.path.dirname(video_path)
     print(f'[find_json] Found video at: {video_path}')
@@ -452,12 +470,18 @@ def _thumbnail_worker(job_id, filename, clipstart, clipend, clip_transcript):
             if age > 600:
                 thumbnail_jobs.pop(jid, None)
 
-        # Find video in Dropbox via os.walk
-        video_path = None
-        for root, dirs, files in os.walk(dropbox_root):
-            if filename in files:
-                video_path = os.path.join(root, filename)
-                break
+        # Check cache first (populated by /find_json); os.walk only as fallback
+        video_path = video_path_cache.get(filename)
+        if video_path and not os.path.exists(video_path):
+            print(f'[thumbnail] Cached path stale, re-walking: {video_path}', flush=True)
+            video_path = None
+
+        if not video_path:
+            print(f'[thumbnail] Cache miss for "{filename}" — searching Dropbox', flush=True)
+            video_path = find_video_in_dropbox(filename)
+            if video_path:
+                video_path_cache[filename] = video_path
+
         if not video_path:
             thumbnail_jobs[job_id] = {
                 'status': 'error',
@@ -1114,4 +1138,4 @@ if __name__ == "__main__":
         print("API key loaded.")
     else:
         print(f"WARNING: API key not found at {API_KEY_PATH}")
-    app.run(host="localhost", port=5000, debug=False)
+    app.run(host="0.0.0.0", port=5000, debug=False, threaded=True)
