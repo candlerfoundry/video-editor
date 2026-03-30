@@ -3,6 +3,7 @@ Foundry Video Editor — Local Flask Backend
 Runs on localhost:5000
 """
 
+import datetime
 import glob
 import io
 import os
@@ -13,6 +14,8 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import threading
+import uuid
 import anthropic
 import whisper
 from flask import Flask, jsonify, request, send_file
@@ -56,6 +59,9 @@ FFMPEG_EXE = find_ffmpeg()
 print(f'[startup] Python: {sys.executable}', flush=True)
 print(f'[startup] Working dir: {os.getcwd()}', flush=True)
 print(f'[startup] ffmpeg: {FFMPEG_EXE}', flush=True)
+
+# ── Thumbnail async job store ──
+thumbnail_jobs = {}  # {job_id: {status, result, error, created_at}}
 
 # ── Whisper models (loaded once on first use) ──
 _WHISPER_MODEL      = None
@@ -431,95 +437,96 @@ def generate_transcript_upload():
     return jsonify({"words": words})
 
 
-# ── Thumbnails ──
-@app.route('/thumbnail', methods=['POST'])
-def thumbnail():
-    """
-    Accepts multipart/form-data:
-      file             — MP4 or MOV
-      titles_only      — "1" to skip frame extraction and just redo titles
-      clip_transcript  — optional clip text to augment title generation
+# ── Thumbnails — async job worker ──
 
-    Returns JSON:
-      { "frames": ["base64...", ...up to 8], "titles": [...8], "clip_transcript": str }
-      or if titles_only=1: { "titles": [...], "clip_transcript": str }
-    """
+def _thumbnail_worker(job_id, filename, clipstart, clipend, clip_transcript):
     import base64
     from PIL import Image as PILImage
     import numpy as np
 
-    if not FFMPEG_EXE:
-        return jsonify({'error': 'ffmpeg not found. Expected at Dropbox\\Scripts\\FFMPEG\\ffmpeg.exe'}), 500
-
-    file = request.files.get("file")
-    if not file:
-        return jsonify({"error": "No file provided"}), 400
-
-    titles_only              = request.form.get("titles_only", "0") == "1"
-    incoming_clip_transcript = request.form.get("clip_transcript", "")
-
-    src_ext    = os.path.splitext(file.filename or 'video.mp4')[1].lower() or '.mp4'
-    tmp_dir    = tempfile.mkdtemp()
-    frame_b64s = None
-
     try:
-        input_path = os.path.join(tmp_dir, 'source' + src_ext)
-        file.save(input_path)
+        # Clean up jobs older than 10 minutes
+        now = datetime.datetime.utcnow()
+        for jid in list(thumbnail_jobs.keys()):
+            age = (now - thumbnail_jobs[jid].get('created_at', now)).total_seconds()
+            if age > 600:
+                thumbnail_jobs.pop(jid, None)
 
-        # Read API key + Anthropic client
-        api_key_path = os.path.join(os.path.expanduser('~'), 'Dropbox', 'Scripts', 'api_key.txt')
-        with open(api_key_path, 'r') as fk:
-            api_key = fk.read().strip()
-        client = anthropic.Anthropic(api_key=api_key)
+        # Find video in Dropbox via os.walk
+        video_path = None
+        for root, dirs, files in os.walk(dropbox_root):
+            if filename in files:
+                video_path = os.path.join(root, filename)
+                break
+        if not video_path:
+            thumbnail_jobs[job_id] = {
+                'status': 'error',
+                'error': f'Video "{filename}" not found in Dropbox',
+            }
+            return
 
-        if not titles_only:
-            # ── Step A: get video duration via ffprobe ──
-            ffprobe_exe = FFMPEG_EXE.replace('ffmpeg.exe', 'ffprobe.exe')
+        print(f'[thumbnail] Job {job_id}: video={video_path}', flush=True)
+
+        tmp_dir = tempfile.mkdtemp()
+        try:
+            # ── Get total duration ──
+            ffprobe_exe = FFMPEG_EXE.replace('ffmpeg.exe', 'ffprobe.exe') if (
+                FFMPEG_EXE and FFMPEG_EXE != 'ffmpeg'
+            ) else 'ffprobe'
             if not os.path.isfile(ffprobe_exe):
                 ffprobe_exe = 'ffprobe'
             probe = subprocess.run(
                 [ffprobe_exe, '-v', 'error', '-show_entries', 'format=duration',
-                 '-of', 'default=noprint_wrappers=1:nokey=1', input_path],
+                 '-of', 'json', video_path],
                 capture_output=True, text=True, creationflags=CREATE_NO_WINDOW
             )
             try:
-                duration = float(probe.stdout.strip())
+                total_duration = float(json.loads(probe.stdout)['format']['duration'])
             except Exception:
-                duration = 90.0
+                total_duration = 90.0
 
-            skip     = 17.0
-            usable   = max(duration - skip - 3.0, 10.0)
+            # FIX 1: spread frames across FULL usable range
+            start_ts = max(17.0, float(clipstart) if clipstart else 0.0)
+            end_ts   = float(clipend) if clipend else total_duration
+            end_ts   = max(start_ts + 5.0, min(end_ts, total_duration - 1.0))
             n_sample = 20
-            timestamps = [skip + i * usable / n_sample for i in range(n_sample)]
+            timestamps = [start_ts + i * (end_ts - start_ts) / (n_sample - 1)
+                          for i in range(n_sample)]
 
-            # ── Step B: extract frames via ffmpeg (PIL + numpy only, no OpenCV) ──
+            print(f'[thumbnail] Job {job_id}: duration={total_duration:.1f}s '
+                  f'range={start_ts:.1f}..{end_ts:.1f}s', flush=True)
+
+            # ── Extract frames ──
             scored = []
             for i, ts in enumerate(timestamps):
                 fp = os.path.join(tmp_dir, f'frame_{i:03d}.jpg')
                 subprocess.run(
-                    [FFMPEG_EXE, '-y', '-ss', str(ts), '-i', input_path,
+                    [FFMPEG_EXE, '-y', '-ss', str(ts), '-i', video_path,
                      '-frames:v', '1', '-q:v', '2', fp],
                     capture_output=True, creationflags=CREATE_NO_WINDOW
                 )
                 if not os.path.isfile(fp):
                     continue
                 try:
-                    img = PILImage.open(fp).convert('L')
-                    arr = np.array(img, dtype=np.float32)
-                    sharpness = float(arr.var())
-                    print(f'[thumbnail] frame {i} ts={ts:.1f}s sharpness={sharpness:.0f}')
+                    img = PILImage.open(fp)
+                    arr = np.array(img.convert('L'), dtype=float)
+                    sharpness = float(np.var(np.gradient(arr)))
+                    print(f'[thumbnail] frame {i} ts={ts:.1f}s sharpness={sharpness:.1f}',
+                          flush=True)
                     scored.append((sharpness, fp))
                 except Exception as fe:
-                    print(f'[thumbnail] frame {i} load error: {fe}')
+                    print(f'[thumbnail] frame {i} error: {fe}', flush=True)
 
             if not scored:
-                return jsonify({"error": "Could not extract usable frames from video"}), 500
+                thumbnail_jobs[job_id] = {
+                    'status': 'error',
+                    'error': 'Could not extract usable frames from video',
+                }
+                return
 
-            # Sort best-first, cap at 8
             scored.sort(reverse=True)
             scored = scored[:8]
 
-            # Encode as 640×360 JPEG base64
             frame_b64s = []
             for _, fp in scored:
                 try:
@@ -528,12 +535,15 @@ def thumbnail():
                     pil.save(buf, 'JPEG', quality=85)
                     frame_b64s.append(base64.b64encode(buf.getvalue()).decode())
                 except Exception as ee:
-                    print(f'[thumbnail] encode error: {ee}')
+                    print(f'[thumbnail] encode error: {ee}', flush=True)
 
             if not frame_b64s:
-                return jsonify({"error": "Frame encoding failed"}), 500
+                thumbnail_jobs[job_id] = {'status': 'error', 'error': 'Frame encoding failed'}
+                return
 
-            # ── Step C: Claude Vision ranking — reorder frame_b64s best-first ──
+            # ── Claude Vision ranking ──
+            api_key_val = read_api_key()
+            client      = anthropic.Anthropic(api_key=api_key_val)
             try:
                 content = []
                 for i, b64 in enumerate(frame_b64s):
@@ -549,52 +559,44 @@ def thumbnail():
                         "Prefer: eyes open and engaged, mouth not wide open mid-word, "
                         "warm/confident expression, good posture, sharp focus. "
                         f"There are {len(frame_b64s)} frames (0-indexed). "
-                        "Return ONLY a JSON array of ALL indices, best first. "
-                        "Example: [2,0,3,1]"
+                        "Return ONLY a JSON array of ALL indices, best first. Example: [2,0,3,1]"
                     )
                 })
                 rank_msg = client.messages.create(
-                    model="claude-sonnet-4-6",
-                    max_tokens=120,
+                    model="claude-sonnet-4-6", max_tokens=120,
                     messages=[{"role": "user", "content": content}]
                 )
                 rank_text = rank_msg.content[0].text.strip()
                 s = rank_text.find('['); e = rank_text.rfind(']')
                 if s != -1 and e != -1:
-                    ranks = json.loads(rank_text[s:e+1])
+                    ranks   = json.loads(rank_text[s:e+1])
                     seen    = set()
                     ordered = []
                     for idx in ranks:
                         if isinstance(idx, int) and 0 <= idx < len(frame_b64s) and idx not in seen:
-                            ordered.append(frame_b64s[idx])
-                            seen.add(idx)
+                            ordered.append(frame_b64s[idx]); seen.add(idx)
                     for idx in range(len(frame_b64s)):
-                        if idx not in seen:
-                            ordered.append(frame_b64s[idx])
+                        if idx not in seen: ordered.append(frame_b64s[idx])
                     frame_b64s = ordered
             except Exception as ve:
-                print(f'[thumbnail] Vision ranking failed (using sharpness order): {ve}')
+                print(f'[thumbnail] Vision ranking failed: {ve}', flush=True)
 
-        # ── Step D: Whisper tiny + Claude title generation ──
-        tiny     = get_whisper_tiny()
-        w_result = tiny.transcribe(input_path)
-        full_transcript = (w_result.get("text") or "")[:3000]
+            # FIX 5: titles from clip_transcript (clip-specific range, sent by frontend)
+            print(f'[thumbnail] clip_transcript length: {len(clip_transcript)}', flush=True)
+            if not clip_transcript:
+                # Fall back: Whisper tiny on the full video
+                tiny       = get_whisper_tiny()
+                w_result   = tiny.transcribe(video_path)
+                clip_transcript = (w_result.get("text") or "")[:3000]
+                print(f'[thumbnail] whisper fallback transcript length: {len(clip_transcript)}',
+                      flush=True)
 
-        titles = []
-        try:
-            context_parts = [f"Full video transcript:\n{full_transcript}"]
-            if incoming_clip_transcript:
-                context_parts.append(
-                    f"Clip transcript (focus segment):\n{incoming_clip_transcript[:1000]}"
-                )
-            context = "\n\n".join(context_parts)
-
-            title_msg = client.messages.create(
-                model="claude-sonnet-4-6",
-                max_tokens=800,
-                messages=[{
-                    "role": "user",
-                    "content": (
+            titles = []
+            try:
+                title_msg = client.messages.create(
+                    model="claude-sonnet-4-6",
+                    max_tokens=800,
+                    messages=[{"role": "user", "content": (
                         "The Candler Foundry produces faith-based video content for clergy, scholars, "
                         "and the spiritually curious public. The best thumbnail titles are short, surprising, "
                         "and emotionally resonant — a question or statement that makes someone stop scrolling. "
@@ -604,28 +606,78 @@ def thumbnail():
                         "- Short, punchy, emotionally direct: a provocative question or bold statement\n"
                         "- No filler phrases, no colons that only pad length\n"
                         "Return ONLY a JSON array of 8 strings, no markdown.\n\n"
-                        f"{context}"
-                    )
-                }]
-            )
-            raw = title_msg.content[0].text.strip()
-            s = raw.find('['); e = raw.rfind(']')
-            if s != -1 and e != -1:
-                parsed = json.loads(raw[s:e+1])
-                titles = [str(t) for t in parsed if len(str(t)) <= 60][:8]
-                if len(titles) < 5:
-                    titles = [str(t)[:60] for t in parsed[:8]]
-        except Exception as te:
-            print(f'[thumbnail] Title generation failed: {te}')
-            titles = ["Add Your Title Here"] * 8
+                        f"Clip transcript ({len(clip_transcript)} chars):\n{clip_transcript}"
+                    )}]
+                )
+                raw = title_msg.content[0].text.strip()
+                s = raw.find('['); e = raw.rfind(']')
+                if s != -1 and e != -1:
+                    parsed = json.loads(raw[s:e+1])
+                    titles = [str(t) for t in parsed if len(str(t)) <= 60][:8]
+                    if len(titles) < 5:
+                        titles = [str(t)[:60] for t in parsed[:8]]
+            except Exception as te:
+                print(f'[thumbnail] Title generation failed: {te}', flush=True)
+                titles = ["Add Your Title Here"] * 8
 
-        result = {"titles": titles, "clip_transcript": full_transcript}
-        if frame_b64s:
-            result["frames"] = frame_b64s
-        return jsonify(result)
+            thumbnail_jobs[job_id] = {
+                'status':     'complete',
+                'result':     {'frames': frame_b64s, 'titles': titles,
+                               'clip_transcript': clip_transcript},
+                'created_at': now,
+            }
 
-    finally:
-        shutil.rmtree(tmp_dir, ignore_errors=True)
+        finally:
+            shutil.rmtree(tmp_dir, ignore_errors=True)
+
+    except Exception as exc:
+        print(f'[thumbnail] Worker exception: {exc}', flush=True)
+        thumbnail_jobs[job_id] = {'status': 'error', 'error': str(exc)}
+
+
+@app.route('/thumbnail', methods=['POST'])
+def thumbnail():
+    """
+    Starts async thumbnail job.
+    Accepts form fields: filename, clipstart, clipend, clip_transcript
+    Returns immediately: {"jobid": "...", "status": "processing"}
+    """
+    if not FFMPEG_EXE:
+        return jsonify({'error': 'ffmpeg not found. Expected at Dropbox\\Scripts\\FFMPEG\\ffmpeg.exe'}), 500
+
+    filename        = request.form.get('filename', '').strip()
+    clipstart       = request.form.get('clipstart', '').strip()
+    clipend         = request.form.get('clipend',   '').strip()
+    clip_transcript = request.form.get('clip_transcript', '')
+
+    if not filename:
+        return jsonify({'error': 'filename is required'}), 400
+
+    job_id = 'thumb' + uuid.uuid4().hex[:8]
+    thumbnail_jobs[job_id] = {
+        'status':     'processing',
+        'created_at': datetime.datetime.utcnow(),
+    }
+    t = threading.Thread(
+        target=_thumbnail_worker,
+        args=(job_id, filename, clipstart, clipend, clip_transcript),
+        daemon=True
+    )
+    t.start()
+    return jsonify({'jobid': job_id, 'status': 'processing'})
+
+
+@app.route('/thumbnailstatus/<jobid>', methods=['GET'])
+def thumbnailstatus(jobid):
+    """Poll thumbnail job status."""
+    job = thumbnail_jobs.get(jobid)
+    if not job:
+        return jsonify({'status': 'error', 'error': 'Job not found'}), 404
+    if job['status'] == 'processing':
+        return jsonify({'status': 'processing'})
+    if job['status'] == 'complete':
+        return jsonify({'status': 'complete', **job['result']})
+    return jsonify({'status': 'error', 'error': job.get('error', 'Unknown error')}), 500
 
 
 # ── Clips ──

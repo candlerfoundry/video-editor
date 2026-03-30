@@ -3,6 +3,6 @@ flask-cors
 openai-whisper
 anthropic
 Pillow
-opencv-python
+numpy
 dropbox
 requests

@@ -645,6 +645,11 @@
     .warm-bar    { background: linear-gradient(135deg, #7a3010 0%, #c84826 60%, #f5a623 100%); }
     .bold-corner { background: linear-gradient(135deg, #1a1a2e 0%, #2d2d5e 100%); }
     .kinetic     { background: linear-gradient(135deg, #0a1628 0%, #1a3a2a 60%, #2a5a1a 100%); }
+    .style-preview-canvas {
+      display: block; width: 100%; height: 64px;
+      border-radius: 6px; margin-bottom: 10px;
+      object-fit: cover;
+    }
 
     /* ─── EDIT CAPTIONS SPECIFIC ─── */
     .caption-toolbar {
@@ -1742,15 +1747,15 @@
               <div class="thumb-control-label" style="margin-bottom:8px;">Style</div>
               <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;">
                 <div class="style-card" id="style-warm_bar" onclick="selectThumbStyle('warm_bar')">
-                  <div class="style-preview warm-bar"></div>
+                  <canvas class="style-preview-canvas" id="style-canvas-warm_bar" width="160" height="90"></canvas>
                   <div class="style-name">Warm Bar</div>
                 </div>
                 <div class="style-card" id="style-bold_corner" onclick="selectThumbStyle('bold_corner')">
-                  <div class="style-preview bold-corner"></div>
+                  <canvas class="style-preview-canvas" id="style-canvas-bold_corner" width="160" height="90"></canvas>
                   <div class="style-name">Bold Corner</div>
                 </div>
                 <div class="style-card" id="style-kinetic_slash" onclick="selectThumbStyle('kinetic_slash')">
-                  <div class="style-preview kinetic"></div>
+                  <canvas class="style-preview-canvas" id="style-canvas-kinetic_slash" width="160" height="90"></canvas>
                   <div class="style-name">Kinetic Slash</div>
                 </div>
               </div>
@@ -2042,6 +2047,7 @@
   let _transcriptWords = [];    // alias kept for transcript highlight helpers
   let savedScrollY     = 0;    // Fix 1: scroll restore
   let activeVideo      = null; // Fix 3: global active video tracker
+  let currentlyPlaying = null; // FIX 4: at-most-one-video-at-a-time
   let origInTime  = 0; // AI-suggested in-point — never overwritten after editor loads
   let origOutTime = 0; // AI-suggested out-point — never overwritten after editor loads
 
@@ -2051,6 +2057,7 @@
     if (_currentStage === 3 && n !== 3) {
       const editVid = document.getElementById('edit-video');
       if (editVid) { editVid.pause(); editVid.currentTime = 0; }
+      if (currentlyPlaying) { currentlyPlaying.pause(); currentlyPlaying = null; }
     }
     _currentStage = n;
     document.getElementById('clips-stage1').style.display = n === 1 ? 'block' : 'none';
@@ -2534,6 +2541,10 @@
       vid.src = URL.createObjectURL(_clipFile);
       vid.load();
       vid.addEventListener('loadedmetadata', () => {
+        if (currentlyPlaying && currentlyPlaying !== vid) {
+          currentlyPlaying.pause(); currentlyPlaying.currentTime = 0;
+        }
+        currentlyPlaying = vid;
         vid.currentTime = p.start ?? 0;
         vid.play();
       }, { once: true });
@@ -2615,6 +2626,10 @@
       }
 
       vid.addEventListener('loadedmetadata', function () {
+        if (currentlyPlaying && currentlyPlaying !== vid) {
+          currentlyPlaying.pause(); currentlyPlaying.currentTime = 0;
+        }
+        currentlyPlaying = vid;
         vid.currentTime = c.start_time ?? 0;
         vid.play().catch(() => {});
         const dur = (c.end_time ?? 0) - (c.start_time ?? 0);
@@ -2686,6 +2701,11 @@
     const video = document.getElementById('edit-video');
     if (!video.src) return;
     if (_playSelTimer) clearTimeout(_playSelTimer);
+    if (currentlyPlaying && currentlyPlaying !== video) {
+      currentlyPlaying.pause();
+      currentlyPlaying.currentTime = 0;
+    }
+    currentlyPlaying = video;
     video.currentTime = editorInTime;
     video.play().catch(() => {});
     const dur = Math.max(0, editorOutTime - editorInTime);
@@ -3070,6 +3090,22 @@
     });
   })();
 
+  // ── Thumbnail async polling helper ──
+  async function pollThumbnailJob(jobId, onComplete, onError) {
+    for (;;) {
+      await new Promise(r => setTimeout(r, 2000));
+      try {
+        const res  = await fetch(BACKEND + '/thumbnailstatus/' + jobId);
+        const data = await res.json();
+        if (data.status === 'complete') { onComplete(data); return; }
+        if (data.status === 'error')    { onError(data.error || 'Unknown error'); return; }
+        // status === 'processing' → keep polling
+      } catch (e) {
+        onError('Poll failed: ' + e.message); return;
+      }
+    }
+  }
+
   function thumbShowState(state) {
     ['upload', 'processing', 'hero', 'editor'].forEach(s => {
       const el = document.getElementById('thumb-state-' + s);
@@ -3092,42 +3128,56 @@
     thumbShowState('processing');
     thumbSetStep(1);
 
-    const t1 = setTimeout(() => thumbSetStep(2), 1500);
-    const t2 = setTimeout(() => thumbSetStep(3), 4500);
+    // Build clip transcript from words data if available
+    let clip_transcript = '';
+    if (_wordsData && editorInTime < editorOutTime) {
+      clip_transcript = _wordsData
+        .filter(w => (w.start ?? 0) < editorOutTime && (w.end ?? w.start ?? 0) >= editorInTime)
+        .map(w => w.word).join(' ').trim();
+    }
 
     const form = new FormData();
-    form.append('file', _thumbFile);
+    form.append('filename',        _thumbFile.name);
+    form.append('clipstart',       editorInTime  > 0 ? String(editorInTime)  : '');
+    form.append('clipend',         editorOutTime > 0 ? String(editorOutTime) : '');
+    form.append('clip_transcript', clip_transcript);
 
+    let jobId;
     try {
-      const res = await fetch(BACKEND + '/thumbnail', { method: 'POST', body: form });
-      clearTimeout(t1); clearTimeout(t2);
-
-      if (!res.ok) {
-        let err = res.statusText;
-        try { const d = await res.json(); err = d.error || err; } catch (_) {}
+      const res  = await fetch(BACKEND + '/thumbnail', { method: 'POST', body: form });
+      const data = await res.json();
+      if (!res.ok || data.error) {
         thumbShowState('upload');
-        alert('Thumbnail generation failed: ' + err);
+        alert('Thumbnail failed: ' + (data.error || res.statusText));
         return;
       }
-
-      const data = await res.json();
-      if (data.error) { thumbShowState('upload'); alert(data.error); return; }
-
-      _thumbFrames        = data.frames || [];
-      _thumbSelectedFrame = 0;
-      _thumbTitles        = data.titles || [];
-
-      thumbSetStep(4);
-      setTimeout(() => {
-        buildThumbHeroState();
-        thumbShowState('hero');
-      }, 400);
-
+      jobId = data.jobid;
     } catch (err) {
-      clearTimeout(t1); clearTimeout(t2);
       thumbShowState('upload');
       alert('Request failed: ' + err.message);
+      return;
     }
+
+    // Step indicators while polling
+    const t1 = setTimeout(() => thumbSetStep(2), 8000);
+    const t2 = setTimeout(() => thumbSetStep(3), 25000);
+
+    pollThumbnailJob(
+      jobId,
+      data => {
+        clearTimeout(t1); clearTimeout(t2);
+        _thumbFrames        = data.frames || [];
+        _thumbSelectedFrame = 0;
+        _thumbTitles        = data.titles || [];
+        thumbSetStep(4);
+        setTimeout(() => { buildThumbHeroState(); thumbShowState('hero'); }, 400);
+      },
+      err => {
+        clearTimeout(t1); clearTimeout(t2);
+        thumbShowState('upload');
+        alert('Thumbnail generation failed: ' + err);
+      }
+    );
   }
 
   function buildThumbHeroState() {
@@ -3145,12 +3195,13 @@
       fg.appendChild(cell);
     });
 
-    // Reset style cards
+    // Reset style cards + render previews
     _thumbStyle = 'warm_bar';
     ['warm_bar', 'bold_corner', 'kinetic_slash'].forEach(s => {
       const el = document.getElementById('style-' + s);
       if (el) el.classList.toggle('selected', s === _thumbStyle);
     });
+    updateStyleCardPreviews(_thumbFrames, _thumbSelectedFrame, 'style-canvas-');
 
     // Title cards — enforce 60-char display cap
     const grid = document.getElementById('thumb-titles-grid');
@@ -3175,6 +3226,7 @@
     document.querySelectorAll('#thumb-frame-grid .frame-cell').forEach((c, i) => {
       c.classList.toggle('selected', i === idx);
     });
+    updateStyleCardPreviews(_thumbFrames, idx, 'style-canvas-');
     // Re-render canvas if editor is open
     const ed = document.getElementById('thumb-state-editor');
     if (ed && ed.style.display !== 'none') renderThumbCanvas();
@@ -3186,6 +3238,7 @@
       const el = document.getElementById('style-' + s);
       if (el) el.classList.toggle('selected', s === style);
     });
+    updateStyleCardPreviews(_thumbFrames, _thumbSelectedFrame, 'style-canvas-');
     const ed = document.getElementById('thumb-state-editor');
     if (ed && ed.style.display !== 'none') renderThumbCanvas();
   }
@@ -3196,20 +3249,30 @@
     btn.disabled = true;
     const origHtml = btn.innerHTML;
     btn.textContent = 'Fetching\u2026';
+    const form = new FormData();
+    form.append('filename',  _thumbFile.name);
+    form.append('clipstart', editorInTime  > 0 ? String(editorInTime)  : '');
+    form.append('clipend',   editorOutTime > 0 ? String(editorOutTime) : '');
     try {
-      const form = new FormData();
-      form.append('file', _thumbFile);
-      const res = await fetch(BACKEND + '/thumbnail', { method: 'POST', body: form });
-      const data = await res.json();
-      if (data.frames && data.frames.length) {
-        _thumbFrames        = data.frames;
-        _thumbSelectedFrame = 0;
-        if (data.titles && data.titles.length) _thumbTitles = data.titles;
-        buildThumbHeroState();
+      const startRes = await fetch(BACKEND + '/thumbnail', { method: 'POST', body: form });
+      const startData = await startRes.json();
+      if (startData.jobid) {
+        pollThumbnailJob(
+          startData.jobid,
+          data => {
+            if (data.frames && data.frames.length) {
+              _thumbFrames = data.frames; _thumbSelectedFrame = 0;
+              if (data.titles && data.titles.length) _thumbTitles = data.titles;
+              buildThumbHeroState();
+            }
+            btn.disabled = false; btn.innerHTML = origHtml;
+          },
+          () => { btn.disabled = false; btn.innerHTML = origHtml; }
+        );
+        return; // btn re-enabled in callbacks
       }
     } catch (_) {}
-    btn.disabled = false;
-    btn.innerHTML = origHtml;
+    btn.disabled = false; btn.innerHTML = origHtml;
   }
 
   async function redoTitles() {
@@ -3218,19 +3281,33 @@
     btn.disabled = true;
     const origHtml = btn.innerHTML;
     btn.textContent = 'Generating\u2026';
+    let clip_transcript = '';
+    if (_wordsData && editorInTime < editorOutTime) {
+      clip_transcript = _wordsData
+        .filter(w => (w.start ?? 0) < editorOutTime && (w.end ?? w.start ?? 0) >= editorInTime)
+        .map(w => w.word).join(' ').trim();
+    }
+    const form = new FormData();
+    form.append('filename',        _thumbFile.name);
+    form.append('clipstart',       editorInTime  > 0 ? String(editorInTime)  : '');
+    form.append('clipend',         editorOutTime > 0 ? String(editorOutTime) : '');
+    form.append('clip_transcript', clip_transcript);
     try {
-      const form = new FormData();
-      form.append('file', _thumbFile);
-      form.append('titles_only', '1');
-      const res = await fetch(BACKEND + '/thumbnail', { method: 'POST', body: form });
-      const data = await res.json();
-      if (data.titles && data.titles.length) {
-        _thumbTitles = data.titles;
-        buildThumbHeroState();
+      const startRes  = await fetch(BACKEND + '/thumbnail', { method: 'POST', body: form });
+      const startData = await startRes.json();
+      if (startData.jobid) {
+        pollThumbnailJob(
+          startData.jobid,
+          data => {
+            if (data.titles && data.titles.length) { _thumbTitles = data.titles; buildThumbHeroState(); }
+            btn.disabled = false; btn.innerHTML = origHtml;
+          },
+          () => { btn.disabled = false; btn.innerHTML = origHtml; }
+        );
+        return;
       }
     } catch (_) {}
-    btn.disabled = false;
-    btn.innerHTML = origHtml;
+    btn.disabled = false; btn.innerHTML = origHtml;
   }
 
   function openThumbEditor() {
@@ -3318,6 +3395,28 @@
 
   // Keep applyStyleOverlay as alias so dialog canvas code still works
   function applyStyleOverlay(ctx, W, H, style) { applyThumbStyleOverlay(ctx, W, H, style); }
+
+  // ── Style card previews: draw selected frame + each style overlay on mini canvases ──
+  function updateStyleCardPreviews(frames, selectedIdx, prefix) {
+    const b64 = (frames || _thumbFrames)[selectedIdx !== undefined ? selectedIdx : _thumbSelectedFrame];
+    if (!b64) return;
+    const styles = ['warm_bar', 'bold_corner', 'kinetic_slash'];
+    const W = 160, H = 90;
+    styles.forEach(style => {
+      const cv = document.getElementById((prefix || 'style-canvas-') + style);
+      if (!cv) return;
+      const ctx = cv.getContext('2d');
+      const img = new Image();
+      img.onload = function () {
+        ctx.clearRect(0, 0, W, H);
+        const scale = Math.max(W / img.naturalWidth, H / img.naturalHeight);
+        const sw = img.naturalWidth * scale, sh = img.naturalHeight * scale;
+        ctx.drawImage(img, (W - sw) / 2, (H - sh) / 2, sw, sh);
+        applyThumbStyleOverlay(ctx, W, H, style);
+      };
+      img.src = 'data:image/jpeg;base64,' + b64;
+    });
+  }
 
   // Keep drawCoverFit as alias so dialog canvas code still works
   function drawCoverFit(ctx, img, W, H) {
@@ -3609,29 +3708,45 @@
 
   async function dlgGenerateThumbnail() {
     if (!_thumbFile || !backendOnline) return;
-    const t1 = setTimeout(() => dlgSetStep(2), 1500);
-    const t2 = setTimeout(() => dlgSetStep(3), 4500);
-    const form = new FormData();
-    form.append('file', _thumbFile);
-    try {
-      const res = await fetch(BACKEND + '/thumbnail', { method: 'POST', body: form });
-      clearTimeout(t1); clearTimeout(t2);
-      if (!res.ok) {
-        let err = res.statusText;
-        try { const d = await res.json(); err = d.error || err; } catch (_) {}
-        closeThumbDialog(); alert('Thumbnail generation failed: ' + err); return;
-      }
-      const data = await res.json();
-      if (data.error) { closeThumbDialog(); alert(data.error); return; }
-      _dlgFrames        = data.frames || [];
-      _dlgSelectedFrame = 0;
-      _thumbTitles      = data.titles || [];
-      dlgSetStep(4);
-      setTimeout(() => { dlgBuildHeroState(); dlgShowState('hero'); }, 400);
-    } catch (err) {
-      clearTimeout(t1); clearTimeout(t2);
-      closeThumbDialog(); alert('Thumbnail request failed: ' + err.message);
+    let clip_transcript = '';
+    if (_wordsData && editorInTime < editorOutTime) {
+      clip_transcript = _wordsData
+        .filter(w => (w.start ?? 0) < editorOutTime && (w.end ?? w.start ?? 0) >= editorInTime)
+        .map(w => w.word).join(' ').trim();
     }
+    const form = new FormData();
+    form.append('filename',        _thumbFile.name);
+    form.append('clipstart',       editorInTime  > 0 ? String(editorInTime)  : '');
+    form.append('clipend',         editorOutTime > 0 ? String(editorOutTime) : '');
+    form.append('clip_transcript', clip_transcript);
+    let jobId;
+    try {
+      const res  = await fetch(BACKEND + '/thumbnail', { method: 'POST', body: form });
+      const data = await res.json();
+      if (!res.ok || data.error) {
+        closeThumbDialog(); alert('Thumbnail failed: ' + (data.error || res.statusText)); return;
+      }
+      jobId = data.jobid;
+    } catch (err) {
+      closeThumbDialog(); alert('Thumbnail request failed: ' + err.message); return;
+    }
+    const t1 = setTimeout(() => dlgSetStep(2), 8000);
+    const t2 = setTimeout(() => dlgSetStep(3), 25000);
+    pollThumbnailJob(
+      jobId,
+      data => {
+        clearTimeout(t1); clearTimeout(t2);
+        _dlgFrames        = data.frames || [];
+        _dlgSelectedFrame = 0;
+        _thumbTitles      = data.titles || [];
+        dlgSetStep(4);
+        setTimeout(() => { dlgBuildHeroState(); dlgShowState('hero'); }, 400);
+      },
+      err => {
+        clearTimeout(t1); clearTimeout(t2);
+        closeThumbDialog(); alert('Thumbnail generation failed: ' + err);
+      }
+    );
   }
 
   function dlgBuildHeroState() {
@@ -3656,6 +3771,7 @@
       const el = document.getElementById('dlg-style-' + s);
       if (el) el.classList.toggle('selected', s === _dlgStyle);
     });
+    updateStyleCardPreviews(_dlgFrames, _dlgSelectedFrame, 'dlg-style-canvas-');
     const grid = document.getElementById('dlg-titles-grid');
     grid.innerHTML = '';
     _thumbTitles.forEach(t => {
@@ -3677,6 +3793,7 @@
     document.querySelectorAll('#dlg-frame-grid .frame-cell').forEach((c, i) => {
       c.classList.toggle('selected', i === idx);
     });
+    updateStyleCardPreviews(_dlgFrames, idx, 'dlg-style-canvas-');
     if (document.getElementById('dlg-state-editor').style.display !== 'none') dlgDrawCanvas();
   }
 
@@ -3684,16 +3801,27 @@
     if (!_thumbFile || !backendOnline) return;
     const btn = document.getElementById('dlg-btn-redo-frames');
     btn.disabled = true; const orig = btn.innerHTML; btn.textContent = 'Fetching\u2026';
+    const form = new FormData();
+    form.append('filename',  _thumbFile.name);
+    form.append('clipstart', editorInTime  > 0 ? String(editorInTime)  : '');
+    form.append('clipend',   editorOutTime > 0 ? String(editorOutTime) : '');
     try {
-      const form = new FormData();
-      form.append('file', _thumbFile);
-      const res = await fetch(BACKEND + '/thumbnail', { method: 'POST', body: form });
-      const data = await res.json();
-      if (data.frames && data.frames.length) {
-        _dlgFrames        = data.frames;
-        _dlgSelectedFrame = 0;
-        if (data.titles && data.titles.length) _thumbTitles = data.titles;
-        dlgBuildHeroState();
+      const startRes  = await fetch(BACKEND + '/thumbnail', { method: 'POST', body: form });
+      const startData = await startRes.json();
+      if (startData.jobid) {
+        pollThumbnailJob(
+          startData.jobid,
+          data => {
+            if (data.frames && data.frames.length) {
+              _dlgFrames = data.frames; _dlgSelectedFrame = 0;
+              if (data.titles && data.titles.length) _thumbTitles = data.titles;
+              dlgBuildHeroState();
+            }
+            btn.disabled = false; btn.innerHTML = orig;
+          },
+          () => { btn.disabled = false; btn.innerHTML = orig; }
+        );
+        return;
       }
     } catch (_) {}
     btn.disabled = false; btn.innerHTML = orig;
@@ -3705,6 +3833,7 @@
       const el = document.getElementById('dlg-style-' + s);
       if (el) el.classList.toggle('selected', s === style);
     });
+    updateStyleCardPreviews(_dlgFrames, _dlgSelectedFrame, 'dlg-style-canvas-');
     if (document.getElementById('dlg-state-editor').style.display !== 'none') dlgDrawCanvas();
   }
 
@@ -3712,12 +3841,31 @@
     if (!_thumbFile || !backendOnline) return;
     const btn = document.getElementById('dlg-btn-redo-titles');
     btn.disabled = true; const orig = btn.innerHTML; btn.textContent = 'Generating\u2026';
+    let clip_transcript = '';
+    if (_wordsData && editorInTime < editorOutTime) {
+      clip_transcript = _wordsData
+        .filter(w => (w.start ?? 0) < editorOutTime && (w.end ?? w.start ?? 0) >= editorInTime)
+        .map(w => w.word).join(' ').trim();
+    }
+    const form = new FormData();
+    form.append('filename',        _thumbFile.name);
+    form.append('clipstart',       editorInTime  > 0 ? String(editorInTime)  : '');
+    form.append('clipend',         editorOutTime > 0 ? String(editorOutTime) : '');
+    form.append('clip_transcript', clip_transcript);
     try {
-      const form = new FormData();
-      form.append('file', _thumbFile); form.append('titles_only', '1');
-      const res = await fetch(BACKEND + '/thumbnail', { method: 'POST', body: form });
-      const data = await res.json();
-      if (data.titles && data.titles.length) { _thumbTitles = data.titles; dlgBuildHeroState(); }
+      const startRes  = await fetch(BACKEND + '/thumbnail', { method: 'POST', body: form });
+      const startData = await startRes.json();
+      if (startData.jobid) {
+        pollThumbnailJob(
+          startData.jobid,
+          data => {
+            if (data.titles && data.titles.length) { _thumbTitles = data.titles; dlgBuildHeroState(); }
+            btn.disabled = false; btn.innerHTML = orig;
+          },
+          () => { btn.disabled = false; btn.innerHTML = orig; }
+        );
+        return;
+      }
     } catch (_) {}
     btn.disabled = false; btn.innerHTML = orig;
   }
@@ -4184,13 +4332,13 @@
           <div class="thumb-control-label" style="margin-bottom:8px;">Style</div>
           <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;">
             <div class="style-card" id="dlg-style-warm_bar" onclick="dlgSelectStyle('warm_bar')">
-              <div class="style-preview warm-bar"></div><div class="style-name">Warm Bar</div>
+              <canvas class="style-preview-canvas" id="dlg-style-canvas-warm_bar" width="160" height="90"></canvas><div class="style-name">Warm Bar</div>
             </div>
             <div class="style-card" id="dlg-style-bold_corner" onclick="dlgSelectStyle('bold_corner')">
-              <div class="style-preview bold-corner"></div><div class="style-name">Bold Corner</div>
+              <canvas class="style-preview-canvas" id="dlg-style-canvas-bold_corner" width="160" height="90"></canvas><div class="style-name">Bold Corner</div>
             </div>
             <div class="style-card" id="dlg-style-kinetic_slash" onclick="dlgSelectStyle('kinetic_slash')">
-              <div class="style-preview kinetic"></div><div class="style-name">Kinetic Slash</div>
+              <canvas class="style-preview-canvas" id="dlg-style-canvas-kinetic_slash" width="160" height="90"></canvas><div class="style-name">Kinetic Slash</div>
             </div>
           </div>
         </div>
