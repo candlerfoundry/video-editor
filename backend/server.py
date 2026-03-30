@@ -623,40 +623,40 @@ def thumbnail():
 
 
 # ── Clips ──
-@app.route('/clips', methods=['POST'])
-def find_clips():
-    try:
-        data = request.json
-        transcript = data.get('transcript', '')
+def _parse_claude_json(raw):
+    """Strip markdown fences and extract the first JSON array from a Claude response."""
+    raw = re.sub(r'^```json\s*', '', raw, flags=re.MULTILINE)
+    raw = re.sub(r'^```\s*', '', raw, flags=re.MULTILINE)
+    raw = re.sub(r'```\s*$', '', raw, flags=re.MULTILINE)
+    raw = raw.strip()
+    start = raw.find('[')
+    end   = raw.rfind(']')
+    if start != -1 and end != -1:
+        raw = raw[start:end+1]
+    return json.loads(raw)
 
-        if not transcript or len(transcript) < 10:
-            return jsonify({'error': 'Transcript too short', 'candidates': []})
 
-        # transcript is already a pre-formatted timestamped string from the frontend:
-        # "[0.0] word [0.4] another [0.9] word ..."
-        transcript_text = transcript if isinstance(transcript, str) else ' '.join(str(w) for w in transcript)
+def _call_clips_claude(transcript_text, client):
+    """Call Claude for viral clip detection. Returns raw list of candidate dicts."""
+    message = client.messages.create(
+        model="claude-sonnet-4-6",
+        max_tokens=3000,
+        messages=[{
+            "role": "user",
+            "content": f"""You are an expert short-form video editor for The Candler Foundry at Emory University — a theological continuing education program that equips church leaders, seminary alumni, and ministry practitioners with faith-grounded, academically rigorous content. Content comes from TheoEd talks, podcast interviews, and teaching sessions featuring pastors, professors, and faith leaders.
 
-        # Log what we received
-        print(f"Transcript length: {len(transcript_text)} chars")
-        print(f"Transcript preview: {transcript_text[:200]}")
-
-        api_key_path = os.path.join(os.path.expanduser('~'), 'Dropbox', 'Scripts', 'api_key.txt')
-        with open(api_key_path, 'r') as f:
-            api_key = f.read().strip()
-
-        client = anthropic.Anthropic(api_key=api_key)
-
-        message = client.messages.create(
-            model="claude-sonnet-4-6",
-            max_tokens=3000,
-            messages=[{
-                "role": "user",
-                "content": f"""You are an expert short-form video editor for a faith-based educational media organization called The Candler Foundry at Emory University. Your job is to find the best clip moments from theological talks and personal testimonials for Instagram Reels, YouTube Shorts, and TikTok.
+Your job is to find viral-worthy clip moments from these theological talks and personal testimonials for Instagram Reels, YouTube Shorts, and TikTok.
 
 The transcript below uses the format: [timestamp_in_seconds] word [timestamp] word ...
 Use these timestamps directly as start_time and end_time values — do not calculate or estimate them.
 
-WHAT PERFORMS WELL ON THESE PLATFORMS for this content type:
+HARD CONSTRAINT — CLIP DURATION (non-negotiable):
+Every clip MUST be between 30 and 90 seconds long (duration = end_time - start_time).
+- Clips shorter than 30 seconds: DO NOT include — too brief for meaningful theological content
+- Clips longer than 90 seconds: DO NOT include — too long for short-form platforms
+- Ideal sweet spot: 45–75 seconds
+
+WHAT PERFORMS WELL ON THESE PLATFORMS for Candler Foundry content:
 - Personal turning points: a moment where someone's faith, perspective, or life changed
 - Surprising or counterintuitive statements about God, Scripture, or spiritual life
 - Vulnerable admissions or honest struggles ("I used to think...", "I never expected...")
@@ -680,13 +680,149 @@ DIVERSITY RULE — this is critical:
 Return ONLY a valid JSON array. No markdown, no code fences, no explanation. Start with [ and end with ].
 
 Each object must have exactly these fields:
-- start_time: float (copy the timestamp number directly from the transcript — e.g. if the segment starts at [143.2], use 143.2)
+- start_time: float (copy the timestamp number directly from the transcript)
 - end_time: float (timestamp of the last word in the segment)
+- duration: float (end_time - start_time, rounded to 1 decimal — MUST be 30.0–90.0)
 - hook_score: integer 1-10 (10 = most likely to stop a scroll)
-- hook_line: string (the single most compelling sentence in this segment, quoted verbatim from the transcript)
+- hook_line: string (the single most compelling sentence in this segment, quoted verbatim)
 - why_it_works: string (1 sentence — name the specific technique: vulnerability, surprise, strong hook, emotional peak, etc.)
 
-Find 8 clips. Rank by hook_score descending.
+Find 8 clips, all between 30 and 90 seconds. Rank by hook_score descending.
+
+Transcript:
+{transcript_text}"""
+        }]
+    )
+    raw = message.content[0].text.strip()
+    print(f"[clips] Claude raw (first 300 chars): {raw[:300]}")
+    return _parse_claude_json(raw)
+
+
+@app.route('/clips', methods=['POST'])
+def find_clips():
+    try:
+        data = request.json
+        transcript = data.get('transcript', '')
+
+        if not transcript or len(transcript) < 10:
+            return jsonify({'error': 'Transcript too short', 'candidates': []})
+
+        # transcript is a pre-formatted timestamped string: "[0.0] word [0.4] another ..."
+        transcript_text = transcript if isinstance(transcript, str) else ' '.join(str(w) for w in transcript)
+        print(f"[clips] Transcript length: {len(transcript_text)} chars")
+        print(f"[clips] Preview: {transcript_text[:200]}")
+
+        api_key_path = os.path.join(os.path.expanduser('~'), 'Dropbox', 'Scripts', 'api_key.txt')
+        with open(api_key_path, 'r') as f:
+            api_key = f.read().strip()
+
+        client = anthropic.Anthropic(api_key=api_key)
+
+        # Retry loop: require ≥ 3 clips with valid duration (25–95s) before returning
+        valid = []
+        MAX_RETRIES = 3
+        for attempt in range(MAX_RETRIES):
+            try:
+                candidates = _call_clips_claude(transcript_text, client)
+            except Exception as ce:
+                print(f"[clips] Attempt {attempt+1} Claude call failed: {ce}")
+                candidates = []
+
+            valid = [
+                c for c in candidates
+                if 25 <= (c.get('end_time', 0) - c.get('start_time', 0)) <= 95
+            ]
+            print(f"[clips] Attempt {attempt+1}: {len(candidates)} total, {len(valid)} valid (25-95s)")
+
+            if len(valid) >= 3:
+                break
+            if attempt < MAX_RETRIES - 1:
+                print(f"[clips] Too few valid clips — retrying...")
+
+        return jsonify({'candidates': valid})
+
+    except Exception as e:
+        print(f"ERROR in /clips: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({'error': str(e), 'candidates': []})
+
+
+# ── Sequential Split ──
+@app.route('/split', methods=['POST'])
+def split_video():
+    """
+    Divides a transcript into sequential 30-90s parts ending at natural pauses.
+
+    Request JSON:
+      transcript  — pre-formatted timestamped string "[0.0] word [0.4] word ..."
+      n_parts     — optional int (2-6); Claude chooses if omitted
+
+    Returns:
+      { parts: [{part, start, end, duration, label, hook}] }
+    """
+    try:
+        data = request.json
+        transcript = data.get('transcript', '')
+        n_parts    = data.get('n_parts')  # may be None, int, or string
+
+        if not transcript or len(transcript) < 10:
+            return jsonify({'error': 'Transcript too short', 'parts': []})
+
+        transcript_text = transcript if isinstance(transcript, str) else ' '.join(str(w) for w in transcript)
+        print(f"[split] Transcript length: {len(transcript_text)} chars")
+
+        # Validate n_parts
+        if n_parts is not None:
+            try:
+                n_parts = int(n_parts)
+                n_parts = max(2, min(6, n_parts))
+            except (ValueError, TypeError):
+                n_parts = None
+
+        api_key_path = os.path.join(os.path.expanduser('~'), 'Dropbox', 'Scripts', 'api_key.txt')
+        with open(api_key_path, 'r') as f:
+            api_key = f.read().strip()
+
+        client = anthropic.Anthropic(api_key=api_key)
+
+        n_instruction = (
+            f"Divide into exactly {n_parts} sequential parts."
+            if n_parts else
+            "Choose the ideal number of sequential parts (between 2 and 6, whichever gives the most natural 45-60s segments)."
+        )
+
+        message = client.messages.create(
+            model="claude-sonnet-4-6",
+            max_tokens=2000,
+            messages=[{
+                "role": "user",
+                "content": f"""You are an expert video editor for The Candler Foundry at Emory University — a theological continuing education program producing content for church leaders and ministry practitioners.
+
+Your task is to divide this theological talk into sequential parts for a multi-part social media series.
+
+{n_instruction}
+
+RULES:
+- Parts are sequential — Part 1 covers the beginning, Part 2 the next section, etc. No overlap.
+- Each part must be 30-90 seconds long (ideal: 45-60 seconds). duration = end - start.
+- End each part at a natural pause, sentence end, or topic transition — never mid-sentence.
+- Give each part a short descriptive label (3-6 words) that captures the idea of that segment.
+- Provide a hook sentence — the most compelling line from that segment, quoted verbatim from the transcript.
+- Together the parts should cover the best portion of the talk (you don't need to use the whole video).
+
+The transcript uses the format: [timestamp_in_seconds] word [timestamp] word ...
+Copy timestamps directly — do not calculate or estimate.
+
+Return ONLY a valid JSON array. No markdown, no code fences, no explanation. Start with [ and end with ].
+
+Each object must have exactly these fields:
+- part: integer (1, 2, 3, ...)
+- start: float (timestamp in seconds, copied directly from transcript)
+- end: float (timestamp in seconds, copied directly from transcript)
+- duration: float (end - start, rounded to 1 decimal — MUST be 30.0–90.0)
+- label: string (3-6 word title for this segment)
+- hook: string (most compelling verbatim sentence from this segment)
 
 Transcript:
 {transcript_text}"""
@@ -694,29 +830,20 @@ Transcript:
         )
 
         raw = message.content[0].text.strip()
-        print(f"Claude raw response (first 300 chars): {raw[:300]}")
+        print(f"[split] Claude raw (first 300 chars): {raw[:300]}")
+        parts = _parse_claude_json(raw)
+        print(f"[split] Parsed {len(parts)} parts")
 
-        # Strip any markdown code fences defensively
-        raw = re.sub(r'^```json\s*', '', raw, flags=re.MULTILINE)
-        raw = re.sub(r'^```\s*', '', raw, flags=re.MULTILINE)
-        raw = re.sub(r'```\s*$', '', raw, flags=re.MULTILINE)
-        raw = raw.strip()
+        # Sort by part number to guarantee order
+        parts.sort(key=lambda p: p.get('part', 0))
 
-        # Find the JSON array even if there's extra text around it
-        start = raw.find('[')
-        end = raw.rfind(']')
-        if start != -1 and end != -1:
-            raw = raw[start:end+1]
-
-        candidates = json.loads(raw)
-        print(f"Parsed {len(candidates)} candidates")
-        return jsonify({'candidates': candidates})
+        return jsonify({'parts': parts})
 
     except Exception as e:
-        print(f"ERROR in /clips: {e}")
+        print(f"ERROR in /split: {e}")
         import traceback
         traceback.print_exc()
-        return jsonify({'error': str(e), 'candidates': []})
+        return jsonify({'error': str(e), 'parts': []})
 
 
 # ── Export Clip ──
