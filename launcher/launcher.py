@@ -41,13 +41,14 @@ class LauncherApp:
     def __init__(self, root):
         self.root = root
         self.proc = None
+        self._stderr_lines = []
         self._build_window()
         self._build_ui()
         threading.Thread(target=self._launch_sequence, daemon=True).start()
 
     def _build_window(self):
         self.root.title('Foundry Video Editor')
-        self.root.geometry('320x420')
+        self.root.geometry('360x500')
         self.root.resizable(False, False)
         self.root.configure(bg=BG)
         self.root.protocol('WM_DELETE_WINDOW', self._on_close)
@@ -94,8 +95,9 @@ class LauncherApp:
         )
         self._status_label.pack(side=tk.LEFT)
 
-        btn_frame = tk.Frame(self.root, bg=BG)
-        btn_frame.pack(pady=(44, 0), padx=20, fill=tk.X)
+        self._btn_frame = tk.Frame(self.root, bg=BG)
+        self._btn_frame.pack(pady=(44, 0), padx=20, fill=tk.X)
+        btn_frame = self._btn_frame
 
         self._btn = tk.Button(
             btn_frame,
@@ -117,7 +119,7 @@ class LauncherApp:
 
         self._log = tk.Text(
             log_frame,
-            height=4,
+            height=10,
             bg=LOG_BG,
             fg=MUTED,
             font=('Courier', 10),
@@ -152,6 +154,40 @@ class LauncherApp:
 
     def _enable_btn(self):
         self.root.after(0, lambda: self._btn.config(state=tk.NORMAL))
+
+    def _read_stderr(self, proc):
+        """Daemon thread: read stderr line by line into buffer and log widget."""
+        try:
+            for raw_line in proc.stderr:
+                line = raw_line.decode('utf-8', errors='replace').rstrip()
+                if line:
+                    self._stderr_lines.append(line)
+                    self._log_line(line)
+        except Exception:
+            pass
+
+    def _show_copy_error_btn(self):
+        """Dynamically add a Copy Error button below the main action button."""
+        def _do():
+            copy_btn = tk.Button(
+                self._btn_frame,
+                text='Copy Error',
+                bg='#333333',
+                fg=WHITE,
+                activebackground='#444444',
+                font=('Arial', 11),
+                height=1,
+                relief=tk.FLAT,
+                cursor='hand2',
+                command=self._copy_error_to_clipboard,
+            )
+            copy_btn.pack(fill=tk.X, pady=(8, 0))
+        self.root.after(0, _do)
+
+    def _copy_error_to_clipboard(self):
+        text = '\n'.join(self._stderr_lines[-20:])
+        self.root.clipboard_clear()
+        self.root.clipboard_append(text)
 
     def _launch_sequence(self):
         server_path = self._find_server()
@@ -188,7 +224,7 @@ class LauncherApp:
             self.proc = subprocess.Popen(
                 [python_exe, server_path],
                 stdout=subprocess.PIPE,
-                stderr=subprocess.STDOUT,
+                stderr=subprocess.PIPE,
                 creationflags=0x08000000,
             )
         except Exception as e:
@@ -196,14 +232,29 @@ class LauncherApp:
             self._log_line(f'[launcher] Failed to start: {e}')
             return
 
+        # Start daemon thread to capture stderr continuously
+        threading.Thread(target=self._read_stderr, args=(self.proc,), daemon=True).start()
+
+        # Wait 2 seconds then check if process is still alive
+        time.sleep(2)
+        if self.proc.poll() is not None:
+            self._set_status('Backend failed to start — see error below', DOT_RED)
+            tail = self._stderr_lines[-20:] or ['(no stderr output captured)']
+            for line in tail:
+                self._log_line(line)
+            self._show_copy_error_btn()
+            return
+
+        # Process still alive — poll health endpoint for up to 15 seconds
         deadline = time.time() + 15
         while time.time() < deadline:
             if self.proc.poll() is not None:
-                output = self.proc.stdout.read().decode('utf-8', errors='replace')
-                lines = [l.strip() for l in output.splitlines() if l.strip()]
-                self._set_status('Error — see below', DOT_RED)
-                for line in lines[-3:]:
+                self._set_status('Backend failed to start — see error below', DOT_RED)
+                time.sleep(0.3)  # let stderr reader catch up
+                tail = self._stderr_lines[-20:] or ['(no stderr output captured)']
+                for line in tail:
                     self._log_line(line)
+                self._show_copy_error_btn()
                 return
 
             try:
@@ -218,15 +269,12 @@ class LauncherApp:
 
             time.sleep(0.5)
 
-        self._set_status('Error — see below', DOT_RED)
-        self._log_line('[launcher] Backend did not start in 15s.')
-        try:
-            chunk = self.proc.stdout.read1(4096).decode('utf-8', errors='replace')
-            for line in chunk.splitlines()[-3:]:
-                if line.strip():
-                    self._log_line(line.strip())
-        except Exception:
-            pass
+        self._set_status('Backend failed to start — see error below', DOT_RED)
+        self._log_line('[launcher] Backend did not respond within 15s.')
+        tail = self._stderr_lines[-20:] or ['(no stderr output captured)']
+        for line in tail:
+            self._log_line(line)
+        self._show_copy_error_btn()
 
     def _find_server(self):
         if getattr(sys, 'frozen', False):

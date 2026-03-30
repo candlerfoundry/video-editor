@@ -11,6 +11,7 @@ import platform
 import re
 import shutil
 import subprocess
+import sys
 import tempfile
 import anthropic
 import whisper
@@ -31,25 +32,30 @@ API_KEY_PATH = os.path.join(dropbox_root, 'Scripts', 'api_key.txt')
 
 def find_ffmpeg():
     candidates = [
-        os.path.join(dropbox_root, 'Scripts', 'FFMPEG', 'ffmpeg.exe'),
-        os.path.join(dropbox_root, 'Scripts', 'FFMPEG', 'bin', 'ffmpeg.exe'),
-        os.path.join(dropbox_root, 'FFMPEG', 'ffmpeg.exe'),
-        os.path.join(dropbox_root, 'ffmpeg', 'bin', 'ffmpeg.exe'),
-        'ffmpeg',
+        os.path.join(os.path.expanduser('~'), 'Dropbox', 'Scripts', 'FFMPEG', 'ffmpeg.exe'),
+        os.path.join(os.path.expanduser('~'), 'Dropbox', 'FFMPEG', 'ffmpeg.exe'),
+        os.path.join(os.path.expanduser('~'), 'Dropbox', 'Scripts', 'FFMPEG', 'bin', 'ffmpeg.exe'),
+        'ffmpeg',  # system PATH fallback
     ]
     for path in candidates:
         try:
-            result = subprocess.run([path, '-version'], capture_output=True,
-                timeout=5, creationflags=CREATE_NO_WINDOW)
+            result = subprocess.run(
+                [path, '-version'], capture_output=True, timeout=5,
+                creationflags=CREATE_NO_WINDOW
+            )
             if result.returncode == 0:
-                print(f'[ffmpeg] Found at: {path}')
+                print(f'[ffmpeg] Found at: {path}', flush=True)
                 return path
         except Exception:
             continue
-    print('[ffmpeg] ERROR: ffmpeg not found in any expected location')
+    print('[ffmpeg] ERROR: ffmpeg not found in any expected location', flush=True)
     return None
 
 FFMPEG_EXE = find_ffmpeg()
+
+print(f'[startup] Python: {sys.executable}', flush=True)
+print(f'[startup] Working dir: {os.getcwd()}', flush=True)
+print(f'[startup] ffmpeg: {FFMPEG_EXE}', flush=True)
 
 # ── Whisper models (loaded once on first use) ──
 _WHISPER_MODEL      = None
@@ -177,7 +183,7 @@ def caption():
     Returns the captioned MP4 as a download.
     """
     if not FFMPEG_EXE:
-        return jsonify({'error': 'ffmpeg not found'}), 500
+        return jsonify({'error': 'ffmpeg not found. Expected at Dropbox\\Scripts\\FFMPEG\\ffmpeg.exe'}), 500
 
     file = request.files.get("file")
     if not file:
@@ -443,7 +449,7 @@ def thumbnail():
     import numpy as np
 
     if not FFMPEG_EXE:
-        return jsonify({'error': 'ffmpeg not found'}), 500
+        return jsonify({'error': 'ffmpeg not found. Expected at Dropbox\\Scripts\\FFMPEG\\ffmpeg.exe'}), 500
 
     file = request.files.get("file")
     if not file:
@@ -870,7 +876,7 @@ def export_clip():
     import dropbox as dbx_module
 
     if not FFMPEG_EXE:
-        return jsonify({'error': 'ffmpeg not found'}), 500
+        return jsonify({'error': 'ffmpeg not found. Expected at Dropbox\\Scripts\\FFMPEG\\ffmpeg.exe'}), 500
 
     file = request.files.get("file")
     if not file:
