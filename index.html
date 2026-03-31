@@ -3711,8 +3711,9 @@
     updateStyleCardPreviews(_dlgFrames, _dlgSelectedFrame, 'dlg-style-canvas-');
   });
 
-  syncThumbTargetFormat(_thumbTargetFormat);
-  syncDlgTargetFormat(_dlgTargetFormat);
+  document.addEventListener('DOMContentLoaded', () => {
+    syncThumbTargetFormat(_thumbTargetFormat);
+  });
 
   // ── Draggable text overlay div ──
   function updateThumbText() {
