@@ -198,6 +198,24 @@
       overflow-y: auto;
     }
 
+    .nav-section {
+      padding: 8px 0 2px;
+    }
+    .nav-section + .nav-section {
+      margin-top: 8px;
+      border-top: 1px solid var(--border);
+      padding-top: 14px;
+    }
+    .nav-section-label {
+      display: block;
+      padding: 0 20px 8px;
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 0.08em;
+      color: var(--muted);
+      text-transform: uppercase;
+    }
+
     .tab-btn {
       width: 100%;
       display: flex; align-items: center; gap: 11px;
@@ -330,6 +348,132 @@
       border-radius: 0 var(--r) var(--r) 0;
     }
     .card-accent h3 { font-size: 16px; font-weight: 700; margin-bottom: 8px; }
+
+    .project-shell {
+      display: none;
+      margin-bottom: 18px;
+      background: linear-gradient(135deg, #fff8f4 0%, #fff 100%);
+    }
+    .project-shell.active { display: block; }
+    .project-shell-kicker {
+      display: inline-block;
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--orange);
+      margin-bottom: 10px;
+    }
+    .project-shell-title {
+      font-size: 22px;
+      font-weight: 700;
+      color: var(--text);
+      margin-bottom: 6px;
+    }
+    .project-shell-meta {
+      font-size: 13px;
+      color: var(--text-2);
+      line-height: 1.6;
+      margin-bottom: 14px;
+      word-break: break-word;
+    }
+    .project-shell-stats {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+    .project-shell-stat {
+      padding: 6px 10px;
+      border-radius: 999px;
+      background: rgba(232, 84, 26, 0.08);
+      color: var(--orange);
+      font-size: 12px;
+      font-weight: 600;
+    }
+
+    .recent-projects-card {
+      margin-bottom: 24px;
+    }
+    .recent-projects-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      margin-bottom: 14px;
+    }
+    .recent-projects-head h3 {
+      margin-bottom: 0;
+    }
+    .recent-projects-sub {
+      font-size: 12px;
+      color: var(--muted);
+    }
+    .recent-projects-list {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+    .recent-project-item {
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 14px 14px 12px;
+      background: var(--bg);
+      transition: border-color 150ms ease, transform 150ms ease;
+    }
+    .recent-project-item:hover {
+      border-color: rgba(232,84,26,0.35);
+      transform: translateY(-1px);
+    }
+    .recent-project-top {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 12px;
+      margin-bottom: 8px;
+    }
+    .recent-project-name {
+      font-size: 14px;
+      font-weight: 700;
+      color: var(--text);
+    }
+    .recent-project-date {
+      font-size: 12px;
+      color: var(--muted);
+      white-space: nowrap;
+    }
+    .recent-project-source {
+      font-size: 12.5px;
+      color: var(--text-2);
+      line-height: 1.55;
+      margin-bottom: 10px;
+      word-break: break-word;
+    }
+    .recent-project-stats {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      margin-bottom: 10px;
+    }
+    .recent-project-stat {
+      font-size: 11px;
+      font-weight: 600;
+      color: var(--muted);
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 999px;
+      padding: 4px 8px;
+    }
+    .recent-project-actions {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+    .recent-project-empty {
+      font-size: 13px;
+      color: var(--muted);
+      line-height: 1.6;
+      padding: 4px 0 2px;
+    }
 
     .drop-zone {
       background: var(--surface);
@@ -1367,38 +1511,44 @@
 
     <nav class="sidebar-nav">
 
-      <button class="tab-btn active" data-tab="clips">
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-          <circle cx="6" cy="6" r="3"/><circle cx="6" cy="18" r="3"/>
-          <path d="M20 4L8.12 15.88M14.47 14.48L20 20M8.12 8.12L12 12"/>
-        </svg>
-        Clips
-      </button>
+      <div class="nav-section">
+        <span class="nav-section-label">Short Clips</span>
+        <button class="tab-btn active" data-tab="clips">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="6" cy="6" r="3"/><circle cx="6" cy="18" r="3"/>
+            <path d="M20 4L8.12 15.88M14.47 14.48L20 20M8.12 8.12L12 12"/>
+          </svg>
+          Clips
+        </button>
 
-      <button class="tab-btn" data-tab="caption">
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-          <rect x="2" y="4" width="20" height="16" rx="2"/>
-          <path d="M8 14h8M8 10h4"/>
-        </svg>
-        Caption Videos
-      </button>
+        <button class="tab-btn" data-tab="thumbnails">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+            <rect x="3" y="3" width="18" height="18" rx="2"/>
+            <circle cx="8.5" cy="8.5" r="1.5"/>
+            <path d="M21 15l-5-5L5 21"/>
+          </svg>
+          Thumbnails
+        </button>
+      </div>
 
-      <button class="tab-btn" data-tab="thumbnails">
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-          <rect x="3" y="3" width="18" height="18" rx="2"/>
-          <circle cx="8.5" cy="8.5" r="1.5"/>
-          <path d="M21 15l-5-5L5 21"/>
-        </svg>
-        Thumbnails
-      </button>
+      <div class="nav-section">
+        <span class="nav-section-label">Captions</span>
+        <button class="tab-btn" data-tab="caption">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+            <rect x="2" y="4" width="20" height="16" rx="2"/>
+            <path d="M8 14h8M8 10h4"/>
+          </svg>
+          Caption Videos
+        </button>
 
-      <button class="tab-btn" data-tab="edit-captions">
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-          <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
-          <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
-        </svg>
-        Edit Captions
-      </button>
+        <button class="tab-btn" data-tab="edit-captions">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
+            <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
+          </svg>
+          Edit Captions
+        </button>
+      </div>
 
     </nav>
 
@@ -1436,6 +1586,24 @@
 
       <!-- Body -->
       <div class="panel-body">
+
+        <div class="card project-shell fade-up" id="clips-project-shell">
+          <span class="project-shell-kicker">Active Project</span>
+          <div class="project-shell-title" id="clips-project-title"></div>
+          <div class="project-shell-meta" id="clips-project-meta"></div>
+          <div class="project-shell-stats" id="clips-project-stats"></div>
+        </div>
+
+        <div class="card recent-projects-card fade-up-1" data-recent-projects="clips">
+          <div class="recent-projects-head">
+            <div>
+              <h3>Recent Projects</h3>
+              <div class="recent-projects-sub">One project per source video, stored locally on this app install.</div>
+            </div>
+            <button class="btn-ghost" type="button" onclick="loadRecentProjects()">Refresh</button>
+          </div>
+          <div class="recent-projects-list"></div>
+        </div>
 
         <!-- ── STAGE 1: Load (compact two-col row) ── -->
         <div id="clips-stage1">
@@ -1714,6 +1882,24 @@
 
       <div class="panel-body">
 
+        <div class="card project-shell fade-up" id="thumb-project-shell">
+          <span class="project-shell-kicker">Active Project</span>
+          <div class="project-shell-title" id="thumb-project-title"></div>
+          <div class="project-shell-meta" id="thumb-project-meta"></div>
+          <div class="project-shell-stats" id="thumb-project-stats"></div>
+        </div>
+
+        <div class="card recent-projects-card fade-up-1" data-recent-projects="thumbnails">
+          <div class="recent-projects-head">
+            <div>
+              <h3>Recent Projects</h3>
+              <div class="recent-projects-sub">Resume source-video projects without cluttering Dropbox.</div>
+            </div>
+            <button class="btn-ghost" type="button" onclick="loadRecentProjects()">Refresh</button>
+          </div>
+          <div class="recent-projects-list"></div>
+        </div>
+
         <!-- STATE 1: Upload -->
         <div id="thumb-state-upload">
           <div class="drop-zone fade-up" id="thumb-drop" style="margin-bottom:20px;"
@@ -1969,14 +2155,17 @@
   let backendOnline = false;
 
   // ── Tab switching ──
-  document.querySelectorAll('.tab-btn').forEach(btn => {
-    btn.addEventListener('click', () => {
-      const target = btn.dataset.tab;
-      document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
-      document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
-      btn.classList.add('active');
-      document.getElementById('tab-' + target).classList.add('active');
+  function switchTab(target) {
+    document.querySelectorAll('.tab-btn').forEach(btn => {
+      btn.classList.toggle('active', btn.dataset.tab === target);
     });
+    document.querySelectorAll('.tab-panel').forEach(panel => {
+      panel.classList.toggle('active', panel.id === 'tab-' + target);
+    });
+  }
+
+  document.querySelectorAll('.tab-btn').forEach(btn => {
+    btn.addEventListener('click', () => switchTab(btn.dataset.tab));
   });
 
   // ── Drag/drop styling ──
@@ -2006,6 +2195,7 @@
       if (!backendOnline) {
         // First successful connection — one-time setup
         backendOnline = true;
+        if (!recentProjectsLoaded) loadRecentProjects();
         try { localStorage.setItem('fve_setup_complete', 'true'); } catch (_) {}
         wizDot.className = 'dot connected';
         wizLabel.textContent = 'Connected!';
@@ -2015,6 +2205,7 @@
           document.getElementById('app-view').classList.add('active');
         }, 600);
       }
+      if (!recentProjectsLoaded) loadRecentProjects();
     } else {
       // Always update dot and label
       hdrDot.className = 'dot waiting';
@@ -2058,6 +2249,245 @@
   // Call immediately on load, then every 3 seconds
   pollHealth();
   setInterval(pollHealth, 3000);
+
+  let activeProject = null;
+  let recentProjects = [];
+  let recentProjectsLoaded = false;
+
+  function formatProjectDate(value) {
+    if (!value) return 'Updated just now';
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return 'Updated recently';
+    return date.toLocaleString([], {
+      month: 'short',
+      day: 'numeric',
+      hour: 'numeric',
+      minute: '2-digit',
+    });
+  }
+
+  function projectStatChips(counts) {
+    const entries = [
+      ['Candidates', counts?.clip_candidates || 0],
+      ['Edited', counts?.edited_clips || 0],
+      ['Thumbnails', counts?.thumbnail_drafts || 0],
+      ['Exports', counts?.exports || 0],
+    ];
+    return entries
+      .filter(([, count]) => count > 0)
+      .map(([label, count]) => `<span class="project-shell-stat">${count} ${label}</span>`)
+      .join('');
+  }
+
+  function renderProjectShells() {
+    const shells = [
+      {
+        shellId: 'clips-project-shell',
+        titleId: 'clips-project-title',
+        metaId: 'clips-project-meta',
+        statsId: 'clips-project-stats',
+      },
+      {
+        shellId: 'thumb-project-shell',
+        titleId: 'thumb-project-title',
+        metaId: 'thumb-project-meta',
+        statsId: 'thumb-project-stats',
+      },
+    ];
+
+    shells.forEach(({ shellId, titleId, metaId, statsId }) => {
+      const shell = document.getElementById(shellId);
+      const title = document.getElementById(titleId);
+      const meta = document.getElementById(metaId);
+      const stats = document.getElementById(statsId);
+      if (!shell || !title || !meta || !stats) return;
+
+      if (!activeProject) {
+        shell.classList.remove('active');
+        title.textContent = '';
+        meta.textContent = '';
+        stats.innerHTML = '';
+        return;
+      }
+
+      const counts = activeProject.counts || activeProject.summary?.counts || {};
+      const sourceFilename = activeProject.source_filename || activeProject.source_video?.filename || 'Source video';
+      const sourcePath = activeProject.source_path || activeProject.source_video?.path || '';
+      title.textContent = activeProject.project_name || 'Project';
+      meta.innerHTML =
+        '<strong>' + escHtml(sourceFilename) + '</strong>' +
+        (sourcePath ? '<br><span>' + escHtml(sourcePath) + '</span>' : '') +
+        '<br><span>Last modified ' + escHtml(formatProjectDate(activeProject.last_modified || activeProject.updated_at)) + '</span>';
+      stats.innerHTML = projectStatChips(counts) || '<span class="project-shell-stat">Local project ready</span>';
+      shell.classList.add('active');
+    });
+  }
+
+  function renderRecentProjects() {
+    document.querySelectorAll('[data-recent-projects]').forEach(card => {
+      const list = card.querySelector('.recent-projects-list');
+      const tabTarget = card.dataset.recentProjects || 'clips';
+      if (!list) return;
+
+      if (!recentProjects.length) {
+        list.innerHTML = '<div class="recent-project-empty">Select a source video to create the first local project. Recent clips, thumbnails, and exports will show up here.</div>';
+        return;
+      }
+
+      list.innerHTML = recentProjects.map(project => {
+        const counts = project.counts || {};
+        const statChips = [
+          counts.clip_candidates ? `<span class="recent-project-stat">${counts.clip_candidates} candidates</span>` : '',
+          counts.edited_clips ? `<span class="recent-project-stat">${counts.edited_clips} edited</span>` : '',
+          counts.thumbnail_drafts ? `<span class="recent-project-stat">${counts.thumbnail_drafts} thumbnails</span>` : '',
+          counts.exports ? `<span class="recent-project-stat">${counts.exports} exports</span>` : '',
+        ].filter(Boolean).join('');
+
+        return (
+          '<div class="recent-project-item">' +
+            '<div class="recent-project-top">' +
+              '<div class="recent-project-name">' + escHtml(project.project_name || 'Project') + '</div>' +
+              '<div class="recent-project-date">' + escHtml(formatProjectDate(project.last_modified)) + '</div>' +
+            '</div>' +
+            '<div class="recent-project-source">' +
+              escHtml(project.source_filename || 'Source video') +
+              (project.source_path ? '<br>' + escHtml(project.source_path) : '') +
+            '</div>' +
+            '<div class="recent-project-stats">' + (statChips || '<span class="recent-project-stat">Ready to resume</span>') + '</div>' +
+            '<div class="recent-project-actions">' +
+              '<button class="btn-ghost btn-sm" type="button" onclick="selectRecentProject(\'' + escHtml(project.id) + '\', \'' + escHtml(tabTarget) + '\')">Open Project</button>' +
+              '<button class="btn-ghost btn-sm" type="button" onclick="selectRecentProject(\'' + escHtml(project.id) + '\', \'thumbnails\')">Open in Thumbnails</button>' +
+            '</div>' +
+          '</div>'
+        );
+      }).join('');
+    });
+  }
+
+  async function loadRecentProjects() {
+    if (!backendOnline) return;
+    try {
+      const res = await fetch(BACKEND + '/projects/recent');
+      const data = await res.json();
+      if (res.ok && Array.isArray(data.projects)) {
+        recentProjects = data.projects;
+        recentProjectsLoaded = true;
+        renderRecentProjects();
+        renderProjectShells();
+      }
+    } catch (_) {}
+  }
+
+  function setActiveProject(project, options = {}) {
+    activeProject = project ? JSON.parse(JSON.stringify(project)) : null;
+    renderProjectShells();
+    if (options.refreshRecent !== false) {
+      loadRecentProjects();
+    }
+  }
+
+  async function updateProject(eventType, payload = {}) {
+    if (!activeProject || !backendOnline) return null;
+    try {
+      const res = await fetch(BACKEND + '/projects/update', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          project_id: activeProject.id,
+          event_type: eventType,
+          payload,
+        }),
+      });
+      const data = await res.json();
+      if (res.ok && data.project) {
+        const summary = data.summary || {};
+        setActiveProject({ ...summary, ...data.project });
+        return data.project;
+      }
+    } catch (_) {}
+    return null;
+  }
+
+  function restoreProjectClipState(project) {
+    const savedCandidates = project?.clip_candidates || [];
+    if (!savedCandidates.length || !_clipFile || !_wordsData || !_wordsData.length) return false;
+
+    const mode = project?.meta?.last_clip_mode || 'viral';
+    document.getElementById('summary-filename').textContent = _clipFile.name;
+    if (mode === 'split') {
+      _splitParts = savedCandidates.map(item => ({
+        part: item.part,
+        start: item.start_time,
+        end: item.end_time,
+        duration: item.duration,
+        label: item.label,
+        hook: item.hook_line,
+      }));
+      setClipMode('split');
+      renderParts(_splitParts);
+    } else {
+      _candidates = savedCandidates.map(item => ({
+        start_time: item.start_time,
+        end_time: item.end_time,
+        duration: item.duration,
+        hook_score: item.hook_score,
+        hook_line: item.hook_line,
+        why_it_works: item.why_it_works,
+      }));
+      setClipMode('viral');
+      renderCandidates(_candidates);
+    }
+    showStage(2);
+    return true;
+  }
+
+  async function maybeOfferProjectResume(projectResponse, view) {
+    if (!projectResponse?.existing_project) return;
+    const project = projectResponse.project;
+    const counts = projectResponse.summary?.counts || {};
+    const resume = window.confirm(
+      'A local project already exists for ' + (project.project_name || 'this source video') + '.\n\n' +
+      'Press OK to resume the saved project context, or Cancel to keep working from the current selection inside that same project.\n\n' +
+      'Saved items: ' +
+      (counts.clip_candidates || 0) + ' clip candidates, ' +
+      (counts.thumbnail_drafts || 0) + ' thumbnails, ' +
+      (counts.exports || 0) + ' exports.'
+    );
+
+    if (resume && view === 'clips') {
+      restoreProjectClipState(project);
+    }
+  }
+
+  async function openProjectForFile(file, view) {
+    if (!file || !backendOnline) return null;
+    try {
+      const res = await fetch(BACKEND + '/projects/open_source', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ filename: file.name }),
+      });
+      const data = await res.json();
+      if (res.ok && data.project) {
+        const summary = data.summary || {};
+        setActiveProject({ ...summary, ...data.project });
+        await updateProject('source_selected', {
+          view,
+          source_path: data.resolved_source_path,
+        });
+        return data;
+      }
+    } catch (_) {}
+    return null;
+  }
+
+  function selectRecentProject(projectId, targetTab) {
+    const project = recentProjects.find(item => item.id === projectId);
+    if (!project) return;
+    setActiveProject(project, { refreshRecent: false });
+    switchTab(targetTab || 'clips');
+    alert('Project context loaded. Re-select the source video to continue editing with full local project data.');
+  }
 
   // Fix 3: global video tracking for #edit-video (listeners set once at init)
   (function () {
@@ -2166,6 +2596,8 @@
     // Show filename + green checkmark in video card
     showVideoLoaded(file.name);
 
+    const projectResponse = await openProjectForFile(file, 'clips');
+
     // Auto-find JSON via backend
     showJsonSearching();
     try {
@@ -2178,6 +2610,11 @@
       if (data.json_found) {
         window.clipsWordsData = data.json_content;
         showJsonLoaded(data.json_filename);
+        await updateProject('transcript_loaded', {
+          json_filename: data.json_filename,
+          json_path: data.json_path,
+          word_count: extractWords(data.json_content).length,
+        });
         enableFindClips();
       } else {
         showJsonNotFound();
@@ -2185,6 +2622,7 @@
     } catch (err) {
       showJsonNotFound();
     }
+    await maybeOfferProjectResume(projectResponse, 'clips');
   });
 
   // ── Picker helper functions ──
@@ -2301,6 +2739,11 @@
       const d = await res.json();
       if (d.words) {
         setWordsData(d.words, _clipFile.name.replace(/\.(mp4|mov)$/i, '') + ' - Transcript (Words).json');
+        await updateProject('transcript_loaded', {
+          json_filename: _clipFile.name.replace(/\.(mp4|mov)$/i, '') + ' - Transcript (Words).json',
+          json_path: '',
+          word_count: d.words.length,
+        });
       } else {
         setJsonStatus('not_found');
         alert('Transcript generation failed: ' + (d.error || 'unknown error'));
@@ -2403,6 +2846,10 @@
         return;
       }
       _candidates = data.candidates || [];
+      await updateProject('clip_candidates_updated', {
+        mode: 'viral',
+        candidates: _candidates,
+      });
       renderCandidates(_candidates);
     } catch (err) {
       document.getElementById('clips-skeleton').style.display = 'none';
@@ -2511,6 +2958,17 @@
         return;
       }
       _splitParts = data.parts || [];
+      await updateProject('clip_candidates_updated', {
+        mode: 'split',
+        candidates: _splitParts.map(part => ({
+          start_time: part.start,
+          end_time: part.end,
+          duration: part.duration,
+          hook_line: part.hook,
+          label: part.label,
+          part: part.part,
+        })),
+      });
       renderParts(_splitParts);
     } catch (err) {
       document.getElementById('clips-skeleton').style.display = 'none';
@@ -2634,6 +3092,12 @@
 
     document.getElementById('export-status').style.display = 'none';
     document.getElementById('export-status').innerHTML = '';
+    updateProject('clip_selected', {
+      start_time: _editCandidate.start_time,
+      end_time: _editCandidate.end_time,
+      hook_line: _editCandidate.hook_line || p.hook || '',
+      mode: 'split',
+    });
     showStage(3);
   }
 
@@ -2711,6 +3175,12 @@
 
     document.getElementById('export-status').style.display = 'none';
     document.getElementById('export-status').innerHTML = '';
+    updateProject('clip_selected', {
+      start_time: _editCandidate.start_time,
+      end_time: _editCandidate.end_time,
+      hook_line: _editCandidate.hook_line || '',
+      mode: 'viral',
+    });
     showStage(3);
   }
 
@@ -3117,6 +3587,9 @@
     drop.classList.add('loaded');
     document.getElementById('thumb-dz-label').textContent = file.name;
     document.getElementById('btn-generate-thumb').disabled = false;
+    openProjectForFile(file, 'thumbnails').then(projectResponse => {
+      maybeOfferProjectResume(projectResponse, 'thumbnails');
+    });
   });
 
   // Drag-drop for thumb zone
@@ -3832,6 +4305,12 @@
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
         a.href = url; a.download = stem + ' - Thumbnail.png'; a.click();
+        updateProject('thumbnail_saved', {
+          title: _thumbTitle,
+          style: _thumbStyle,
+          target_format: _thumbTargetFormat,
+          context: 'thumbnail_tab',
+        });
         setTimeout(() => URL.revokeObjectURL(url), 5000);
       }, 'image/png');
     });
@@ -4365,6 +4844,12 @@
         thumbnailBlobUrl = URL.createObjectURL(blob);
         document.getElementById('thumb-preview-img').src = thumbnailBlobUrl;
         document.getElementById('thumb-preview-panel').classList.add('active');
+        updateProject('thumbnail_saved', {
+          title: _dlgTitle,
+          style: _dlgStyle,
+          target_format: _dlgTargetFormat,
+          context: 'clip_export_dialog',
+        });
         closeThumbDialog();
         openExportFormDialog();
       }, 'image/png');
@@ -4504,6 +4989,12 @@
             ? '<a href="' + escHtml(data.airtable_url) + '" target="_blank" rel="noopener" class="btn btn-sm">View in Airtable \u2192</a>'
             : '') +
         '</div>';
+      await updateProject('export_created', {
+        filename,
+        clip_type: clipType,
+        clip_dropbox_url: data.clip_dropbox_url,
+        thumbnail_dropbox_url: data.thumbnail_dropbox_url,
+      });
     } catch (err) {
       clearTimeout(t1); clearTimeout(t2);
       statusEl.innerHTML =

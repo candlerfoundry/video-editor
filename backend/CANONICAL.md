@@ -311,3 +311,37 @@ zip -j foundry-video-editor-backend.zip backend/server.py backend/start_server.b
 Do not create nested folders inside the deliverable zip.
 
 Regression risk: Medium.
+
+---
+
+## 15. Local project model and workflow structure
+
+Canonical product rules:
+- A project represents one source video, not one clip.
+- Editable working data lives locally on the app install, not in Dropbox.
+- Dropbox remains the source-of-truth location for source media and intentional final exports.
+- Recent projects may be shared across users of the same local app installation.
+
+Canonical backend requirements:
+- `server.py` owns the first-phase local project store.
+- Local project JSON files live under `%LOCALAPPDATA%/Foundry Video Editor/projects/`.
+- Keep one JSON file per source-video project, keyed by the resolved source video path when available.
+- `project_name` should be derived from the cleaned source filename via `bare_stem(...)`.
+- `/projects/open_source` must create-or-resume the local project for a selected source video.
+- `/projects/recent` must return recent project summaries for the UI.
+- `/projects/update` must persist transcript metadata, clip candidates, edited clip markers, thumbnail draft markers, and export markers.
+- Project persistence must stay local-only; do not write working project state back into Dropbox automatically.
+
+Canonical frontend workflow requirements in `index.html`:
+- Left navigation is grouped into:
+  - `SHORT CLIPS`: `Clips`, `Thumbnails`
+  - `CAPTIONS`: `Caption Videos`, `Edit Captions`
+- Relevant short-clip screens must surface a real `Recent Projects` shell that shows:
+  - project name
+  - source filename/path when available
+  - last modified timestamp
+  - simple counts for clip candidates, edited clips, thumbnail drafts, and exports
+- When the user selects a source video, the app must check the local project store and offer to resume the existing project context or continue in that same project.
+- Resuming should be lightweight in phase one; restoring saved clip candidate lists is enough. Do not redesign thumbnail editing or export flow around projects yet.
+
+Regression risk: High.

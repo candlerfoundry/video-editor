@@ -13,6 +13,7 @@ Runs on localhost:5000
 
 import datetime
 import glob
+import hashlib
 import io
 import os
 import json
@@ -24,6 +25,7 @@ import subprocess
 import sys
 import tempfile
 import threading
+import unicodedata
 import uuid
 import anthropic
 import whisper
@@ -98,6 +100,13 @@ thumbnail_jobs = {}  # {job_id: {status, result, error, created_at}}
 
 # ── Video path cache (populated by /find_json, reused by /thumbnail) ──
 video_path_cache = {}  # {filename: full_absolute_path}
+project_store_lock = threading.Lock()
+local_app_root = os.path.join(
+    os.environ.get('LOCALAPPDATA') or tempfile.gettempdir(),
+    'Foundry Video Editor',
+)
+project_store_dir = os.path.join(local_app_root, 'projects')
+os.makedirs(project_store_dir, exist_ok=True)
 
 
 def find_video_in_dropbox(filename):
@@ -431,6 +440,287 @@ def bare_stem(name):
     return stem
 
 
+def iso_now():
+    return datetime.datetime.now(datetime.timezone.utc).replace(microsecond=0).isoformat().replace('+00:00', 'Z')
+
+
+def slugify_project_name(value):
+    normalized = unicodedata.normalize('NFKD', value or '')
+    ascii_value = normalized.encode('ascii', 'ignore').decode('ascii')
+    slug = re.sub(r'[^a-zA-Z0-9]+', '-', ascii_value).strip('-').lower()
+    return slug or 'project'
+
+
+def derive_project_name(filename):
+    stem = bare_stem(os.path.basename(filename or '')).replace('_', ' ').strip()
+    stem = re.sub(r'\s+', ' ', stem)
+    parts = [part.strip() for part in re.split(r'\s+-\s+', stem) if part.strip()]
+    if len(parts) >= 2:
+        return ' - '.join(parts[:2])
+    return stem or 'Untitled Project'
+
+
+def make_source_key(source_path=None, filename=None):
+    identity = (source_path or filename or '').strip().lower()
+    return hashlib.sha1(identity.encode('utf-8')).hexdigest()
+
+
+def get_project_path(project_id):
+    return os.path.join(project_store_dir, f'{project_id}.json')
+
+
+def compact_clip_candidate(item):
+    return {
+        'start_time': item.get('start_time'),
+        'end_time': item.get('end_time'),
+        'duration': item.get('duration'),
+        'hook_score': item.get('hook_score'),
+        'hook_line': item.get('hook_line'),
+        'why_it_works': item.get('why_it_works'),
+        'label': item.get('label'),
+        'part': item.get('part'),
+        'mode': item.get('mode'),
+    }
+
+
+def summarize_project(project):
+    source_video = project.get('source_video') or {}
+    transcript = project.get('transcript') or {}
+    return {
+        'id': project.get('id'),
+        'project_name': project.get('project_name'),
+        'source_filename': source_video.get('filename'),
+        'source_path': source_video.get('path'),
+        'last_modified': project.get('updated_at'),
+        'last_opened_at': project.get('last_opened_at'),
+        'counts': {
+            'clip_candidates': len(project.get('clip_candidates') or []),
+            'edited_clips': len(project.get('edited_clips') or []),
+            'thumbnail_drafts': len(project.get('thumbnail_drafts') or []),
+            'exports': len(project.get('exports') or []),
+        },
+        'transcript': {
+            'json_filename': transcript.get('json_filename'),
+            'word_count': transcript.get('word_count', 0),
+        },
+        'meta': project.get('meta') or {},
+    }
+
+
+def load_project(project_id):
+    path = get_project_path(project_id)
+    if not os.path.exists(path):
+        return None
+    with open(path, 'r', encoding='utf-8') as handle:
+        return json.load(handle)
+
+
+def save_project(project):
+    path = get_project_path(project['id'])
+    project['updated_at'] = iso_now()
+    with open(path, 'w', encoding='utf-8') as handle:
+        json.dump(project, handle, ensure_ascii=False, indent=2)
+
+
+def create_project_record(project_id, filename, source_path):
+    timestamp = iso_now()
+    clean_filename = os.path.basename(source_path or filename or '')
+    return {
+        'id': project_id,
+        'slug': slugify_project_name(derive_project_name(clean_filename)),
+        'project_name': derive_project_name(clean_filename),
+        'created_at': timestamp,
+        'updated_at': timestamp,
+        'last_opened_at': timestamp,
+        'source_video': {
+            'filename': clean_filename,
+            'path': source_path,
+            'bare_stem': bare_stem(clean_filename),
+        },
+        'transcript': {},
+        'clip_candidates': [],
+        'edited_clips': [],
+        'thumbnail_drafts': [],
+        'exports': [],
+        'meta': {
+            'last_view': 'clips',
+            'last_clip_mode': 'viral',
+        },
+    }
+
+
+def resolve_project_for_source(filename='', source_path=None):
+    clean_filename = (filename or '').strip()
+    resolved_path = (source_path or '').strip() or video_path_cache.get(clean_filename)
+    if resolved_path and not os.path.exists(resolved_path):
+        resolved_path = ''
+    if not resolved_path and clean_filename:
+        resolved_path = find_video_in_dropbox(clean_filename) or ''
+    project_id = make_source_key(resolved_path or None, clean_filename)
+    with project_store_lock:
+        project = load_project(project_id)
+        existed = project is not None
+        if not project:
+            project = create_project_record(project_id, clean_filename, resolved_path or None)
+        source_video = project.setdefault('source_video', {})
+        if clean_filename:
+            source_video['filename'] = clean_filename
+            source_video['bare_stem'] = bare_stem(clean_filename)
+        if resolved_path:
+            source_video['path'] = resolved_path
+        project['project_name'] = derive_project_name(source_video.get('filename') or clean_filename)
+        project['slug'] = slugify_project_name(project['project_name'])
+        project['last_opened_at'] = iso_now()
+        save_project(project)
+    return project, existed, resolved_path or None
+
+
+def upsert_project_list_item(items, new_item, key_fields):
+    for index, existing in enumerate(items):
+        if all(existing.get(field) == new_item.get(field) for field in key_fields):
+            items[index] = {**existing, **new_item}
+            return
+    items.append(new_item)
+
+
+@app.route('/projects/recent', methods=['GET'])
+def recent_projects():
+    try:
+        projects = []
+        with project_store_lock:
+            for name in os.listdir(project_store_dir):
+                if not name.endswith('.json'):
+                    continue
+                path = os.path.join(project_store_dir, name)
+                try:
+                    with open(path, 'r', encoding='utf-8') as handle:
+                        projects.append(json.load(handle))
+                except Exception:
+                    logger.warning('[projects] Skipping unreadable project file: %s', path)
+        projects.sort(
+            key=lambda project: project.get('updated_at') or project.get('last_opened_at') or '',
+            reverse=True,
+        )
+        return jsonify({'projects': [summarize_project(project) for project in projects[:12]]})
+    except Exception as exc:
+        logger.exception('[projects] Failed to list recent projects')
+        return jsonify({'error': str(exc), 'projects': []}), 500
+
+
+@app.route('/projects/open_source', methods=['POST'])
+def open_project_for_source():
+    try:
+        data = request.get_json(force=True) or {}
+        filename = (data.get('filename') or '').strip()
+        source_path = (data.get('source_path') or '').strip()
+        if not filename and not source_path:
+            return jsonify({'error': 'filename or source_path is required'}), 400
+        project, existed, resolved_path = resolve_project_for_source(filename, source_path)
+        logger.info(
+            '[projects] %s project %s for %s',
+            'Resumed' if existed else 'Created',
+            project.get('id'),
+            project.get('source_video', {}).get('filename'),
+        )
+        return jsonify({
+            'project': project,
+            'summary': summarize_project(project),
+            'existing_project': existed,
+            'resolved_source_path': resolved_path,
+        })
+    except Exception as exc:
+        logger.exception('[projects] Failed to open source project')
+        return jsonify({'error': str(exc)}), 500
+
+
+@app.route('/projects/update', methods=['POST'])
+def update_project():
+    try:
+        data = request.get_json(force=True) or {}
+        project_id = (data.get('project_id') or '').strip()
+        event_type = (data.get('event_type') or '').strip()
+        payload = data.get('payload') or {}
+        if not project_id or not event_type:
+            return jsonify({'error': 'project_id and event_type are required'}), 400
+
+        with project_store_lock:
+            project = load_project(project_id)
+            if not project:
+                return jsonify({'error': 'Project not found'}), 404
+
+            project.setdefault('meta', {})
+            project['last_opened_at'] = iso_now()
+
+            if event_type == 'source_selected':
+                if payload.get('view'):
+                    project['meta']['last_view'] = payload['view']
+                if payload.get('source_path'):
+                    project.setdefault('source_video', {})['path'] = payload['source_path']
+            elif event_type == 'transcript_loaded':
+                project['transcript'] = {
+                    'json_filename': payload.get('json_filename'),
+                    'json_path': payload.get('json_path'),
+                    'word_count': int(payload.get('word_count') or 0),
+                    'loaded_at': iso_now(),
+                }
+            elif event_type == 'clip_candidates_updated':
+                mode = payload.get('mode') or 'viral'
+                project['meta']['last_clip_mode'] = mode
+                candidates = payload.get('candidates') or []
+                project['clip_candidates'] = [
+                    compact_clip_candidate({**candidate, 'mode': mode})
+                    for candidate in candidates[:20]
+                ]
+            elif event_type == 'clip_selected':
+                clip_entry = {
+                    'start_time': payload.get('start_time'),
+                    'end_time': payload.get('end_time'),
+                    'hook_line': payload.get('hook_line'),
+                    'mode': payload.get('mode') or project['meta'].get('last_clip_mode') or 'viral',
+                    'updated_at': iso_now(),
+                }
+                upsert_project_list_item(
+                    project.setdefault('edited_clips', []),
+                    clip_entry,
+                    ['start_time', 'end_time', 'hook_line'],
+                )
+            elif event_type == 'thumbnail_saved':
+                thumb_entry = {
+                    'title': payload.get('title'),
+                    'style': payload.get('style'),
+                    'target_format': payload.get('target_format'),
+                    'context': payload.get('context'),
+                    'saved_at': iso_now(),
+                }
+                upsert_project_list_item(
+                    project.setdefault('thumbnail_drafts', []),
+                    thumb_entry,
+                    ['title', 'style', 'target_format', 'context'],
+                )
+            elif event_type == 'export_created':
+                export_entry = {
+                    'filename': payload.get('filename'),
+                    'clip_type': payload.get('clip_type'),
+                    'clip_dropbox_url': payload.get('clip_dropbox_url'),
+                    'thumbnail_dropbox_url': payload.get('thumbnail_dropbox_url'),
+                    'exported_at': iso_now(),
+                }
+                upsert_project_list_item(
+                    project.setdefault('exports', []),
+                    export_entry,
+                    ['filename'],
+                )
+            else:
+                return jsonify({'error': f'Unsupported event_type: {event_type}'}), 400
+
+            save_project(project)
+
+        return jsonify({'project': project, 'summary': summarize_project(project)})
+    except Exception as exc:
+        logger.exception('[projects] Failed to update project')
+        return jsonify({'error': str(exc)}), 500
+
+
 @app.route('/find_json', methods=['POST'])
 def find_json():
     try:
@@ -482,6 +772,7 @@ def find_json():
 
         return jsonify({
             'json_found': True,
+            'video_path': video_path,
             'json_path': json_path,
             'json_filename': os.path.basename(json_path),
             'json_content': content
