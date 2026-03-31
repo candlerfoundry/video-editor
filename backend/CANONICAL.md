@@ -261,9 +261,14 @@ Required behavior:
 - set `imageSmoothingEnabled = true`
 - set `imageSmoothingQuality = 'high'`
 - size mini-canvas backing stores to displayed CSS size with `devicePixelRatio`
+- do not hardcode thumbnail previews or editor canvases to `16:9`
+- the UI must expose target thumbnail formats, currently `Instagram 4:5` and `YouTube Shorts 9:16`
+- style cards, editor canvases, and saved thumbnail previews must all resize to the selected target ratio
+- the full selected thumbnail crop must remain visible in previews; never show only a narrow strip because the viewport stayed landscape
 
 Why:
 - Backend extraction quality and frontend preview quality can regress independently.
+- A fixed landscape preview box can make a correctly extracted portrait crop look broken even when the image data is fine.
 
 Regression risk: High.
 
