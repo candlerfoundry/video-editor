@@ -16,6 +16,7 @@ import glob
 import io
 import os
 import json
+import logging
 import platform
 import re
 import shutil
@@ -35,6 +36,23 @@ from flask_cors import CORS
 if hasattr(sys.stderr, "reconfigure"):
     sys.stderr.reconfigure(line_buffering=True)
 sys.stdout = sys.stderr
+
+LOG_LEVEL_NAME = os.environ.get('FVE_LOG_LEVEL', 'INFO').upper()
+LOG_LEVEL = getattr(logging, LOG_LEVEL_NAME, logging.INFO)
+THUMBNAIL_DEBUG = os.environ.get('FVE_THUMBNAIL_DEBUG', '').strip().lower() in {'1', 'true', 'yes', 'on'}
+
+logging.basicConfig(
+    level=LOG_LEVEL,
+    format='%(asctime)s %(levelname)s %(name)s: %(message)s',
+    stream=sys.stderr,
+)
+
+logger = logging.getLogger('foundry_video_editor')
+thumb_logger = logging.getLogger('foundry_video_editor.thumbnail')
+if THUMBNAIL_DEBUG:
+    thumb_logger.setLevel(logging.DEBUG)
+else:
+    thumb_logger.setLevel(max(LOG_LEVEL, logging.INFO))
 
 app = Flask(__name__)
 CORS(app)
@@ -62,18 +80,18 @@ def find_ffmpeg():
                 creationflags=CREATE_NO_WINDOW
             )
             if result.returncode == 0:
-                print(f'[ffmpeg] Found at: {path}', flush=True)
+                logger.info('[ffmpeg] Found at: %s', path)
                 return path
         except Exception:
             continue
-    print('[ffmpeg] ERROR: ffmpeg not found in any expected location', flush=True)
+    logger.error('[ffmpeg] ERROR: ffmpeg not found in any expected location')
     return None
 
 FFMPEG_EXE = find_ffmpeg()
 
-print(f'[startup] Python: {sys.executable}', flush=True)
-print(f'[startup] Working dir: {os.getcwd()}', flush=True)
-print(f'[startup] ffmpeg: {FFMPEG_EXE}', flush=True)
+logger.info('[startup] Python: %s', sys.executable)
+logger.info('[startup] Working dir: %s', os.getcwd())
+logger.info('[startup] ffmpeg: %s', FFMPEG_EXE)
 
 # ── Thumbnail async job store ──
 thumbnail_jobs = {}  # {job_id: {status, result, error, created_at}}
@@ -87,9 +105,9 @@ def find_video_in_dropbox(filename):
     for root, dirs, files in os.walk(dropbox_root):
         if filename in files:
             found = os.path.join(root, filename)
-            print(f'[find_video] Found "{filename}" at {found}', flush=True)
+            logger.info('[find_video] Found "%s" at %s', filename, found)
             return found
-    print(f'[find_video] "{filename}" not found in Dropbox', flush=True)
+    logger.warning('[find_video] "%s" not found in Dropbox', filename)
     return None
 
 # ── Whisper models (loaded once on first use) ──
@@ -216,10 +234,9 @@ def get_video_stream_info(video_path, ffmpeg_exe):
             'display_height': display_height,
             'orientation': 'portrait' if display_height > display_width else 'landscape',
         }
-        print(
-            f'[thumbnail] source stream {width}x{height}, rotation={rotation}, '
-            f'display={display_width}x{display_height}',
-            flush=True,
+        thumb_logger.info(
+            'Source stream %sx%s rotation=%s display=%sx%s orientation=%s',
+            width, height, rotation, display_width, display_height, info['orientation'],
         )
         return info
 
@@ -232,7 +249,7 @@ def get_video_stream_info(video_path, ffmpeg_exe):
                 return _probe('ffprobe')
             except Exception:
                 pass
-        print(f'[thumbnail] ffprobe stream probe failed, using default metadata: {e}', flush=True)
+        thumb_logger.warning('ffprobe stream probe failed, using default metadata: %s', e)
         return {
             'width': 1920,
             'height': 1080,
@@ -569,23 +586,24 @@ def _thumbnail_worker(job_id, filename, clipstart, clipend, clip_transcript):
         # Check cache first (populated by /find_json); os.walk only as fallback
         video_path = video_path_cache.get(filename)
         if video_path and not os.path.exists(video_path):
-            print(f'[thumbnail] Cached path stale, re-walking: {video_path}', flush=True)
+            thumb_logger.info('Job %s cached path stale, re-walking: %s', job_id, video_path)
             video_path = None
 
         if not video_path:
-            print(f'[thumbnail] Cache miss for "{filename}" — searching Dropbox', flush=True)
+            thumb_logger.info('Job %s cache miss for "%s"; searching Dropbox', job_id, filename)
             video_path = find_video_in_dropbox(filename)
             if video_path:
                 video_path_cache[filename] = video_path
 
         if not video_path:
+            thumb_logger.warning('Job %s failed: video "%s" not found in Dropbox', job_id, filename)
             thumbnail_jobs[job_id] = {
                 'status': 'error',
                 'error': f'Video "{filename}" not found in Dropbox',
             }
             return
 
-        print(f'[thumbnail] Job {job_id}: video={video_path}', flush=True)
+        thumb_logger.info('Job %s started for "%s"', job_id, video_path)
 
         tmp_dir = tempfile.mkdtemp()
         try:
@@ -615,10 +633,14 @@ def _thumbnail_worker(job_id, filename, clipstart, clipend, clip_transcript):
                 timestamps = [round(start_t, 3)]
             else:
                 timestamps = [start_t + i * (end_t - start_t) / 19 for i in range(20)]
-            print(f'[thumbnail] timestamps from {start_t:.1f}s to {end_t:.1f}s ({len(timestamps)} frames)', flush=True)
+            thumb_logger.info(
+                'Job %s sampling %s timestamps from %.1fs to %.1fs',
+                job_id, len(timestamps), start_t, end_t,
+            )
 
             # ── Extract frames ──
             scored = []
+            frame_errors = 0
             for i, ts in enumerate(timestamps):
                 fp = os.path.join(tmp_dir, f'frame_{i:03d}.jpg')
                 subprocess.run(
@@ -632,13 +654,17 @@ def _thumbnail_worker(job_id, filename, clipstart, clipend, clip_transcript):
                     img = PILImage.open(fp)
                     arr = np.array(img.convert('L'), dtype=float)
                     sharpness = float(np.var(np.gradient(arr)))
-                    print(f'[thumbnail] frame {i} ts={ts:.1f}s sharpness={sharpness:.1f}',
-                          flush=True)
+                    thumb_logger.debug(
+                        'Job %s frame %s ts=%.1fs sharpness=%.1f',
+                        job_id, i, ts, sharpness,
+                    )
                     scored.append((sharpness, fp))
                 except Exception as fe:
-                    print(f'[thumbnail] frame {i} error: {fe}', flush=True)
+                    frame_errors += 1
+                    thumb_logger.debug('Job %s frame %s failed to score: %s', job_id, i, fe)
 
             if not scored:
+                thumb_logger.warning('Job %s failed: could not extract usable frames', job_id)
                 thumbnail_jobs[job_id] = {
                     'status': 'error',
                     'error': 'Could not extract usable frames from video',
@@ -647,8 +673,13 @@ def _thumbnail_worker(job_id, filename, clipstart, clipend, clip_transcript):
 
             scored.sort(reverse=True)
             scored = scored[:8]
+            thumb_logger.info(
+                'Job %s extracted %s usable frames (%s frame errors), keeping top %s',
+                job_id, len(scored), frame_errors, len(scored),
+            )
 
             frame_b64s = []
+            encoded_sizes = []
             for _, fp in scored:
                 try:
                     pil = PILImage.open(fp).convert('RGB')
@@ -656,18 +687,23 @@ def _thumbnail_worker(job_id, filename, clipstart, clipend, clip_transcript):
                     pil.thumbnail((1600, 1600), PILImage.LANCZOS)
                     buf = io.BytesIO()
                     pil.save(buf, 'JPEG', quality=92, optimize=True)
-                    print(
-                        f'[thumbnail] encoded frame {fp}: {original_size[0]}x{original_size[1]} '
-                        f'-> {pil.size[0]}x{pil.size[1]}',
-                        flush=True,
+                    encoded_sizes.append((original_size, pil.size))
+                    thumb_logger.debug(
+                        'Job %s encoded frame %s: %sx%s -> %sx%s',
+                        job_id, os.path.basename(fp),
+                        original_size[0], original_size[1], pil.size[0], pil.size[1],
                     )
                     frame_b64s.append(base64.b64encode(buf.getvalue()).decode())
                 except Exception as ee:
-                    print(f'[thumbnail] encode error: {ee}', flush=True)
+                    thumb_logger.debug('Job %s frame encode failed for %s: %s', job_id, fp, ee)
 
             if not frame_b64s:
+                thumb_logger.warning('Job %s failed: frame encoding produced no output', job_id)
                 thumbnail_jobs[job_id] = {'status': 'error', 'error': 'Frame encoding failed'}
                 return
+            if encoded_sizes:
+                largest = max(size[1][0] * size[1][1] for size in encoded_sizes)
+                thumb_logger.info('Job %s encoded %s frames for ranking (largest encoded frame area=%s)', job_id, len(frame_b64s), largest)
 
             # ── Claude Vision ranking ──
             api_key_val = read_api_key()
@@ -707,17 +743,16 @@ def _thumbnail_worker(job_id, filename, clipstart, clipend, clip_transcript):
                         if idx not in seen: ordered.append(frame_b64s[idx])
                     frame_b64s = ordered
             except Exception as ve:
-                print(f'[thumbnail] Vision ranking failed: {ve}', flush=True)
+                thumb_logger.warning('Job %s vision ranking failed; keeping sharpness order: %s', job_id, ve)
 
             # FIX 5: titles from clip_transcript (clip-specific range, sent by frontend)
-            print(f'[thumbnail] clip_transcript length: {len(clip_transcript)}', flush=True)
+            thumb_logger.info('Job %s clip transcript length=%s chars', job_id, len(clip_transcript))
             if not clip_transcript:
                 # Fall back: Whisper tiny on the full video
                 tiny       = get_whisper_tiny()
                 w_result   = tiny.transcribe(video_path)
                 clip_transcript = (w_result.get("text") or "")[:3000]
-                print(f'[thumbnail] whisper fallback transcript length: {len(clip_transcript)}',
-                      flush=True)
+                thumb_logger.info('Job %s used Whisper fallback transcript length=%s chars', job_id, len(clip_transcript))
 
             titles = []
             try:
@@ -745,8 +780,13 @@ def _thumbnail_worker(job_id, filename, clipstart, clipend, clip_transcript):
                     if len(titles) < 5:
                         titles = [str(t)[:60] for t in parsed[:8]]
             except Exception as te:
-                print(f'[thumbnail] Title generation failed: {te}', flush=True)
+                thumb_logger.warning('Job %s title generation failed: %s', job_id, te)
                 titles = ["Add Your Title Here"] * 8
+
+            thumb_logger.info(
+                'Job %s complete: %s ranked frames, %s titles, orientation=%s',
+                job_id, len(frame_b64s), len(titles), stream_info.get('orientation'),
+            )
 
             thumbnail_jobs[job_id] = {
                 'status':     'complete',
@@ -759,7 +799,7 @@ def _thumbnail_worker(job_id, filename, clipstart, clipend, clip_transcript):
             shutil.rmtree(tmp_dir, ignore_errors=True)
 
     except Exception as exc:
-        print(f'[thumbnail] Worker exception: {exc}', flush=True)
+        thumb_logger.exception('Job %s worker exception', job_id)
         thumbnail_jobs[job_id] = {'status': 'error', 'error': str(exc)}
 
 
@@ -782,6 +822,10 @@ def thumbnail():
         return jsonify({'error': 'filename is required'}), 400
 
     job_id = 'thumb' + uuid.uuid4().hex[:8]
+    thumb_logger.info(
+        'Queueing thumbnail job %s for filename="%s" clipstart="%s" clipend="%s" transcript_chars=%s',
+        job_id, filename, clipstart, clipend, len(clip_transcript),
+    )
     thumbnail_jobs[job_id] = {
         'status':     'processing',
         'created_at': datetime.datetime.utcnow(),
@@ -800,6 +844,7 @@ def thumbnailstatus(jobid):
     """Poll thumbnail job status."""
     job = thumbnail_jobs.get(jobid)
     if not job:
+        thumb_logger.warning('Status poll for missing thumbnail job %s', jobid)
         return jsonify({'status': 'error', 'error': 'Job not found'}), 404
     if job['status'] == 'processing':
         return jsonify({'status': 'processing'})
@@ -1236,10 +1281,10 @@ def export_clip():
 
 
 if __name__ == "__main__":
-    print("Foundry Video Editor backend starting on http://localhost:5000")
+    logger.info("Foundry Video Editor backend starting on http://localhost:5000")
     api_key = read_api_key()
     if api_key:
-        print("API key loaded.")
+        logger.info("API key loaded.")
     else:
-        print(f"WARNING: API key not found at {API_KEY_PATH}")
+        logger.warning("API key not found at %s", API_KEY_PATH)
     app.run(host="0.0.0.0", port=5000, debug=False, threaded=True)
