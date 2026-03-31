@@ -1,3 +1,11 @@
+# =============================================================================
+# CANONICAL.md RULE — READ BEFORE EDITING
+# This file is governed by backend/CANONICAL.md.
+# Before editing ANY function: read CANONICAL.md and compare to current code.
+# After editing ANY function: update CANONICAL.md to match the new version.
+# NEVER commit server.py without also committing an updated CANONICAL.md.
+# =============================================================================
+
 """
 Foundry Video Editor — Local Flask Backend
 Runs on localhost:5000
@@ -322,58 +330,63 @@ def bare_stem(name):
 
 @app.route('/find_json', methods=['POST'])
 def find_json():
-    data = request.json
-    filename = data.get('filename', '')
-    print(f'[find_json] Looking for video: {filename}')
+    try:
+        data = request.json
+        filename = data.get('filename', '')
+        print(f'[find_json] Looking for video: {filename}')
 
-    # Check cache first; fall back to os.walk
-    video_path = video_path_cache.get(filename)
-    if video_path and not os.path.exists(video_path):
-        print(f'[find_json] Cached path stale, re-walking: {video_path}')
-        video_path = None
+        # Check cache first; fall back to os.walk
+        video_path = video_path_cache.get(filename)
+        if video_path and not os.path.exists(video_path):
+            print(f'[find_json] Cached path stale, re-walking: {video_path}')
+            video_path = None
 
-    if not video_path:
-        video_path = find_video_in_dropbox(filename)
+        if not video_path:
+            video_path = find_video_in_dropbox(filename)
 
-    if not video_path:
-        print(f'[find_json] ERROR: video file not found in Dropbox')
-        return jsonify({'json_found': False, 'error': 'Video file not found in Dropbox'})
+        if not video_path:
+            print(f'[find_json] ERROR: video file not found in Dropbox')
+            return jsonify({'json_found': False, 'error': 'Video file not found in Dropbox'})
 
-    # Cache for later use by /thumbnail and other routes
-    video_path_cache[filename] = video_path
-    print(f'[cache] Stored path for {filename}', flush=True)
+        # Cache for later use by /thumbnail and other routes
+        video_path_cache[filename] = video_path
+        print(f'[cache] Stored path for {filename}', flush=True)
 
-    video_folder = os.path.dirname(video_path)
-    print(f'[find_json] Found video at: {video_path}')
-    print(f'[find_json] Searching folder: {video_folder}')
-    print(f'[find_json] Files in folder: {os.listdir(video_folder)}')
+        video_folder = os.path.dirname(video_path)
+        print(f'[find_json] Found video at: {video_path}')
+        print(f'[find_json] Searching folder: {video_folder}')
+        print(f'[find_json] Files in folder: {os.listdir(video_folder)}')
 
-    # Search same folder for Words JSON
-    matches = glob.glob(os.path.join(video_folder, '*Transcript (Words).json'))
-    print(f'[find_json] Glob matches in same folder: {matches}')
+        # Search same folder for Words JSON
+        matches = glob.glob(os.path.join(video_folder, '*Transcript (Words).json'))
+        print(f'[find_json] Glob matches in same folder: {matches}')
 
-    if not matches:
-        # Try parent folder one level up
-        parent_folder = os.path.dirname(video_folder)
-        matches = glob.glob(os.path.join(parent_folder, '*Transcript (Words).json'))
-        print(f'[find_json] Glob matches in parent folder: {matches}')
+        if not matches:
+            # Try parent folder one level up
+            parent_folder = os.path.dirname(video_folder)
+            matches = glob.glob(os.path.join(parent_folder, '*Transcript (Words).json'))
+            print(f'[find_json] Glob matches in parent folder: {matches}')
 
-    if not matches:
-        print(f'[find_json] FAILED: no Words JSON found near {video_folder}')
-        return jsonify({'json_found': False, 'error': 'No transcript found near this video'})
+        if not matches:
+            print(f'[find_json] FAILED: no Words JSON found near {video_folder}')
+            return jsonify({'json_found': False, 'error': 'No transcript found near this video'})
 
-    json_path = matches[0]
-    print(f'[find_json] SUCCESS: {json_path}')
+        json_path = matches[0]
+        print(f'[find_json] SUCCESS: {json_path}')
 
-    with open(json_path, 'r', encoding='utf-8') as f:
-        content = json.load(f)
+        with open(json_path, 'r', encoding='utf-8') as f:
+            content = json.load(f)
 
-    return jsonify({
-        'json_found': True,
-        'json_path': json_path,
-        'json_filename': os.path.basename(json_path),
-        'json_content': content
-    })
+        return jsonify({
+            'json_found': True,
+            'json_path': json_path,
+            'json_filename': os.path.basename(json_path),
+            'json_content': content
+        })
+
+    except Exception as e:
+        print(f'[find_json] ERROR: {e}', flush=True)
+        return jsonify({'json_found': False, 'error': str(e)})
 
 
 # ── Generate Transcript ──
@@ -509,16 +522,12 @@ def _thumbnail_worker(job_id, filename, clipstart, clipend, clip_transcript):
             except Exception:
                 total_duration = 90.0
 
-            # FIX 1: spread frames across FULL usable range
-            start_ts = max(17.0, float(clipstart) if clipstart else 0.0)
-            end_ts   = float(clipend) if clipend else total_duration
-            end_ts   = max(start_ts + 5.0, min(end_ts, total_duration - 1.0))
-            n_sample = 20
-            timestamps = [start_ts + i * (end_ts - start_ts) / (n_sample - 1)
-                          for i in range(n_sample)]
-
-            print(f'[thumbnail] Job {job_id}: duration={total_duration:.1f}s '
-                  f'range={start_ts:.1f}..{end_ts:.1f}s', flush=True)
+            start_t = max(17, float(clipstart or 0))
+            end_t = float(clipend) if clipend else total_duration
+            if end_t <= start_t:
+                end_t = total_duration
+            timestamps = [start_t + i * (end_t - start_t) / 19 for i in range(20)]
+            print(f'[thumbnail] timestamps from {start_t:.1f}s to {end_t:.1f}s ({len(timestamps)} frames)', flush=True)
 
             # ── Extract frames ──
             scored = []
