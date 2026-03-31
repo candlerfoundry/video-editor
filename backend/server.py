@@ -29,6 +29,13 @@ import whisper
 from flask import Flask, jsonify, request, send_file
 from flask_cors import CORS
 
+# The desktop launcher drains stderr but older builds may not drain stdout.
+# Route app logging to stderr so verbose thumbnail jobs cannot block the backend
+# by filling an unread stdout pipe.
+if hasattr(sys.stderr, "reconfigure"):
+    sys.stderr.reconfigure(line_buffering=True)
+sys.stdout = sys.stderr
+
 app = Flask(__name__)
 CORS(app)
 

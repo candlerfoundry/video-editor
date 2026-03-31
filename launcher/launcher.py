@@ -41,7 +41,7 @@ class LauncherApp:
     def __init__(self, root):
         self.root = root
         self.proc = None
-        self._stderr_lines = []
+        self._backend_log_lines = []
         self._build_window()
         self._build_ui()
         threading.Thread(target=self._launch_sequence, daemon=True).start()
@@ -155,13 +155,13 @@ class LauncherApp:
     def _enable_btn(self):
         self.root.after(0, lambda: self._btn.config(state=tk.NORMAL))
 
-    def _read_stderr(self, proc):
-        """Daemon thread: read stderr line by line into buffer and log widget."""
+    def _read_backend_output(self, proc):
+        """Drain the backend log stream so the child process never blocks on a full pipe."""
         try:
-            for raw_line in proc.stderr:
+            for raw_line in proc.stdout:
                 line = raw_line.decode('utf-8', errors='replace').rstrip()
                 if line:
-                    self._stderr_lines.append(line)
+                    self._backend_log_lines.append(line)
                     self._log_line(line)
         except Exception:
             pass
@@ -185,7 +185,7 @@ class LauncherApp:
         self.root.after(0, _do)
 
     def _copy_error_to_clipboard(self):
-        text = '\n'.join(self._stderr_lines[-20:])
+        text = '\n'.join(self._backend_log_lines[-20:])
         self.root.clipboard_clear()
         self.root.clipboard_append(text)
 
@@ -204,6 +204,7 @@ class LauncherApp:
             return
 
         self._log_line(f'[launcher] Python: {python_exe}')
+        self._log_line(f'[launcher] Using backend: {server_path}')
 
         req_path = os.path.join(os.path.dirname(server_path), 'requirements.txt')
         if os.path.isfile(req_path):
@@ -224,7 +225,7 @@ class LauncherApp:
             self.proc = subprocess.Popen(
                 [python_exe, server_path],
                 stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
                 creationflags=0x08000000,
             )
         except Exception as e:
@@ -232,14 +233,14 @@ class LauncherApp:
             self._log_line(f'[launcher] Failed to start: {e}')
             return
 
-        # Start daemon thread to capture stderr continuously
-        threading.Thread(target=self._read_stderr, args=(self.proc,), daemon=True).start()
+        # Start daemon thread to continuously drain the merged backend log stream.
+        threading.Thread(target=self._read_backend_output, args=(self.proc,), daemon=True).start()
 
         # Wait 2 seconds then check if process is still alive
         time.sleep(2)
         if self.proc.poll() is not None:
             self._set_status('Backend failed to start — see error below', DOT_RED)
-            tail = self._stderr_lines[-20:] or ['(no stderr output captured)']
+            tail = self._backend_log_lines[-20:] or ['(no backend log output captured)']
             for line in tail:
                 self._log_line(line)
             self._show_copy_error_btn()
@@ -251,7 +252,7 @@ class LauncherApp:
             if self.proc.poll() is not None:
                 self._set_status('Backend failed to start — see error below', DOT_RED)
                 time.sleep(0.3)  # let stderr reader catch up
-                tail = self._stderr_lines[-20:] or ['(no stderr output captured)']
+                tail = self._backend_log_lines[-20:] or ['(no backend log output captured)']
                 for line in tail:
                     self._log_line(line)
                 self._show_copy_error_btn()
@@ -271,7 +272,7 @@ class LauncherApp:
 
         self._set_status('Backend failed to start — see error below', DOT_RED)
         self._log_line('[launcher] Backend did not respond within 15s.')
-        tail = self._stderr_lines[-20:] or ['(no stderr output captured)']
+        tail = self._backend_log_lines[-20:] or ['(no backend log output captured)']
         for line in tail:
             self._log_line(line)
         self._show_copy_error_btn()

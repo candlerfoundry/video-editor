@@ -18,6 +18,10 @@
 
 ## 1. FLASK APP STARTUP — app.run MUST have threaded=True
 
+if hasattr(sys.stderr, "reconfigure"):
+    sys.stderr.reconfigure(line_buffering=True)
+sys.stdout = sys.stderr
+
 if __name__ == '__main__':
     print('[startup] Starting Foundry Video Editor backend...', flush=True)
     print(f'[startup] Python: {sys.executable}', flush=True)
@@ -26,6 +30,8 @@ if __name__ == '__main__':
 
 WHY: Without threaded=True Flask cannot handle concurrent requests.
 The health poll (every 3s) will timeout during thumbnail generation without this.
+Routing stdout to stderr is also required because the launcher drains stderr; if stdout
+is piped but unread, verbose thumbnail logging can fill the pipe and freeze the backend.
 REGRESSION RISK: High. Often dropped when server.py is restructured.
 
 ---
