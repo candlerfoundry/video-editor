@@ -771,6 +771,8 @@ def update_project():
                     'clip_type': payload.get('clip_type'),
                     'clip_dropbox_url': payload.get('clip_dropbox_url'),
                     'thumbnail_dropbox_url': payload.get('thumbnail_dropbox_url'),
+                    'thumbnail_mode': payload.get('thumbnail_mode'),
+                    'thumbnail_draft_id': payload.get('thumbnail_draft_id'),
                     'exported_at': iso_now(),
                 }
                 upsert_project_list_item(

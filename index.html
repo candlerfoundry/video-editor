@@ -1782,7 +1782,7 @@
               <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
                 <polyline points="20 6 9 17 4 12"/>
               </svg>
-              Done Editing Video
+              Continue to Export
             </button>
           </div>
 
@@ -4682,6 +4682,8 @@
 
   let thumbnailBlob    = null;   // PNG blob captured from dialog canvas
   let thumbnailBlobUrl = null;   // object URL for in-app display
+  let _exportThumbnailMode = 'video_only';
+  let _selectedReuseThumbnailDraftId = null;
   let _dlgStyle          = 'warm_bar';
   let _dlgTitle          = '';
   let _dlgFontFamily     = 'Montserrat';
@@ -4716,17 +4718,240 @@
     },
   };
 
+  function getCurrentProjectThumbnailDrafts() {
+    const drafts = activeProject?.thumbnail_drafts || [];
+    return drafts
+      .filter(draft => {
+        const sameFilename = !draft.source_filename || !_clipFile || draft.source_filename === _clipFile.name;
+        const samePath = !draft.source_path || !activeProject?.source_path || draft.source_path === activeProject.source_path;
+        return sameFilename && samePath;
+      })
+      .slice()
+      .sort((a, b) => String(b.saved_at || '').localeCompare(String(a.saved_at || '')));
+  }
+
+  function cloneDraftForCurrentClip(draft, duplicate = false) {
+    const cloned = JSON.parse(JSON.stringify(draft || {}));
+    cloned.entry_point = 'clip';
+    cloned.source_filename = _clipFile?.name || cloned.source_filename || '';
+    cloned.source_path = activeProject?.source_path || activeProject?.source_video?.path || cloned.source_path || '';
+    cloned.clip_start = editorInTime;
+    cloned.clip_end = editorOutTime;
+    if (duplicate || !cloned.draft_id) {
+      cloned.draft_id = 'draft-' + Date.now();
+    }
+    return cloned;
+  }
+
+  async function renderThumbnailDraftToBlob(draft) {
+    const cfg = getThumbTargetConfig(draft?.target_format || 'instagram');
+    const canvas = document.createElement('canvas');
+    canvas.width = cfg.width;
+    canvas.height = cfg.height;
+    const boxes = draft?.text_boxes || [];
+    const box = boxes[0] || makeThumbnailTextBox(draft?.title || '');
+    const frame = (draft?.available_frames || [])[draft?.selected_frame_index || 0];
+    if (!frame) throw new Error('This thumbnail draft has no saved frame data yet.');
+    return await new Promise((resolve, reject) => {
+      renderFrameCanvas(canvas, frame, draft?.style || 'warm_bar', (ctx, W) => {
+        drawThumbTextBlock(
+          ctx,
+          W,
+          box.text || '',
+          box.font_size || 64,
+          box.font_family || 'Montserrat',
+          box.x ?? (cfg.width * 0.5),
+          box.y ?? getDefaultThumbTextPosition(draft?.style || 'warm_bar', draft?.target_format || 'instagram').y,
+          box.color || '#ffffff',
+          box.shadow ?? true,
+          box.background_opacity ?? 0,
+          box.background_color || '#111111'
+        );
+        canvas.toBlob(blob => {
+          if (!blob) {
+            reject(new Error('Could not render thumbnail draft.'));
+            return;
+          }
+          resolve(blob);
+        }, 'image/png');
+      });
+    });
+  }
+
+  function setExportThumbnailPreview(blobUrl, metaText) {
+    const thumbRow = document.getElementById('export-thumb-preview-row');
+    const thumbImg = document.getElementById('export-thumb-img');
+    const meta = document.getElementById('export-thumb-preview-meta');
+    if (!thumbRow || !thumbImg || !meta) return;
+    if (blobUrl) {
+      thumbImg.src = blobUrl;
+      thumbRow.style.display = 'flex';
+      meta.textContent = metaText || 'Will be saved alongside your clip';
+    } else {
+      thumbRow.style.display = 'none';
+      thumbImg.removeAttribute('src');
+    }
+  }
+
+  async function applyReuseThumbnailDraft(draftId) {
+    const draft = getCurrentProjectThumbnailDrafts().find(item => item.draft_id === draftId);
+    if (!draft) return;
+    _selectedReuseThumbnailDraftId = draftId;
+    try {
+      const blob = await renderThumbnailDraftToBlob(draft);
+      if (thumbnailBlobUrl) URL.revokeObjectURL(thumbnailBlobUrl);
+      thumbnailBlob = blob;
+      thumbnailBlobUrl = URL.createObjectURL(blob);
+      setThumbPreviewRatio(draft.target_format || 'instagram');
+      setExportThumbnailPreview(thumbnailBlobUrl, 'Using saved project thumbnail draft');
+      renderExportThumbnailChoices();
+    } catch (err) {
+      alert(err.message);
+    }
+  }
+
+  function openThumbnailComposerForExport() {
+    document.getElementById('dialog-export').close();
+    openThumbDialog();
+  }
+
+  function editExistingThumbnailDraft(draftId) {
+    const draft = getCurrentProjectThumbnailDrafts().find(item => item.draft_id === draftId);
+    if (!draft) return;
+    document.getElementById('dialog-export').close();
+    _thumbFile = _clipFile;
+    _sharedThumbnailEntryPoint = 'clip';
+    _sharedThumbnailDraft = cloneDraftForCurrentClip(draft, false);
+    applyDraftToDialogState();
+    updateSharedComposerDoneLabel();
+    syncDlgTargetFormat(_dlgTargetFormat);
+    document.getElementById('dialog-thumb').showModal();
+    if (_dlgFrames.length) {
+      dlgBuildHeroState();
+      dlgShowState('hero');
+      return;
+    }
+    dlgShowState('processing');
+    dlgSetStep(1);
+    dlgGenerateThumbnail();
+  }
+
+  function duplicateAndEditThumbnailDraft(draftId) {
+    const draft = getCurrentProjectThumbnailDrafts().find(item => item.draft_id === draftId);
+    if (!draft) return;
+    document.getElementById('dialog-export').close();
+    _thumbFile = _clipFile;
+    _sharedThumbnailEntryPoint = 'clip';
+    _sharedThumbnailDraft = cloneDraftForCurrentClip(draft, true);
+    applyDraftToDialogState();
+    updateSharedComposerDoneLabel();
+    syncDlgTargetFormat(_dlgTargetFormat);
+    document.getElementById('dialog-thumb').showModal();
+    if (_dlgFrames.length) {
+      dlgBuildHeroState();
+      dlgShowState('hero');
+      return;
+    }
+    dlgShowState('processing');
+    dlgSetStep(1);
+    dlgGenerateThumbnail();
+  }
+
+  function renderExportThumbnailChoices() {
+    const help = document.getElementById('export-thumb-help');
+    const createPanel = document.getElementById('export-thumb-create-panel');
+    const existingPanel = document.getElementById('export-thumb-existing-panel');
+    const list = document.getElementById('export-existing-thumbnails');
+    if (!help || !createPanel || !existingPanel || !list) return;
+
+    document.getElementById('export-thumb-mode-video')?.classList.toggle('active', _exportThumbnailMode === 'video_only');
+    document.getElementById('export-thumb-mode-create')?.classList.toggle('active', _exportThumbnailMode === 'create_new');
+    document.getElementById('export-thumb-mode-existing')?.classList.toggle('active', _exportThumbnailMode === 'reuse_existing');
+
+    createPanel.style.display = _exportThumbnailMode === 'create_new' ? 'block' : 'none';
+    existingPanel.style.display = _exportThumbnailMode === 'reuse_existing' ? 'block' : 'none';
+
+    if (_exportThumbnailMode === 'video_only') {
+      help.textContent = 'Export the edited clip without attaching a thumbnail.';
+      setExportThumbnailPreview('', '');
+    } else if (_exportThumbnailMode === 'create_new') {
+      help.textContent = 'Use the shared thumbnail composer with this clip preloaded, then return here to export.';
+      const hasClipDraft = !!(
+        _sharedThumbnailDraft?.available_frames?.length &&
+        _sharedThumbnailDraft?.source_filename === _clipFile?.name &&
+        _sharedThumbnailDraft?.clip_start === editorInTime &&
+        _sharedThumbnailDraft?.clip_end === editorOutTime
+      );
+      const meta = document.getElementById('export-thumb-create-meta');
+      if (meta) {
+        meta.textContent = hasClipDraft
+          ? 'A clip thumbnail is already prepared. You can export as-is or re-open the composer to keep editing.'
+          : 'Open the shared composer with this clip preloaded.';
+      }
+      if (hasClipDraft && thumbnailBlobUrl) {
+        setExportThumbnailPreview(thumbnailBlobUrl, 'Using current clip thumbnail');
+      } else {
+        setExportThumbnailPreview('', '');
+      }
+    } else {
+      help.textContent = 'Choose an editable thumbnail draft already saved in this project.';
+      const drafts = getCurrentProjectThumbnailDrafts();
+      if (!drafts.length) {
+        list.innerHTML = '<div class="recent-project-empty">No saved thumbnail drafts exist for this source video yet.</div>';
+      } else {
+        list.innerHTML = drafts.map(draft => {
+          const box = (draft.text_boxes || [])[0] || {};
+          const selected = draft.draft_id === _selectedReuseThumbnailDraftId;
+          return (
+            '<div class="recent-project-item" style="' + (selected ? 'border-color: var(--orange); background: var(--orange-tint);' : '') + '">' +
+              '<div class="recent-project-top">' +
+                '<div class="recent-project-name">' + escHtml(box.text || draft.source_filename || 'Thumbnail draft') + '</div>' +
+                '<div class="recent-project-date">' + escHtml(formatProjectDate(draft.saved_at)) + '</div>' +
+              '</div>' +
+              '<div class="recent-project-source">' +
+                'Format: ' + escHtml(draft.target_format || 'instagram') +
+                (draft.clip_start !== null && draft.clip_start !== undefined ? '<br>Clip context: ' + escHtml(formatTime(draft.clip_start)) + ' - ' + escHtml(formatTime(draft.clip_end || draft.clip_start)) : '') +
+              '</div>' +
+              '<div class="recent-project-actions">' +
+                '<button type="button" class="btn-ghost btn-sm" onclick="applyReuseThumbnailDraft(\'' + escHtml(draft.draft_id) + '\')">Use This Thumbnail</button>' +
+                '<button type="button" class="btn-ghost btn-sm" onclick="editExistingThumbnailDraft(\'' + escHtml(draft.draft_id) + '\')">Edit</button>' +
+                '<button type="button" class="btn-ghost btn-sm" onclick="duplicateAndEditThumbnailDraft(\'' + escHtml(draft.draft_id) + '\')">Duplicate &amp; Edit</button>' +
+              '</div>' +
+            '</div>'
+          );
+        }).join('');
+      }
+      if (_selectedReuseThumbnailDraftId && thumbnailBlobUrl) {
+        setExportThumbnailPreview(thumbnailBlobUrl, 'Using saved project thumbnail draft');
+      } else {
+        setExportThumbnailPreview('', '');
+      }
+    }
+  }
+
+  function setExportThumbnailMode(mode) {
+    _exportThumbnailMode = mode;
+    if (mode !== 'reuse_existing') {
+      _selectedReuseThumbnailDraftId = null;
+    }
+    renderExportThumbnailChoices();
+  }
+
   function openDoneEditingModal() {
-    document.getElementById('modal-pre-export').showModal();
+    openExportFormDialog();
   }
 
   function skipToExport() {
     document.getElementById('modal-pre-export').close();
+    _exportThumbnailMode = 'video_only';
     openExportFormDialog();
   }
 
   function openThumbDialog() {
-    document.getElementById('modal-pre-export').close();
+    const preExport = document.getElementById('modal-pre-export');
+    if (preExport?.open) preExport.close();
+    const exportDialog = document.getElementById('dialog-export');
+    if (exportDialog?.open) exportDialog.close();
     if (!_clipFile) {
       alert('Load a video first.');
       return;
@@ -5245,15 +5470,17 @@
     const endFmt   = editorOutTime.toFixed(1);
     document.getElementById('export-filename').value = baseName + ' - Clip (' + startFmt + '-' + endFmt + ').mp4';
     document.getElementById('export-type').value = detectClipType(_clipFile ? _clipFile.name : '');
-    const thumbRow = document.getElementById('export-thumb-preview-row');
-    if (thumbnailBlobUrl) {
-      document.getElementById('export-thumb-img').src = thumbnailBlobUrl;
-      thumbRow.style.display = 'flex';
-    } else {
-      thumbRow.style.display = 'none';
-    }
+    const hasClipDraft = !!(
+      _sharedThumbnailDraft?.available_frames?.length &&
+      _sharedThumbnailDraft?.source_filename === _clipFile?.name &&
+      _sharedThumbnailDraft?.clip_start === editorInTime &&
+      _sharedThumbnailDraft?.clip_end === editorOutTime
+    );
+    _exportThumbnailMode = hasClipDraft ? 'create_new' : 'video_only';
+    _selectedReuseThumbnailDraftId = null;
     document.getElementById('export-dialog-status').style.display = 'none';
     document.getElementById('btn-export-save').disabled = false;
+    renderExportThumbnailChoices();
     document.getElementById('dialog-export').showModal();
   }
 
@@ -5272,6 +5499,42 @@
     const clipType = document.getElementById('export-type').value;
     const statusEl = document.getElementById('export-dialog-status');
     const btn      = document.getElementById('btn-export-save');
+    let exportThumbnailBlob = null;
+
+    if (_exportThumbnailMode === 'create_new') {
+      if (thumbnailBlob) {
+        exportThumbnailBlob = thumbnailBlob;
+      } else if (_sharedThumbnailDraft?.available_frames?.length) {
+        try {
+          exportThumbnailBlob = await renderThumbnailDraftToBlob(_sharedThumbnailDraft);
+        } catch (err) {
+          alert(err.message);
+          return;
+        }
+      } else {
+        alert('Open the shared composer and create a thumbnail before exporting with a thumbnail.');
+        return;
+      }
+    }
+
+    if (_exportThumbnailMode === 'reuse_existing') {
+      if (!_selectedReuseThumbnailDraftId) {
+        alert('Choose an existing project thumbnail before exporting.');
+        return;
+      }
+      const draft = getCurrentProjectThumbnailDrafts().find(item => item.draft_id === _selectedReuseThumbnailDraftId);
+      if (!draft) {
+        alert('That project thumbnail draft is no longer available.');
+        return;
+      }
+      try {
+        exportThumbnailBlob = await renderThumbnailDraftToBlob(draft);
+      } catch (err) {
+        alert(err.message);
+        return;
+      }
+    }
+
     btn.disabled = true;
     statusEl.style.display = 'block';
 
@@ -5300,8 +5563,8 @@
         .map(w => w.word).join(' ').trim();
       if (clipWords) form.append('clip_transcript', clipWords);
     }
-    if (thumbnailBlob) {
-      form.append('thumbnail', thumbnailBlob, filename.replace(/\.mp4$/i, '') + ' - Thumbnail.png');
+    if (exportThumbnailBlob) {
+      form.append('thumbnail', exportThumbnailBlob, filename.replace(/\.mp4$/i, '') + ' - Thumbnail.png');
     }
 
     try {
@@ -5328,6 +5591,8 @@
         clip_type: clipType,
         clip_dropbox_url: data.clip_dropbox_url,
         thumbnail_dropbox_url: data.thumbnail_dropbox_url,
+        thumbnail_mode: _exportThumbnailMode,
+        thumbnail_draft_id: _exportThumbnailMode === 'reuse_existing' ? _selectedReuseThumbnailDraftId : (_sharedThumbnailDraft?.draft_id || ''),
       });
     } catch (err) {
       clearTimeout(t1); clearTimeout(t2);
@@ -5664,6 +5929,33 @@
       <label class="export-form-label">Save Location</label>
       <span class="export-form-readonly">~/Dropbox/Social Media Clips/</span>
     </div>
+    <div class="export-form-row">
+      <label class="export-form-label">Thumbnail</label>
+      <div style="display:flex;flex-direction:column;gap:10px;">
+        <div style="display:flex;gap:8px;flex-wrap:wrap;">
+          <button type="button" class="btn-ghost btn-sm" id="export-thumb-mode-video" onclick="setExportThumbnailMode('video_only')">Video Only</button>
+          <button type="button" class="btn-ghost btn-sm" id="export-thumb-mode-create" onclick="setExportThumbnailMode('create_new')">Video + Create Thumbnail</button>
+          <button type="button" class="btn-ghost btn-sm" id="export-thumb-mode-existing" onclick="setExportThumbnailMode('reuse_existing')">Video + Existing Thumbnail</button>
+        </div>
+        <div id="export-thumb-help" style="font-size:12px;color:var(--muted);line-height:1.55;"></div>
+      </div>
+    </div>
+    <div id="export-thumb-create-panel" style="display:none;margin-bottom:12px;padding:12px;background:var(--sidebar-bg);border:1px solid var(--border);border-radius:var(--r);">
+      <div style="display:flex;justify-content:space-between;gap:12px;align-items:flex-start;flex-wrap:wrap;">
+        <div>
+          <div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:0.07em;color:var(--orange);margin-bottom:4px;">Create or Edit Thumbnail</div>
+          <div id="export-thumb-create-meta" style="font-size:13px;color:var(--text-2);line-height:1.6;">Open the shared composer with this clip preloaded.</div>
+        </div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;">
+          <button type="button" class="btn btn-sm" onclick="openThumbnailComposerForExport()">Open Shared Composer</button>
+          <button type="button" class="btn-ghost btn-sm" onclick="saveCurrentThumbnailDraft(true)">Save Draft</button>
+        </div>
+      </div>
+    </div>
+    <div id="export-thumb-existing-panel" style="display:none;margin-bottom:12px;padding:12px;background:var(--sidebar-bg);border:1px solid var(--border);border-radius:var(--r);">
+      <div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:0.07em;color:var(--text);margin-bottom:8px;">Project Thumbnails</div>
+      <div id="export-existing-thumbnails" style="display:flex;flex-direction:column;gap:10px;"></div>
+    </div>
     <div id="export-thumb-preview-row"
          style="display:none;margin-bottom:4px;padding:12px;background:var(--sidebar-bg);
                 border:1px solid var(--border);border-radius:var(--r);align-items:center;gap:12px;">
@@ -5672,7 +5964,7 @@
                   border:1px solid var(--border);flex-shrink:0;" />
       <div>
         <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.07em;color:var(--green);margin-bottom:3px;">Thumbnail ready</div>
-        <div style="font-size:13px;color:var(--text-2);">Will be saved alongside your clip</div>
+        <div id="export-thumb-preview-meta" style="font-size:13px;color:var(--text-2);">Will be saved alongside your clip</div>
       </div>
     </div>
   </div>

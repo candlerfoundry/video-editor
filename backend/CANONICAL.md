@@ -387,3 +387,34 @@ Canonical backend requirements:
 - Backward compatibility with the earlier lightweight thumbnail save event is acceptable, but the canonical structure is the richer draft model above.
 
 Regression risk: High.
+
+---
+
+## 17. Clip export handoff and thumbnail reuse
+
+Canonical product rules:
+- After clip editing, users stay in the clip workflow and move directly into export choices.
+- The clip export handoff must support:
+  - video only
+  - video + create thumbnail
+  - video + choose existing thumbnail
+- Existing thumbnail reuse must come from project-aware local thumbnail drafts for the same source-video project, not from ad hoc Dropbox image picking.
+- If feasible, existing drafts may be opened for edit or duplicate-and-edit from the clip export handoff.
+
+Canonical frontend requirements in `index.html`:
+- The `Done Editing Video` handoff should open export options, not force the user into a separate standalone thumbnail workflow.
+- `Video + Create Thumbnail` must launch the shared composer with current clip context preloaded:
+  - source video
+  - clip start/end
+  - candidate frames when already available
+  - suggested titles when already available
+- `Video + Existing Thumbnail` must list saved project thumbnail drafts for the current source-video project context.
+- Reusing a saved draft should render a fresh export PNG from the saved editable draft data, not depend on a previously flattened Dropbox image.
+- Export preview state should clearly reflect whether the user is exporting video only, a current clip thumbnail, or a reused project draft.
+
+Canonical backend/project requirements:
+- `thumbnail_drafts` remain the source of reusable thumbnail state for export handoff.
+- `exports` may record `thumbnail_mode` and `thumbnail_draft_id` when a thumbnail is attached during clip export.
+- Clip export must still keep Dropbox writes intentional: no final thumbnail or clip file should be written until the user confirms export.
+
+Regression risk: High.
