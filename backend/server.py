@@ -168,7 +168,7 @@ def get_video_dimensions(video_path, ffmpeg_exe):
         data = json.loads(result.stdout)
         w = data['streams'][0]['width']
         h = data['streams'][0]['height']
-        print(f'[dimensions] {video_path}: {w}x{h}')
+        logger.info('[dimensions] %s: %sx%s', video_path, w, h)
         return w, h
 
     # Derive ffprobe path from ffmpeg path; fall back to bare 'ffprobe'
@@ -181,7 +181,7 @@ def get_video_dimensions(video_path, ffmpeg_exe):
                 return _probe('ffprobe')
             except Exception:
                 pass
-        print(f'[dimensions] ffprobe failed, using default 1920x1080: {e}')
+        logger.warning('[dimensions] ffprobe failed, using default 1920x1080: %s', e)
         return 1920, 1080
 
 
@@ -342,7 +342,10 @@ def caption():
         # Detect video dimensions and choose adaptive caption style
         width, height = get_video_dimensions(input_path, FFMPEG_EXE)
         cap_style = get_caption_style(width, height)
-        print(f'[captions] Orientation: {cap_style["label"]} — fontsize {cap_style["fontsize"]}')
+        logger.info(
+            '[captions] Orientation: %s fontsize=%s',
+            cap_style["label"], cap_style["fontsize"],
+        )
 
         style = (
             f"Fontsize={cap_style['fontsize']},{STYLE_STR},"
@@ -433,46 +436,46 @@ def find_json():
     try:
         data = request.json
         filename = data.get('filename', '')
-        print(f'[find_json] Looking for video: {filename}')
+        logger.info('[find_json] Looking for video: %s', filename)
 
         # Check cache first; fall back to os.walk
         video_path = video_path_cache.get(filename)
         if video_path and not os.path.exists(video_path):
-            print(f'[find_json] Cached path stale, re-walking: {video_path}')
+            logger.info('[find_json] Cached path stale, re-walking: %s', video_path)
             video_path = None
 
         if not video_path:
             video_path = find_video_in_dropbox(filename)
 
         if not video_path:
-            print(f'[find_json] ERROR: video file not found in Dropbox')
+            logger.warning('[find_json] Video file not found in Dropbox: %s', filename)
             return jsonify({'json_found': False, 'error': 'Video file not found in Dropbox'})
 
         # Cache for later use by /thumbnail and other routes
         video_path_cache[filename] = video_path
-        print(f'[cache] Stored path for {filename}', flush=True)
+        logger.info('[cache] Stored path for %s', filename)
 
         video_folder = os.path.dirname(video_path)
-        print(f'[find_json] Found video at: {video_path}')
-        print(f'[find_json] Searching folder: {video_folder}')
-        print(f'[find_json] Files in folder: {os.listdir(video_folder)}')
+        logger.info('[find_json] Found video at: %s', video_path)
+        logger.debug('[find_json] Searching folder: %s', video_folder)
+        logger.debug('[find_json] Files in folder: %s', os.listdir(video_folder))
 
         # Search same folder for Words JSON
         matches = glob.glob(os.path.join(video_folder, '*Transcript (Words).json'))
-        print(f'[find_json] Glob matches in same folder: {matches}')
+        logger.debug('[find_json] Glob matches in same folder: %s', matches)
 
         if not matches:
             # Try parent folder one level up
             parent_folder = os.path.dirname(video_folder)
             matches = glob.glob(os.path.join(parent_folder, '*Transcript (Words).json'))
-            print(f'[find_json] Glob matches in parent folder: {matches}')
+            logger.debug('[find_json] Glob matches in parent folder: %s', matches)
 
         if not matches:
-            print(f'[find_json] FAILED: no Words JSON found near {video_folder}')
+            logger.warning('[find_json] No Words JSON found near %s', video_folder)
             return jsonify({'json_found': False, 'error': 'No transcript found near this video'})
 
         json_path = matches[0]
-        print(f'[find_json] SUCCESS: {json_path}')
+        logger.info('[find_json] Using transcript JSON: %s', json_path)
 
         with open(json_path, 'r', encoding='utf-8') as f:
             content = json.load(f)
@@ -485,7 +488,7 @@ def find_json():
         })
 
     except Exception as e:
-        print(f'[find_json] ERROR: {e}', flush=True)
+        logger.exception('[find_json] ERROR')
         return jsonify({'json_found': False, 'error': str(e)})
 
 
@@ -925,7 +928,7 @@ Transcript:
         }]
     )
     raw = message.content[0].text.strip()
-    print(f"[clips] Claude raw (first 300 chars): {raw[:300]}")
+    logger.debug("[clips] Claude raw (first 300 chars): %s", raw[:300])
     return _parse_claude_json(raw)
 
 
@@ -940,8 +943,8 @@ def find_clips():
 
         # transcript is a pre-formatted timestamped string: "[0.0] word [0.4] another ..."
         transcript_text = transcript if isinstance(transcript, str) else ' '.join(str(w) for w in transcript)
-        print(f"[clips] Transcript length: {len(transcript_text)} chars")
-        print(f"[clips] Preview: {transcript_text[:200]}")
+        logger.info("[clips] Transcript length: %s chars", len(transcript_text))
+        logger.debug("[clips] Preview: %s", transcript_text[:200])
 
         api_key_path = os.path.join(os.path.expanduser('~'), 'Dropbox', 'Scripts', 'api_key.txt')
         with open(api_key_path, 'r') as f:
@@ -956,26 +959,27 @@ def find_clips():
             try:
                 candidates = _call_clips_claude(transcript_text, client)
             except Exception as ce:
-                print(f"[clips] Attempt {attempt+1} Claude call failed: {ce}")
+                logger.warning("[clips] Attempt %s Claude call failed: %s", attempt + 1, ce)
                 candidates = []
 
             valid = [
                 c for c in candidates
                 if 25 <= (c.get('end_time', 0) - c.get('start_time', 0)) <= 95
             ]
-            print(f"[clips] Attempt {attempt+1}: {len(candidates)} total, {len(valid)} valid (25-95s)")
+            logger.info(
+                "[clips] Attempt %s: %s total, %s valid (25-95s)",
+                attempt + 1, len(candidates), len(valid),
+            )
 
             if len(valid) >= 3:
                 break
             if attempt < MAX_RETRIES - 1:
-                print(f"[clips] Too few valid clips — retrying...")
+                logger.info("[clips] Too few valid clips; retrying")
 
         return jsonify({'candidates': valid})
 
     except Exception as e:
-        print(f"ERROR in /clips: {e}")
-        import traceback
-        traceback.print_exc()
+        logger.exception("ERROR in /clips")
         return jsonify({'error': str(e), 'candidates': []})
 
 
@@ -1001,7 +1005,7 @@ def split_video():
             return jsonify({'error': 'Transcript too short', 'parts': []})
 
         transcript_text = transcript if isinstance(transcript, str) else ' '.join(str(w) for w in transcript)
-        print(f"[split] Transcript length: {len(transcript_text)} chars")
+        logger.info("[split] Transcript length: %s chars", len(transcript_text))
 
         # Validate n_parts
         if n_parts is not None:
@@ -1061,9 +1065,9 @@ Transcript:
         )
 
         raw = message.content[0].text.strip()
-        print(f"[split] Claude raw (first 300 chars): {raw[:300]}")
+        logger.debug("[split] Claude raw (first 300 chars): %s", raw[:300])
         parts = _parse_claude_json(raw)
-        print(f"[split] Parsed {len(parts)} parts")
+        logger.info("[split] Parsed %s parts", len(parts))
 
         # Sort by part number to guarantee order
         parts.sort(key=lambda p: p.get('part', 0))
@@ -1071,9 +1075,7 @@ Transcript:
         return jsonify({'parts': parts})
 
     except Exception as e:
-        print(f"ERROR in /split: {e}")
-        import traceback
-        traceback.print_exc()
+        logger.exception("ERROR in /split")
         return jsonify({'error': str(e), 'parts': []})
 
 
@@ -1207,9 +1209,9 @@ def export_clip():
             thumb_url = get_shared_link(thumb_dbx_path)
 
     except FileNotFoundError:
-        print("dropbox_credentials.json not found — skipping Dropbox link generation")
+        logger.warning("dropbox_credentials.json not found; skipping Dropbox link generation")
     except Exception as de:
-        print(f"Dropbox error: {de}")
+        logger.warning("Dropbox error during shared-link generation: %s", de)
 
     # ── Step D: Search source video record in Airtable ──
     api_key          = read_api_key()
@@ -1228,7 +1230,7 @@ def export_clip():
                 if records:
                     source_record_id = records[0]["id"]
         except Exception as ae:
-            print(f"Airtable source lookup failed: {ae}")
+            logger.warning("Airtable source lookup failed: %s", ae)
 
     # ── Step E: Create Airtable record (Video Shorts & Social) ──
     airtable_record_id = None
@@ -1268,7 +1270,7 @@ def export_clip():
                         "/tbll0KDqmrAlwQuAx/" + airtable_record_id
                     )
         except Exception as ae:
-            print(f"Airtable record creation failed: {ae}")
+            logger.warning("Airtable record creation failed: %s", ae)
 
     return jsonify({
         "success":               True,

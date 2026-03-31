@@ -48,6 +48,7 @@ Why:
 - `threaded=True` is required so `/health` keeps answering while long jobs run.
 - `sys.stdout = sys.stderr` protects older launcher builds that only drain stderr.
 - Thumbnail paths must use `logging`, not `print()`, so log volume is controlled and routable.
+- The same rule also applies to `/find_json`, `/clips`, `/split`, caption helpers, and export integrations.
 - Normal job lifecycle logs belong at `INFO`.
 - Per-frame diagnostics belong at `DEBUG` and must stay behind `FVE_THUMBNAIL_DEBUG`, off by default.
 
@@ -130,6 +131,13 @@ Canonical requirements:
 Frontend contract:
 - `index.html` checks `data.json_found`.
 
+Logging rules:
+- `INFO`: lookup start, cache store, final chosen transcript JSON
+- `DEBUG`: folder listings and glob result details
+- `WARNING`: missing video or missing transcript JSON
+- `EXCEPTION`: unexpected route failure
+- do not add `print()` calls back to this route or Dropbox-walk helpers
+
 Regression risk: High.
 
 ---
@@ -203,7 +211,44 @@ Regression risk: High.
 
 ---
 
-## 9. Thumbnail preview rendering
+## 9. /clips and /split logging discipline
+
+Canonical requirements:
+- Both routes must use `logger`, not `print()`.
+- `INFO`: transcript length, attempt summaries, parsed result counts.
+- `DEBUG`: Claude raw preview snippets and transcript previews.
+- `WARNING`: retryable Claude/API failures.
+- `EXCEPTION`: route-level failures.
+
+Why:
+- These routes can produce large prompt/response debug output.
+- If they regress back to noisy `print()` loops, they can recreate the same launcher/backend I/O blockage pattern.
+
+Instruction for future coding sessions:
+- Before adding diagnostics to `/clips` or `/split`, prefer one summary line.
+- Only log raw model output snippets at `DEBUG`.
+- Never log full transcripts or full model responses at `INFO`.
+
+Regression risk: High.
+
+---
+
+## 10. Export and integration logging
+
+Canonical requirements:
+- Dropbox-link generation and Airtable integration must use `logger.warning(...)` for recoverable failures.
+- These integration failures should not crash the export route when the clip itself succeeded.
+- Do not add `print()` calls in export-side Dropbox/Airtable branches.
+
+Why:
+- These integrations can fail intermittently and are often edited during operational debugging.
+- Reintroducing `print()` in retry-prone integration paths recreates backend I/O risk.
+
+Regression risk: Medium.
+
+---
+
+## 11. Thumbnail preview rendering
 
 All thumbnail surfaces in `index.html` must use one aspect-ratio-preserving cover-fit helper:
 - main thumbnail editor canvas
@@ -224,7 +269,7 @@ Regression risk: High.
 
 ---
 
-## 10. Health polling
+## 12. Health polling
 
 Canonical `index.html` behavior:
 - poll `http://localhost:5000/health`
@@ -239,7 +284,7 @@ Regression risk: Medium.
 
 ---
 
-## 11. Simultaneous video playback
+## 13. Simultaneous video playback
 
 Canonical `index.html` behavior:
 - maintain one `currentlyPlaying` reference
@@ -250,7 +295,7 @@ Regression risk: High.
 
 ---
 
-## 12. Zip build command
+## 14. Zip build command
 
 Use a flat zip layout for backend delivery:
 
