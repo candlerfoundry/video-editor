@@ -1748,15 +1748,15 @@
               <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;">
                 <div class="style-card" id="style-warm_bar" onclick="selectThumbStyle('warm_bar')">
                   <canvas class="style-preview-canvas" id="style-canvas-warm_bar" width="160" height="90"></canvas>
-                  <div class="style-name">Warm Bar</div>
+                  <div class="style-name">Caption Bar</div>
                 </div>
                 <div class="style-card" id="style-bold_corner" onclick="selectThumbStyle('bold_corner')">
                   <canvas class="style-preview-canvas" id="style-canvas-bold_corner" width="160" height="90"></canvas>
-                  <div class="style-name">Bold Corner</div>
+                  <div class="style-name">Bold Title</div>
                 </div>
                 <div class="style-card" id="style-kinetic_slash" onclick="selectThumbStyle('kinetic_slash')">
                   <canvas class="style-preview-canvas" id="style-canvas-kinetic_slash" width="160" height="90"></canvas>
-                  <div class="style-name">Kinetic Slash</div>
+                  <div class="style-name">Split</div>
                 </div>
               </div>
             </div>
@@ -3337,9 +3337,9 @@
     });
 
     // Default text position per style
-    if      (_thumbStyle === 'warm_bar')      { _thumbCanvasTX = 640; _thumbCanvasTY = 600; }
-    else if (_thumbStyle === 'bold_corner')   { _thumbCanvasTX = 360; _thumbCanvasTY = 150; }
-    else if (_thumbStyle === 'kinetic_slash') { _thumbCanvasTX = 320; _thumbCanvasTY = 250; }
+    if      (_thumbStyle === 'warm_bar')      { _thumbCanvasTX = 640; _thumbCanvasTY = 620; }  // centered in bottom bar
+    else if (_thumbStyle === 'bold_corner')   { _thumbCanvasTX = 640; _thumbCanvasTY = 360; }  // centered on canvas
+    else if (_thumbStyle === 'kinetic_slash') { _thumbCanvasTX = 640; _thumbCanvasTY = 594; }  // centered in dark band
 
     thumbShowState('editor');
     renderThumbCanvas();
@@ -3373,23 +3373,23 @@
   // Shared style overlay helper — used by renderThumbCanvas + downloadThumbPNG
   function applyThumbStyleOverlay(ctx, W, H, style) {
     if (style === 'warm_bar') {
-      const grad = ctx.createLinearGradient(0, H * 0.58, 0, H);
-      grad.addColorStop(0, 'rgba(10,5,0,0)');
-      grad.addColorStop(1, 'rgba(10,5,0,0.86)');
-      ctx.fillStyle = grad;
-      ctx.fillRect(0, H * 0.58, W, H * 0.42);
+      // STYLE A: Caption Bar — dark bar at bottom 30%, CF Orange left border
+      ctx.fillStyle = 'rgba(0,0,0,0.72)';
+      ctx.fillRect(0, H * 0.70, W, H * 0.30);
+      ctx.fillStyle = '#E8541A';
+      ctx.fillRect(0, H * 0.70, 8, H * 0.30);
     } else if (style === 'bold_corner') {
-      ctx.fillStyle = 'rgba(10,10,30,0.82)';
-      ctx.fillRect(0, 0, W * 0.62, H * 0.44);
+      // STYLE B: Bold Title — full dark scrim, CF Orange underline band
+      ctx.fillStyle = 'rgba(0,0,0,0.55)';
+      ctx.fillRect(0, 0, W, H);
+      ctx.fillStyle = '#E8541A';
+      ctx.fillRect(W * 0.20, H * 0.62, W * 0.60, 4);
     } else if (style === 'kinetic_slash') {
-      ctx.beginPath();
-      ctx.moveTo(0, H * 0.52);
-      ctx.lineTo(W * 0.74, 0);
-      ctx.lineTo(W * 0.82, 0);
-      ctx.lineTo(0, H * 0.64);
-      ctx.closePath();
-      ctx.fillStyle = 'rgba(10,40,20,0.82)';
-      ctx.fill();
+      // STYLE C: Split — dark band at bottom 35%, CF Orange top stripe
+      ctx.fillStyle = 'rgba(17,17,17,0.85)';
+      ctx.fillRect(0, H * 0.65, W, H * 0.35);
+      ctx.fillStyle = '#E8541A';
+      ctx.fillRect(0, H * 0.65, W, 6);
     }
   }
 
@@ -3893,9 +3893,9 @@
       b.classList.toggle('selected', i === 0);
     });
 
-    if      (_dlgStyle === 'warm_bar')      { _dlgCanvasTX = 640; _dlgCanvasTY = 600; }
-    else if (_dlgStyle === 'bold_corner')   { _dlgCanvasTX = 360; _dlgCanvasTY = 150; }
-    else if (_dlgStyle === 'kinetic_slash') { _dlgCanvasTX = 320; _dlgCanvasTY = 250; }
+    if      (_dlgStyle === 'warm_bar')      { _dlgCanvasTX = 640; _dlgCanvasTY = 620; }  // centered in bottom bar
+    else if (_dlgStyle === 'bold_corner')   { _dlgCanvasTX = 640; _dlgCanvasTY = 360; }  // centered on canvas
+    else if (_dlgStyle === 'kinetic_slash') { _dlgCanvasTX = 640; _dlgCanvasTY = 594; }  // centered in dark band
     dlgShowState('editor');
     dlgDrawCanvas();
     requestAnimationFrame(() => dlgUpdateText());
@@ -4332,13 +4332,13 @@
           <div class="thumb-control-label" style="margin-bottom:8px;">Style</div>
           <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;">
             <div class="style-card" id="dlg-style-warm_bar" onclick="dlgSelectStyle('warm_bar')">
-              <canvas class="style-preview-canvas" id="dlg-style-canvas-warm_bar" width="160" height="90"></canvas><div class="style-name">Warm Bar</div>
+              <canvas class="style-preview-canvas" id="dlg-style-canvas-warm_bar" width="160" height="90"></canvas><div class="style-name">Caption Bar</div>
             </div>
             <div class="style-card" id="dlg-style-bold_corner" onclick="dlgSelectStyle('bold_corner')">
-              <canvas class="style-preview-canvas" id="dlg-style-canvas-bold_corner" width="160" height="90"></canvas><div class="style-name">Bold Corner</div>
+              <canvas class="style-preview-canvas" id="dlg-style-canvas-bold_corner" width="160" height="90"></canvas><div class="style-name">Bold Title</div>
             </div>
             <div class="style-card" id="dlg-style-kinetic_slash" onclick="dlgSelectStyle('kinetic_slash')">
-              <canvas class="style-preview-canvas" id="dlg-style-canvas-kinetic_slash" width="160" height="90"></canvas><div class="style-name">Kinetic Slash</div>
+              <canvas class="style-preview-canvas" id="dlg-style-canvas-kinetic_slash" width="160" height="90"></canvas><div class="style-name">Split</div>
             </div>
           </div>
         </div>

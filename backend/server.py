@@ -522,10 +522,10 @@ def _thumbnail_worker(job_id, filename, clipstart, clipend, clip_transcript):
             except Exception:
                 total_duration = 90.0
 
-            start_t = max(17, float(clipstart or 0))
-            end_t = float(clipend) if clipend else total_duration
-            if end_t <= start_t:
-                end_t = total_duration
+            # Always sample full video for thumbnail frame selection
+            # (user wants to pick the best moment from anywhere in the video)
+            start_t = 17  # skip intro
+            end_t = total_duration
             timestamps = [start_t + i * (end_t - start_t) / 19 for i in range(20)]
             print(f'[thumbnail] timestamps from {start_t:.1f}s to {end_t:.1f}s ({len(timestamps)} frames)', flush=True)
 

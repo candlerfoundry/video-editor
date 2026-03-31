@@ -174,23 +174,23 @@ Both the route name and field name must match what index.html sends/expects.
 
 ---
 
-## 6. FRAME TIMESTAMP SPREAD — THE MOST-REGRESSED FIX
+## 6. FRAME TIMESTAMP SPREAD — FULL VIDEO SAMPLING (updated session 15a)
 
 # Inside _thumbnail_worker(), after getting video duration:
-start_t = max(17, float(clipstart or 0))
-end_t = float(clipend) if clipend else total_duration
-if end_t <= start_t:
-    end_t = total_duration
+# Always sample full video for thumbnail frame selection
+# (user wants to pick the best moment from anywhere in the video)
+start_t = 17  # skip intro
+end_t = total_duration
 timestamps = [start_t + i * (end_t - start_t) / 19 for i in range(20)]
 print(f'[thumbnail] timestamps from {start_t:.1f}s to {end_t:.1f}s ({len(timestamps)} frames)', flush=True)
 
-WHY: Without even distribution, all 20 frames cluster at the start of the video.
-The 8 returned frames then all show the same moment.
-This line has been written and lost in sessions 14b and 14c.
+WHY: Frames always come from the FULL video so users can pick the best moment
+from anywhere — not just within the selected clip range.
+The spread formula ensures even distribution across the full duration.
 REGRESSION RISK: CRITICAL. Must be present. Verify every session.
 
-NOTE: Variable names match the current _thumbnail_worker function signature:
-  clipstart, clipend (function params), total_duration (local var from ffprobe).
+NOTE: clip_start/clip_end params are still accepted by the route and passed to
+the worker (for future use / transcript context) but are NOT used for frame sampling.
 
 ---
 
