@@ -646,9 +646,10 @@
     .bold-corner { background: linear-gradient(135deg, #1a1a2e 0%, #2d2d5e 100%); }
     .kinetic     { background: linear-gradient(135deg, #0a1628 0%, #1a3a2a 60%, #2a5a1a 100%); }
     .style-preview-canvas {
-      display: block; width: 100%; height: 64px;
-      border-radius: 6px; margin-bottom: 10px;
-      object-fit: cover;
+      display: block; width: min(100%, 170px); height: auto;
+      aspect-ratio: var(--thumb-preview-ratio, 16 / 9);
+      border-radius: 6px; margin: 0 auto 10px;
+      background: #111;
     }
 
     /* ─── EDIT CAPTIONS SPECIFIC ─── */
@@ -1010,13 +1011,14 @@
     .thumb-step.done   .thumb-step-dot { background: var(--green); animation: none; }
 
     .thumb-canvas-wrap {
-      position: relative; width: 640px; height: 360px;
+      position: relative; width: var(--thumb-editor-width, 640px); height: var(--thumb-editor-height, 360px);
       border-radius: var(--r); overflow: hidden;
       border: 1px solid var(--border);
       box-shadow: var(--shadow-md);
       flex-shrink: 0;
+      background: #111;
     }
-    #thumb-canvas { display: block; width: 640px; height: 360px; }
+    #thumb-canvas { display: block; width: 100%; height: 100%; }
     #thumb-text-drag {
       position: absolute; cursor: move; user-select: none;
       padding: 4px 10px;
@@ -1219,7 +1221,8 @@
     }
     #thumb-preview-panel.active { display: flex; }
     #thumb-preview-img {
-      width: 160px; height: 90px; border-radius: 8px; object-fit: cover;
+      width: auto; height: auto; max-width: 160px; max-height: 160px; aspect-ratio: var(--thumb-preview-ratio, 16 / 9); object-fit: contain;
+      background: #111;
       border: 1px solid var(--border); box-shadow: var(--shadow-sm); flex-shrink: 0;
     }
     .thumb-prev-label {
@@ -1228,7 +1231,35 @@
     }
     .thumb-prev-meta { font-size: 13px; color: var(--text-2); }
     /* Dialog canvas */
-    #dlg-canvas { display: block; width: 640px; height: 360px; }
+    #dlg-canvas { display: block; width: 100%; height: 100%; }
+    .thumb-format-group {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      margin-bottom: 14px;
+    }
+    .thumb-format-btn {
+      border: 1px solid var(--border-2);
+      background: var(--surface);
+      color: var(--text-2);
+      border-radius: 999px;
+      padding: 8px 12px;
+      font: inherit;
+      font-size: 12.5px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: border-color 150ms, background-color 150ms, color 150ms, box-shadow 150ms;
+    }
+    .thumb-format-btn:hover {
+      border-color: var(--orange);
+      color: var(--text);
+    }
+    .thumb-format-btn.selected {
+      border-color: var(--orange);
+      background: var(--orange-tint);
+      color: var(--orange);
+      box-shadow: 0 0 0 3px var(--orange-tint);
+    }
     #dlg-text-drag {
       position: absolute; cursor: move; user-select: none; padding: 4px 10px;
       border: 2px dashed rgba(255,255,255,0.55); border-radius: 4px; text-align: center;
@@ -1744,6 +1775,11 @@
 
             <!-- Style picker -->
             <div style="flex:1;min-width:260px;">
+              <div class="thumb-control-label" style="margin-bottom:8px;">Thumbnail Format</div>
+              <div class="thumb-format-group">
+                <button type="button" class="thumb-format-btn selected" data-thumb-format-target="main" data-thumb-format="instagram" onclick="setThumbTargetFormat('instagram')">Instagram 4:5</button>
+                <button type="button" class="thumb-format-btn" data-thumb-format-target="main" data-thumb-format="youtube_shorts" onclick="setThumbTargetFormat('youtube_shorts')">YouTube Shorts 9:16</button>
+              </div>
               <div class="thumb-control-label" style="margin-bottom:8px;">Style</div>
               <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;">
                 <div class="style-card" id="style-warm_bar" onclick="selectThumbStyle('warm_bar')">
@@ -1797,6 +1833,13 @@
               <div class="card">
                 <h3 style="margin-bottom:14px;">Text Style</h3>
                 <div style="display:flex;flex-direction:column;gap:14px;">
+                  <div>
+                    <div class="thumb-control-label">Thumbnail Format</div>
+                    <div class="thumb-format-group" style="margin-bottom:0;">
+                      <button type="button" class="thumb-format-btn selected" data-thumb-format-target="main" data-thumb-format="instagram" onclick="setThumbTargetFormat('instagram')">Instagram 4:5</button>
+                      <button type="button" class="thumb-format-btn" data-thumb-format-target="main" data-thumb-format="youtube_shorts" onclick="setThumbTargetFormat('youtube_shorts')">YouTube Shorts 9:16</button>
+                    </div>
+                  </div>
 
                   <div>
                     <div class="thumb-control-label">Font</div>
@@ -3062,6 +3105,8 @@
   let _thumbTextColor      = '#ffffff';
   let _thumbShadowOn       = true;
   let _thumbOverlayOpacity = 0;      // 0-80
+  let _thumbVideoInfo      = null;
+  let _thumbTargetFormat   = 'instagram';
 
   // Wire thumb-file input
   document.getElementById('thumb-file').addEventListener('change', function () {
@@ -3169,6 +3214,7 @@
         _thumbFrames        = data.frames || [];
         _thumbSelectedFrame = 0;
         _thumbTitles        = data.titles || [];
+        _thumbVideoInfo     = data.video_info || null;
         thumbSetStep(4);
         setTimeout(() => { buildThumbHeroState(); thumbShowState('hero'); }, 400);
       },
@@ -3181,6 +3227,7 @@
   }
 
   function buildThumbHeroState() {
+    syncThumbTargetFormat(_thumbTargetFormat);
     // Frame grid
     const fg = document.getElementById('thumb-frame-grid');
     fg.innerHTML = '';
@@ -3232,6 +3279,19 @@
     if (ed && ed.style.display !== 'none') renderThumbCanvas();
   }
 
+  function setThumbTargetFormat(format) {
+    syncThumbTargetFormat(format);
+    const pos = getDefaultThumbTextPosition(_thumbStyle, format);
+    _thumbCanvasTX = pos.x;
+    _thumbCanvasTY = pos.y;
+    updateStyleCardPreviews(_thumbFrames, _thumbSelectedFrame, 'style-canvas-');
+    const ed = document.getElementById('thumb-state-editor');
+    if (ed && ed.style.display !== 'none') {
+      renderThumbCanvas();
+      requestAnimationFrame(() => updateThumbText());
+    }
+  }
+
   function selectThumbStyle(style) {
     _thumbStyle = style;
     ['warm_bar', 'bold_corner', 'kinetic_slash'].forEach(s => {
@@ -3262,6 +3322,7 @@
           data => {
             if (data.frames && data.frames.length) {
               _thumbFrames = data.frames; _thumbSelectedFrame = 0;
+              _thumbVideoInfo = data.video_info || _thumbVideoInfo;
               if (data.titles && data.titles.length) _thumbTitles = data.titles;
               buildThumbHeroState();
             }
@@ -3336,11 +3397,11 @@
       b.classList.toggle('selected', i === 0);
     });
 
-    // Default text position per style
-    if      (_thumbStyle === 'warm_bar')      { _thumbCanvasTX = 640; _thumbCanvasTY = 620; }  // centered in bottom bar
-    else if (_thumbStyle === 'bold_corner')   { _thumbCanvasTX = 640; _thumbCanvasTY = 360; }  // centered on canvas
-    else if (_thumbStyle === 'kinetic_slash') { _thumbCanvasTX = 640; _thumbCanvasTY = 594; }  // centered in dark band
+    const thumbPos = getDefaultThumbTextPosition(_thumbStyle, _thumbTargetFormat);
+    _thumbCanvasTX = thumbPos.x;
+    _thumbCanvasTY = thumbPos.y;
 
+    syncThumbTargetFormat(_thumbTargetFormat);
     thumbShowState('editor');
     renderThumbCanvas();
     requestAnimationFrame(() => updateThumbText());
@@ -3348,10 +3409,179 @@
 
   function backToTitles() { thumbShowState('hero'); }
 
+  function getThumbImageSrc(b64) {
+    return 'data:image/jpeg;base64,' + b64;
+  }
+
+  function getThumbTargetConfig(format) {
+    return THUMB_TARGET_FORMATS[format] || THUMB_TARGET_FORMATS.instagram;
+  }
+
+  function getThumbCanvasScale(canvasId, wrapId) {
+    const canvas = document.getElementById(canvasId);
+    const wrap = document.getElementById(wrapId);
+    const displayWidth = Math.max(1, wrap?.clientWidth || canvas?.clientWidth || canvas?.width || 1);
+    const displayHeight = Math.max(1, wrap?.clientHeight || canvas?.clientHeight || canvas?.height || 1);
+    return {
+      scaleX: (canvas?.width || 1) / displayWidth,
+      scaleY: (canvas?.height || 1) / displayHeight,
+    };
+  }
+
+  function getDefaultThumbTextPosition(style, format) {
+    const cfg = getThumbTargetConfig(format);
+    const x = cfg.width * 0.5;
+    if (style === 'warm_bar') return { x, y: cfg.height * 0.84 };
+    if (style === 'bold_corner') return { x, y: cfg.height * 0.50 };
+    return { x, y: cfg.height * 0.81 };
+  }
+
+  function updateThumbFormatButtons(target, format) {
+    document.querySelectorAll(`.thumb-format-btn[data-thumb-format-target="${target}"]`).forEach(btn => {
+      btn.classList.toggle('selected', btn.dataset.thumbFormat === format);
+    });
+  }
+
+  function setThumbPreviewRatio(format) {
+    const cfg = getThumbTargetConfig(format);
+    const ratio = `${cfg.width} / ${cfg.height}`;
+    document.documentElement.style.setProperty('--thumb-preview-ratio', ratio);
+    const thumbPreview = document.getElementById('thumb-preview-img');
+    if (thumbPreview) thumbPreview.style.aspectRatio = ratio;
+    const exportPreview = document.getElementById('export-thumb-img');
+    if (exportPreview) exportPreview.style.aspectRatio = ratio;
+  }
+
+  function applyEditorCanvasLayout(canvasId, wrapId, format) {
+    const canvas = document.getElementById(canvasId);
+    const wrap = document.getElementById(wrapId);
+    if (!canvas || !wrap) return;
+    const cfg = getThumbTargetConfig(format);
+    wrap.style.setProperty('--thumb-editor-width', `${cfg.displayWidth}px`);
+    wrap.style.setProperty('--thumb-editor-height', `${cfg.displayHeight}px`);
+    wrap.style.width = `${cfg.displayWidth}px`;
+    wrap.style.height = `${cfg.displayHeight}px`;
+    canvas.width = cfg.width;
+    canvas.height = cfg.height;
+  }
+
+  function applyStylePreviewRatio(prefix, format) {
+    const cfg = getThumbTargetConfig(format);
+    const ratio = `${cfg.width} / ${cfg.height}`;
+    ['warm_bar', 'bold_corner', 'kinetic_slash'].forEach(style => {
+      const canvas = document.getElementById((prefix || 'style-canvas-') + style);
+      if (!canvas) return;
+      canvas.style.aspectRatio = ratio;
+    });
+  }
+
+  function syncThumbTargetFormat(format) {
+    _thumbTargetFormat = format;
+    updateThumbFormatButtons('main', format);
+    setThumbPreviewRatio(format);
+    applyStylePreviewRatio('style-canvas-', format);
+    applyEditorCanvasLayout('thumb-canvas', 'thumb-canvas-wrap', format);
+  }
+
+  function syncDlgTargetFormat(format) {
+    _dlgTargetFormat = format;
+    updateThumbFormatButtons('dialog', format);
+    setThumbPreviewRatio(format);
+    applyStylePreviewRatio('dlg-style-canvas-', format);
+    applyEditorCanvasLayout('dlg-canvas', 'dlg-canvas-wrap', format);
+  }
+
+  function getCoverSourceRect(srcW, srcH, destW, destH) {
+    const srcRatio = srcW / srcH;
+    const destRatio = destW / destH;
+    if (srcRatio > destRatio) {
+      const sh = srcH;
+      const sw = sh * destRatio;
+      return { sx: (srcW - sw) / 2, sy: 0, sw, sh };
+    }
+    const sw = srcW;
+    const sh = sw / destRatio;
+    return { sx: 0, sy: (srcH - sh) / 2, sw, sh };
+  }
+
+  function drawImageCover(ctx, img, W, H) {
+    const crop = getCoverSourceRect(img.naturalWidth, img.naturalHeight, W, H);
+    ctx.imageSmoothingEnabled = true;
+    ctx.imageSmoothingQuality = 'high';
+    ctx.drawImage(img, crop.sx, crop.sy, crop.sw, crop.sh, 0, 0, W, H);
+  }
+
+  function renderFrameCanvas(canvas, b64, style, afterDraw) {
+    if (!canvas || !b64) return;
+    const ctx = canvas.getContext('2d');
+    const W = canvas.width;
+    const H = canvas.height;
+    const img = new Image();
+    img.onload = function () {
+      ctx.clearRect(0, 0, W, H);
+      drawImageCover(ctx, img, W, H);
+      applyThumbStyleOverlay(ctx, W, H, style);
+      if (afterDraw) afterDraw(ctx, W, H);
+    };
+    img.src = getThumbImageSrc(b64);
+  }
+
+  function prepareStylePreviewCanvas(canvas, format) {
+    const cfg = getThumbTargetConfig(format);
+    const dpr = window.devicePixelRatio || 1;
+    const cssWidth = Math.max(1, Math.round(canvas.clientWidth || 160));
+    const cssHeight = Math.max(1, Math.round(canvas.clientHeight || Math.round(cssWidth * cfg.height / cfg.width)));
+    const pixelWidth = Math.max(160, Math.round(cssWidth * dpr));
+    const pixelHeight = Math.max(90, Math.round(cssHeight * dpr));
+    if (canvas.width !== pixelWidth || canvas.height !== pixelHeight) {
+      canvas.width = pixelWidth;
+      canvas.height = pixelHeight;
+    }
+  }
+
+  function drawThumbTextBlock(ctx, W, title, fontSize, fontFamily, tx, ty, textColor, shadowOn, overlayOpacity) {
+    ctx.font = `700 ${fontSize}px ${fontFamily}, sans-serif`;
+    const lines = wrapText(ctx, title, W * 0.8);
+    const lineH = fontSize * 1.25;
+
+    if (overlayOpacity > 0) {
+      const boxH = lines.length * lineH + 28;
+      const boxW = Math.min(W * 0.88, W * 0.9);
+      ctx.fillStyle = `rgba(17,17,17,${overlayOpacity / 100})`;
+      ctx.beginPath();
+      if (ctx.roundRect) {
+        ctx.roundRect(tx - boxW / 2, ty - lines.length * lineH / 2 - 14, boxW, boxH, 8);
+      } else {
+        ctx.rect(tx - boxW / 2, ty - lines.length * lineH / 2 - 14, boxW, boxH);
+      }
+      ctx.fill();
+    }
+
+    ctx.save();
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    if (shadowOn) {
+      ctx.shadowColor = 'rgba(0,0,0,0.8)';
+      ctx.shadowBlur = 8;
+      ctx.shadowOffsetX = 2;
+      ctx.shadowOffsetY = 2;
+    }
+    ctx.fillStyle = textColor;
+    ctx.font = `700 ${fontSize}px ${fontFamily}, sans-serif`;
+    let lineY = ty - (lines.length - 1) * lineH / 2;
+    for (const line of lines) {
+      ctx.fillText(line, tx, lineY);
+      lineY += lineH;
+    }
+    ctx.restore();
+  }
+
   // ── Canvas rendering (object-fit cover + style overlay) ──
   function renderThumbCanvas() {
     const canvas = document.getElementById('thumb-canvas');
     const b64 = _thumbFrames[_thumbSelectedFrame];
+    renderFrameCanvas(canvas, b64, _thumbStyle);
+    return;
     if (!canvas || !b64) return;
     const ctx = canvas.getContext('2d');
     const W = 1280, H = 720;
@@ -3372,6 +3602,45 @@
 
   // Shared style overlay helper — used by renderThumbCanvas + downloadThumbPNG
   function applyThumbStyleOverlay(ctx, W, H, style) {
+    if (style === 'warm_bar') {
+      const fade = ctx.createLinearGradient(0, H * 0.48, 0, H);
+      fade.addColorStop(0, 'rgba(9,9,9,0)');
+      fade.addColorStop(1, 'rgba(9,9,9,0.78)');
+      ctx.fillStyle = fade;
+      ctx.fillRect(0, H * 0.48, W, H * 0.52);
+      ctx.fillStyle = 'rgba(9,9,9,0.76)';
+      ctx.fillRect(0, H * 0.72, W, H * 0.28);
+      ctx.fillStyle = '#E8541A';
+      ctx.fillRect(W * 0.05, H * 0.72 - 8, W * 0.30, 8);
+      return;
+    }
+    if (style === 'bold_corner') {
+      const scrim = ctx.createLinearGradient(0, 0, 0, H);
+      scrim.addColorStop(0, 'rgba(7,7,7,0.30)');
+      scrim.addColorStop(1, 'rgba(7,7,7,0.62)');
+      ctx.fillStyle = scrim;
+      ctx.fillRect(0, 0, W, H);
+      const vignette = ctx.createRadialGradient(W / 2, H / 2, H * 0.12, W / 2, H / 2, H * 0.72);
+      vignette.addColorStop(0, 'rgba(0,0,0,0)');
+      vignette.addColorStop(1, 'rgba(0,0,0,0.30)');
+      ctx.fillStyle = vignette;
+      ctx.fillRect(0, 0, W, H);
+      ctx.fillStyle = '#E8541A';
+      ctx.fillRect(W * 0.22, H * 0.63, W * 0.56, 6);
+      return;
+    }
+    if (style === 'kinetic_slash') {
+      const fade = ctx.createLinearGradient(0, H * 0.54, 0, H);
+      fade.addColorStop(0, 'rgba(17,17,17,0)');
+      fade.addColorStop(1, 'rgba(17,17,17,0.84)');
+      ctx.fillStyle = fade;
+      ctx.fillRect(0, H * 0.54, W, H * 0.46);
+      ctx.fillStyle = 'rgba(17,17,17,0.85)';
+      ctx.fillRect(0, H * 0.66, W, H * 0.34);
+      ctx.fillStyle = '#E8541A';
+      ctx.fillRect(0, H * 0.66, W, 8);
+      return;
+    }
     if (style === 'warm_bar') {
       // STYLE A: Caption Bar — dark bar at bottom 30%, CF Orange left border
       ctx.fillStyle = 'rgba(0,0,0,0.72)';
@@ -3400,7 +3669,15 @@
   function updateStyleCardPreviews(frames, selectedIdx, prefix) {
     const b64 = (frames || _thumbFrames)[selectedIdx !== undefined ? selectedIdx : _thumbSelectedFrame];
     if (!b64) return;
+    const format = prefix === 'dlg-style-canvas-' ? _dlgTargetFormat : _thumbTargetFormat;
     const styles = ['warm_bar', 'bold_corner', 'kinetic_slash'];
+    styles.forEach(style => {
+      const cv = document.getElementById((prefix || 'style-canvas-') + style);
+      if (!cv) return;
+      prepareStylePreviewCanvas(cv, format);
+      renderFrameCanvas(cv, b64, style);
+    });
+    return;
     const W = 160, H = 90;
     styles.forEach(style => {
       const cv = document.getElementById((prefix || 'style-canvas-') + style);
@@ -3420,10 +3697,22 @@
 
   // Keep drawCoverFit as alias so dialog canvas code still works
   function drawCoverFit(ctx, img, W, H) {
+    drawImageCover(ctx, img, W, H);
+    return;
     const scale = Math.max(W / img.naturalWidth, H / img.naturalHeight);
     const sw = img.naturalWidth * scale, sh = img.naturalHeight * scale;
     ctx.drawImage(img, (W - sw) / 2, (H - sh) / 2, sw, sh);
   }
+
+  window.addEventListener('resize', () => {
+    syncThumbTargetFormat(_thumbTargetFormat);
+    syncDlgTargetFormat(_dlgTargetFormat);
+    updateStyleCardPreviews(_thumbFrames, _thumbSelectedFrame, 'style-canvas-');
+    updateStyleCardPreviews(_dlgFrames, _dlgSelectedFrame, 'dlg-style-canvas-');
+  });
+
+  syncThumbTargetFormat(_thumbTargetFormat);
+  syncDlgTargetFormat(_dlgTargetFormat);
 
   // ── Draggable text overlay div ──
   function updateThumbText() {
@@ -3435,7 +3724,8 @@
     if (fontSel)   _thumbFontFamily = fontSel.value;
     if (shadowChk) _thumbShadowOn   = shadowChk.checked;
 
-    const displayPx = Math.round(_thumbFontSize / 2);  // 1280-wide canvas → 640-wide display
+    const { scaleX, scaleY } = getThumbCanvasScale('thumb-canvas', 'thumb-canvas-wrap');
+    const displayPx = Math.round(_thumbFontSize / Math.max(scaleX, scaleY));
 
     drag.style.fontFamily    = _thumbFontFamily + ', sans-serif';
     drag.style.fontSize      = displayPx + 'px';
@@ -3460,8 +3750,8 @@
     const sizeVal = document.getElementById('thumb-size-val');
     if (sizeVal) sizeVal.textContent = _thumbFontSize;
 
-    drag.style.left = (_thumbCanvasTX / 2) + 'px';
-    drag.style.top  = (_thumbCanvasTY / 2) + 'px';
+    drag.style.left = (_thumbCanvasTX / scaleX) + 'px';
+    drag.style.top  = (_thumbCanvasTY / scaleY) + 'px';
   }
 
   // ── Control change handlers ──
@@ -3510,14 +3800,16 @@
 
     document.addEventListener('mousemove', function (e) {
       if (!dragging) return;
-      const dx = (e.clientX - startX) * 2;
-      const dy = (e.clientY - startY) * 2;
-      _thumbCanvasTX = Math.max(60, Math.min(1220, origTX + dx));
-      _thumbCanvasTY = Math.max(40, Math.min(680,  origTY + dy));
+      const { scaleX, scaleY } = getThumbCanvasScale('thumb-canvas', 'thumb-canvas-wrap');
+      const canvas = document.getElementById('thumb-canvas');
+      const dx = (e.clientX - startX) * scaleX;
+      const dy = (e.clientY - startY) * scaleY;
+      _thumbCanvasTX = Math.max(60, Math.min((canvas?.width || 1280) - 60, origTX + dx));
+      _thumbCanvasTY = Math.max(40, Math.min((canvas?.height || 720) - 40,  origTY + dy));
       const drag = document.getElementById('thumb-text-drag');
       if (drag) {
-        drag.style.left = (_thumbCanvasTX / 2) + 'px';
-        drag.style.top  = (_thumbCanvasTY / 2) + 'px';
+        drag.style.left = (_thumbCanvasTX / scaleX) + 'px';
+        drag.style.top  = (_thumbCanvasTY / scaleY) + 'px';
       }
     });
 
@@ -3528,6 +3820,21 @@
   function downloadThumbPNG() {
     const canvas = document.getElementById('thumb-canvas');
     const b64 = _thumbFrames[_thumbSelectedFrame];
+    if (!canvas || !b64) return;
+    renderFrameCanvas(canvas, b64, _thumbStyle, (ctx, W) => {
+      drawThumbTextBlock(
+        ctx, W, _thumbTitle, _thumbFontSize, _thumbFontFamily,
+        _thumbCanvasTX, _thumbCanvasTY, _thumbTextColor, _thumbShadowOn, _thumbOverlayOpacity
+      );
+      const stem = _thumbFile ? _thumbFile.name.replace(/\.(mp4|mov)$/i, '') : 'thumbnail';
+      canvas.toBlob(blob => {
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url; a.download = stem + ' - Thumbnail.png'; a.click();
+        setTimeout(() => URL.revokeObjectURL(url), 5000);
+      }, 'image/png');
+    });
+    return;
     if (!canvas || !b64) return;
     const ctx = canvas.getContext('2d');
     const W = 1280, H = 720;
@@ -3636,6 +3943,27 @@
   let _dlgTextColor      = '#ffffff';
   let _dlgShadowOn       = true;
   let _dlgOverlayOpacity = 0;
+  let _dlgVideoInfo      = null;
+  let _dlgTargetFormat   = 'instagram';
+
+  const THUMB_TARGET_FORMATS = {
+    instagram: {
+      label: 'Instagram',
+      ratioLabel: '4:5',
+      width: 1080,
+      height: 1350,
+      displayWidth: 360,
+      displayHeight: 450,
+    },
+    youtube_shorts: {
+      label: 'YouTube Shorts',
+      ratioLabel: '9:16',
+      width: 1080,
+      height: 1920,
+      displayWidth: 320,
+      displayHeight: 568,
+    },
+  };
 
   function openDoneEditingModal() {
     document.getElementById('modal-pre-export').showModal();
@@ -3658,6 +3986,8 @@
     _dlgTextColor      = '#ffffff';
     _dlgShadowOn       = true;
     _dlgOverlayOpacity = 0;
+    _dlgTargetFormat   = _thumbTargetFormat;
+    syncDlgTargetFormat(_dlgTargetFormat);
     dlgShowState('processing');
     dlgSetStep(1);
     document.getElementById('dlg-footer-editor').style.display = 'none';
@@ -3687,6 +4017,10 @@
     const btn = document.getElementById('btn-thumb-expand');
     const expanded = dlg.classList.toggle('expanded');
     btn.textContent = expanded ? 'Collapse \u2199' : 'Expand \u2197';
+    requestAnimationFrame(() => {
+      updateStyleCardPreviews(_dlgFrames, _dlgSelectedFrame, 'dlg-style-canvas-');
+      if (document.getElementById('dlg-state-editor').style.display !== 'none') dlgDrawCanvas();
+    });
   }
 
   function dlgShowState(state) {
@@ -3739,6 +4073,7 @@
         _dlgFrames        = data.frames || [];
         _dlgSelectedFrame = 0;
         _thumbTitles      = data.titles || [];
+        _dlgVideoInfo     = data.video_info || null;
         dlgSetStep(4);
         setTimeout(() => { dlgBuildHeroState(); dlgShowState('hero'); }, 400);
       },
@@ -3750,6 +4085,7 @@
   }
 
   function dlgBuildHeroState() {
+    syncDlgTargetFormat(_dlgTargetFormat);
     // Frame grid
     const fg = document.getElementById('dlg-frame-grid');
     if (fg) {
@@ -3797,6 +4133,18 @@
     if (document.getElementById('dlg-state-editor').style.display !== 'none') dlgDrawCanvas();
   }
 
+  function setDlgTargetFormat(format) {
+    syncDlgTargetFormat(format);
+    const pos = getDefaultThumbTextPosition(_dlgStyle, format);
+    _dlgCanvasTX = pos.x;
+    _dlgCanvasTY = pos.y;
+    updateStyleCardPreviews(_dlgFrames, _dlgSelectedFrame, 'dlg-style-canvas-');
+    if (document.getElementById('dlg-state-editor').style.display !== 'none') {
+      dlgDrawCanvas();
+      requestAnimationFrame(() => dlgUpdateText());
+    }
+  }
+
   async function dlgRedoFrames() {
     if (!_thumbFile || !backendOnline) return;
     const btn = document.getElementById('dlg-btn-redo-frames');
@@ -3814,6 +4162,7 @@
           data => {
             if (data.frames && data.frames.length) {
               _dlgFrames = data.frames; _dlgSelectedFrame = 0;
+              _dlgVideoInfo = data.video_info || _dlgVideoInfo;
               if (data.titles && data.titles.length) _thumbTitles = data.titles;
               dlgBuildHeroState();
             }
@@ -3893,9 +4242,10 @@
       b.classList.toggle('selected', i === 0);
     });
 
-    if      (_dlgStyle === 'warm_bar')      { _dlgCanvasTX = 640; _dlgCanvasTY = 620; }  // centered in bottom bar
-    else if (_dlgStyle === 'bold_corner')   { _dlgCanvasTX = 640; _dlgCanvasTY = 360; }  // centered on canvas
-    else if (_dlgStyle === 'kinetic_slash') { _dlgCanvasTX = 640; _dlgCanvasTY = 594; }  // centered in dark band
+    const dlgPos = getDefaultThumbTextPosition(_dlgStyle, _dlgTargetFormat);
+    _dlgCanvasTX = dlgPos.x;
+    _dlgCanvasTY = dlgPos.y;
+    syncDlgTargetFormat(_dlgTargetFormat);
     dlgShowState('editor');
     dlgDrawCanvas();
     requestAnimationFrame(() => dlgUpdateText());
@@ -3906,6 +4256,8 @@
   function dlgDrawCanvas() {
     const canvas = document.getElementById('dlg-canvas');
     const b64 = _dlgFrames[_dlgSelectedFrame];
+    renderFrameCanvas(canvas, b64, _dlgStyle);
+    return;
     if (!canvas || !b64) return;
     const ctx = canvas.getContext('2d');
     const W = 1280, H = 720;
@@ -3925,7 +4277,8 @@
     const shadowChk = document.getElementById('dlg-shadow-toggle');
     if (fontSel)   _dlgFontFamily = fontSel.value;
     if (shadowChk) _dlgShadowOn   = shadowChk.checked;
-    const displayPx = Math.round(_dlgFontSize / 2);
+    const { scaleX, scaleY } = getThumbCanvasScale('dlg-canvas', 'dlg-canvas-wrap');
+    const displayPx = Math.round(_dlgFontSize / Math.max(scaleX, scaleY));
     drag.style.fontFamily    = _dlgFontFamily + ', sans-serif';
     drag.style.fontSize      = displayPx + 'px';
     drag.style.fontWeight    = '700';
@@ -3940,8 +4293,8 @@
     drag.textContent         = _dlgTitle;
     const sizeVal = document.getElementById('dlg-size-val');
     if (sizeVal) sizeVal.textContent = _dlgFontSize;
-    drag.style.left = (_dlgCanvasTX / 2) + 'px';
-    drag.style.top  = (_dlgCanvasTY / 2) + 'px';
+    drag.style.left = (_dlgCanvasTX / scaleX) + 'px';
+    drag.style.top  = (_dlgCanvasTY / scaleY) + 'px';
   }
 
   function setDlgFontSize(val) {
@@ -3983,11 +4336,14 @@
     });
     document.addEventListener('mousemove', function (e) {
       if (!dragging) return;
-      const dx = (e.clientX - startX) * 2, dy = (e.clientY - startY) * 2;
-      _dlgCanvasTX = Math.max(60, Math.min(1220, origTX + dx));
-      _dlgCanvasTY = Math.max(40, Math.min(680,  origTY + dy));
+      const { scaleX, scaleY } = getThumbCanvasScale('dlg-canvas', 'dlg-canvas-wrap');
+      const canvas = document.getElementById('dlg-canvas');
+      const dx = (e.clientX - startX) * scaleX;
+      const dy = (e.clientY - startY) * scaleY;
+      _dlgCanvasTX = Math.max(60, Math.min((canvas?.width || 1280) - 60, origTX + dx));
+      _dlgCanvasTY = Math.max(40, Math.min((canvas?.height || 720) - 40,  origTY + dy));
       const drag = document.getElementById('dlg-text-drag');
-      if (drag) { drag.style.left = (_dlgCanvasTX / 2) + 'px'; drag.style.top = (_dlgCanvasTY / 2) + 'px'; }
+      if (drag) { drag.style.left = (_dlgCanvasTX / scaleX) + 'px'; drag.style.top = (_dlgCanvasTY / scaleY) + 'px'; }
     });
     document.addEventListener('mouseup', () => { dragging = false; });
   })();
@@ -3996,6 +4352,23 @@
   function dlgDoneWithThumbnail() {
     const canvas = document.getElementById('dlg-canvas');
     const b64 = _dlgFrames[_dlgSelectedFrame];
+    if (!canvas || !b64) { closeThumbDialog(); openExportFormDialog(); return; }
+    renderFrameCanvas(canvas, b64, _dlgStyle, (ctx, W) => {
+      drawThumbTextBlock(
+        ctx, W, _dlgTitle, _dlgFontSize, _dlgFontFamily,
+        _dlgCanvasTX, _dlgCanvasTY, _dlgTextColor, _dlgShadowOn, _dlgOverlayOpacity
+      );
+      canvas.toBlob(blob => {
+        if (thumbnailBlobUrl) URL.revokeObjectURL(thumbnailBlobUrl);
+        thumbnailBlob    = blob;
+        thumbnailBlobUrl = URL.createObjectURL(blob);
+        document.getElementById('thumb-preview-img').src = thumbnailBlobUrl;
+        document.getElementById('thumb-preview-panel').classList.add('active');
+        closeThumbDialog();
+        openExportFormDialog();
+      }, 'image/png');
+    });
+    return;
     if (!canvas || !b64) { closeThumbDialog(); openExportFormDialog(); return; }
     const ctx = canvas.getContext('2d');
     const W = 1280, H = 720;
@@ -4329,6 +4702,11 @@
           </div>
         </div>
         <div style="flex:1;min-width:240px;">
+          <div class="thumb-control-label" style="margin-bottom:8px;">Thumbnail Format</div>
+          <div class="thumb-format-group">
+            <button type="button" class="thumb-format-btn selected" data-thumb-format-target="dialog" data-thumb-format="instagram" onclick="setDlgTargetFormat('instagram')">Instagram 4:5</button>
+            <button type="button" class="thumb-format-btn" data-thumb-format-target="dialog" data-thumb-format="youtube_shorts" onclick="setDlgTargetFormat('youtube_shorts')">YouTube Shorts 9:16</button>
+          </div>
           <div class="thumb-control-label" style="margin-bottom:8px;">Style</div>
           <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;">
             <div class="style-card" id="dlg-style-warm_bar" onclick="dlgSelectStyle('warm_bar')">
@@ -4365,6 +4743,13 @@
           <div class="card">
             <h3 style="margin-bottom:14px;">Text Style</h3>
             <div style="display:flex;flex-direction:column;gap:14px;">
+              <div>
+                <div class="thumb-control-label">Thumbnail Format</div>
+                <div class="thumb-format-group" style="margin-bottom:0;">
+                  <button type="button" class="thumb-format-btn selected" data-thumb-format-target="dialog" data-thumb-format="instagram" onclick="setDlgTargetFormat('instagram')">Instagram 4:5</button>
+                  <button type="button" class="thumb-format-btn" data-thumb-format-target="dialog" data-thumb-format="youtube_shorts" onclick="setDlgTargetFormat('youtube_shorts')">YouTube Shorts 9:16</button>
+                </div>
+              </div>
               <div>
                 <div class="thumb-control-label">Font</div>
                 <select class="thumb-font-select" id="dlg-font-select" onchange="dlgUpdateText()">
@@ -4453,7 +4838,7 @@
          style="display:none;margin-bottom:4px;padding:12px;background:var(--sidebar-bg);
                 border:1px solid var(--border);border-radius:var(--r);align-items:center;gap:12px;">
       <img id="export-thumb-img" src="" alt="Thumbnail"
-           style="width:96px;height:54px;border-radius:6px;object-fit:cover;
+           style="width:auto;height:auto;max-width:110px;max-height:120px;aspect-ratio:var(--thumb-preview-ratio,16 / 9);object-fit:contain;background:#111;
                   border:1px solid var(--border);flex-shrink:0;" />
       <div>
         <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.07em;color:var(--green);margin-bottom:3px;">Thumbnail ready</div>

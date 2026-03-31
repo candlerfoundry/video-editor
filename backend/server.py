@@ -16,6 +16,7 @@ import glob
 import io
 import os
 import json
+import logging
 import platform
 import re
 import shutil
@@ -28,6 +29,30 @@ import anthropic
 import whisper
 from flask import Flask, jsonify, request, send_file
 from flask_cors import CORS
+
+# The desktop launcher drains stderr but older builds may not drain stdout.
+# Route app logging to stderr so verbose thumbnail jobs cannot block the backend
+# by filling an unread stdout pipe.
+if hasattr(sys.stderr, "reconfigure"):
+    sys.stderr.reconfigure(line_buffering=True)
+sys.stdout = sys.stderr
+
+LOG_LEVEL_NAME = os.environ.get('FVE_LOG_LEVEL', 'INFO').upper()
+LOG_LEVEL = getattr(logging, LOG_LEVEL_NAME, logging.INFO)
+THUMBNAIL_DEBUG = os.environ.get('FVE_THUMBNAIL_DEBUG', '').strip().lower() in {'1', 'true', 'yes', 'on'}
+
+logging.basicConfig(
+    level=LOG_LEVEL,
+    format='%(asctime)s %(levelname)s %(name)s: %(message)s',
+    stream=sys.stderr,
+)
+
+logger = logging.getLogger('foundry_video_editor')
+thumb_logger = logging.getLogger('foundry_video_editor.thumbnail')
+if THUMBNAIL_DEBUG:
+    thumb_logger.setLevel(logging.DEBUG)
+else:
+    thumb_logger.setLevel(max(LOG_LEVEL, logging.INFO))
 
 app = Flask(__name__)
 CORS(app)
@@ -55,18 +80,18 @@ def find_ffmpeg():
                 creationflags=CREATE_NO_WINDOW
             )
             if result.returncode == 0:
-                print(f'[ffmpeg] Found at: {path}', flush=True)
+                logger.info('[ffmpeg] Found at: %s', path)
                 return path
         except Exception:
             continue
-    print('[ffmpeg] ERROR: ffmpeg not found in any expected location', flush=True)
+    logger.error('[ffmpeg] ERROR: ffmpeg not found in any expected location')
     return None
 
 FFMPEG_EXE = find_ffmpeg()
 
-print(f'[startup] Python: {sys.executable}', flush=True)
-print(f'[startup] Working dir: {os.getcwd()}', flush=True)
-print(f'[startup] ffmpeg: {FFMPEG_EXE}', flush=True)
+logger.info('[startup] Python: %s', sys.executable)
+logger.info('[startup] Working dir: %s', os.getcwd())
+logger.info('[startup] ffmpeg: %s', FFMPEG_EXE)
 
 # ── Thumbnail async job store ──
 thumbnail_jobs = {}  # {job_id: {status, result, error, created_at}}
@@ -80,9 +105,9 @@ def find_video_in_dropbox(filename):
     for root, dirs, files in os.walk(dropbox_root):
         if filename in files:
             found = os.path.join(root, filename)
-            print(f'[find_video] Found "{filename}" at {found}', flush=True)
+            logger.info('[find_video] Found "%s" at %s', filename, found)
             return found
-    print(f'[find_video] "{filename}" not found in Dropbox', flush=True)
+    logger.warning('[find_video] "%s" not found in Dropbox', filename)
     return None
 
 # ── Whisper models (loaded once on first use) ──
@@ -143,7 +168,7 @@ def get_video_dimensions(video_path, ffmpeg_exe):
         data = json.loads(result.stdout)
         w = data['streams'][0]['width']
         h = data['streams'][0]['height']
-        print(f'[dimensions] {video_path}: {w}x{h}')
+        logger.info('[dimensions] %s: %sx%s', video_path, w, h)
         return w, h
 
     # Derive ffprobe path from ffmpeg path; fall back to bare 'ffprobe'
@@ -156,8 +181,83 @@ def get_video_dimensions(video_path, ffmpeg_exe):
                 return _probe('ffprobe')
             except Exception:
                 pass
-        print(f'[dimensions] ffprobe failed, using default 1920x1080: {e}')
+        logger.warning('[dimensions] ffprobe failed, using default 1920x1080: %s', e)
         return 1920, 1080
+
+
+def get_video_stream_info(video_path, ffmpeg_exe):
+    """
+    Returns raw stream dimensions plus display dimensions that account for rotation metadata.
+    """
+    def _probe(ffprobe_exe):
+        result = subprocess.run(
+            [ffprobe_exe, '-v', 'error', '-select_streams', 'v:0',
+             '-show_entries', 'stream=width,height,side_data_list:stream_tags=rotate',
+             '-of', 'json', video_path],
+            capture_output=True, text=True, timeout=10,
+            creationflags=CREATE_NO_WINDOW,
+        )
+        data = json.loads(result.stdout or '{}')
+        stream = (data.get('streams') or [{}])[0]
+        width = int(stream.get('width') or 1920)
+        height = int(stream.get('height') or 1080)
+
+        rotation = 0
+        tags = stream.get('tags') or {}
+        if tags.get('rotate') is not None:
+            try:
+                rotation = int(float(tags['rotate']))
+            except Exception:
+                rotation = 0
+
+        if not rotation:
+            for side_data in stream.get('side_data_list') or []:
+                if side_data.get('rotation') is None:
+                    continue
+                try:
+                    rotation = int(float(side_data['rotation']))
+                    break
+                except Exception:
+                    continue
+
+        rotation = rotation % 360
+        if rotation in (90, 270):
+            display_width, display_height = height, width
+        else:
+            display_width, display_height = width, height
+
+        info = {
+            'width': width,
+            'height': height,
+            'rotation': rotation,
+            'display_width': display_width,
+            'display_height': display_height,
+            'orientation': 'portrait' if display_height > display_width else 'landscape',
+        }
+        thumb_logger.info(
+            'Source stream %sx%s rotation=%s display=%sx%s orientation=%s',
+            width, height, rotation, display_width, display_height, info['orientation'],
+        )
+        return info
+
+    ffprobe = ffmpeg_exe.replace('ffmpeg.exe', 'ffprobe.exe') if ffmpeg_exe != 'ffmpeg' else 'ffprobe'
+    try:
+        return _probe(ffprobe)
+    except Exception as e:
+        if ffprobe != 'ffprobe':
+            try:
+                return _probe('ffprobe')
+            except Exception:
+                pass
+        thumb_logger.warning('ffprobe stream probe failed, using default metadata: %s', e)
+        return {
+            'width': 1920,
+            'height': 1080,
+            'rotation': 0,
+            'display_width': 1920,
+            'display_height': 1080,
+            'orientation': 'landscape',
+        }
 
 
 def get_caption_style(width, height):
@@ -242,7 +342,10 @@ def caption():
         # Detect video dimensions and choose adaptive caption style
         width, height = get_video_dimensions(input_path, FFMPEG_EXE)
         cap_style = get_caption_style(width, height)
-        print(f'[captions] Orientation: {cap_style["label"]} — fontsize {cap_style["fontsize"]}')
+        logger.info(
+            '[captions] Orientation: %s fontsize=%s',
+            cap_style["label"], cap_style["fontsize"],
+        )
 
         style = (
             f"Fontsize={cap_style['fontsize']},{STYLE_STR},"
@@ -333,46 +436,46 @@ def find_json():
     try:
         data = request.json
         filename = data.get('filename', '')
-        print(f'[find_json] Looking for video: {filename}')
+        logger.info('[find_json] Looking for video: %s', filename)
 
         # Check cache first; fall back to os.walk
         video_path = video_path_cache.get(filename)
         if video_path and not os.path.exists(video_path):
-            print(f'[find_json] Cached path stale, re-walking: {video_path}')
+            logger.info('[find_json] Cached path stale, re-walking: %s', video_path)
             video_path = None
 
         if not video_path:
             video_path = find_video_in_dropbox(filename)
 
         if not video_path:
-            print(f'[find_json] ERROR: video file not found in Dropbox')
+            logger.warning('[find_json] Video file not found in Dropbox: %s', filename)
             return jsonify({'json_found': False, 'error': 'Video file not found in Dropbox'})
 
         # Cache for later use by /thumbnail and other routes
         video_path_cache[filename] = video_path
-        print(f'[cache] Stored path for {filename}', flush=True)
+        logger.info('[cache] Stored path for %s', filename)
 
         video_folder = os.path.dirname(video_path)
-        print(f'[find_json] Found video at: {video_path}')
-        print(f'[find_json] Searching folder: {video_folder}')
-        print(f'[find_json] Files in folder: {os.listdir(video_folder)}')
+        logger.info('[find_json] Found video at: %s', video_path)
+        logger.debug('[find_json] Searching folder: %s', video_folder)
+        logger.debug('[find_json] Files in folder: %s', os.listdir(video_folder))
 
         # Search same folder for Words JSON
         matches = glob.glob(os.path.join(video_folder, '*Transcript (Words).json'))
-        print(f'[find_json] Glob matches in same folder: {matches}')
+        logger.debug('[find_json] Glob matches in same folder: %s', matches)
 
         if not matches:
             # Try parent folder one level up
             parent_folder = os.path.dirname(video_folder)
             matches = glob.glob(os.path.join(parent_folder, '*Transcript (Words).json'))
-            print(f'[find_json] Glob matches in parent folder: {matches}')
+            logger.debug('[find_json] Glob matches in parent folder: %s', matches)
 
         if not matches:
-            print(f'[find_json] FAILED: no Words JSON found near {video_folder}')
+            logger.warning('[find_json] No Words JSON found near %s', video_folder)
             return jsonify({'json_found': False, 'error': 'No transcript found near this video'})
 
         json_path = matches[0]
-        print(f'[find_json] SUCCESS: {json_path}')
+        logger.info('[find_json] Using transcript JSON: %s', json_path)
 
         with open(json_path, 'r', encoding='utf-8') as f:
             content = json.load(f)
@@ -385,7 +488,7 @@ def find_json():
         })
 
     except Exception as e:
-        print(f'[find_json] ERROR: {e}', flush=True)
+        logger.exception('[find_json] ERROR')
         return jsonify({'json_found': False, 'error': str(e)})
 
 
@@ -486,26 +589,29 @@ def _thumbnail_worker(job_id, filename, clipstart, clipend, clip_transcript):
         # Check cache first (populated by /find_json); os.walk only as fallback
         video_path = video_path_cache.get(filename)
         if video_path and not os.path.exists(video_path):
-            print(f'[thumbnail] Cached path stale, re-walking: {video_path}', flush=True)
+            thumb_logger.info('Job %s cached path stale, re-walking: %s', job_id, video_path)
             video_path = None
 
         if not video_path:
-            print(f'[thumbnail] Cache miss for "{filename}" — searching Dropbox', flush=True)
+            thumb_logger.info('Job %s cache miss for "%s"; searching Dropbox', job_id, filename)
             video_path = find_video_in_dropbox(filename)
             if video_path:
                 video_path_cache[filename] = video_path
 
         if not video_path:
+            thumb_logger.warning('Job %s failed: video "%s" not found in Dropbox', job_id, filename)
             thumbnail_jobs[job_id] = {
                 'status': 'error',
                 'error': f'Video "{filename}" not found in Dropbox',
             }
             return
 
-        print(f'[thumbnail] Job {job_id}: video={video_path}', flush=True)
+        thumb_logger.info('Job %s started for "%s"', job_id, video_path)
 
         tmp_dir = tempfile.mkdtemp()
         try:
+            stream_info = get_video_stream_info(video_path, FFMPEG_EXE)
+
             # ── Get total duration ──
             ffprobe_exe = FFMPEG_EXE.replace('ffmpeg.exe', 'ffprobe.exe') if (
                 FFMPEG_EXE and FFMPEG_EXE != 'ffmpeg'
@@ -524,13 +630,20 @@ def _thumbnail_worker(job_id, filename, clipstart, clipend, clip_transcript):
 
             # Always sample full video for thumbnail frame selection
             # (user wants to pick the best moment from anywhere in the video)
-            start_t = 17  # skip intro
-            end_t = total_duration
-            timestamps = [start_t + i * (end_t - start_t) / 19 for i in range(20)]
-            print(f'[thumbnail] timestamps from {start_t:.1f}s to {end_t:.1f}s ({len(timestamps)} frames)', flush=True)
+            start_t = 17.0 if total_duration > 20.0 else 0.0
+            end_t = max(start_t, total_duration - 0.25)
+            if end_t <= start_t + 0.01:
+                timestamps = [round(start_t, 3)]
+            else:
+                timestamps = [start_t + i * (end_t - start_t) / 19 for i in range(20)]
+            thumb_logger.info(
+                'Job %s sampling %s timestamps from %.1fs to %.1fs',
+                job_id, len(timestamps), start_t, end_t,
+            )
 
             # ── Extract frames ──
             scored = []
+            frame_errors = 0
             for i, ts in enumerate(timestamps):
                 fp = os.path.join(tmp_dir, f'frame_{i:03d}.jpg')
                 subprocess.run(
@@ -544,13 +657,17 @@ def _thumbnail_worker(job_id, filename, clipstart, clipend, clip_transcript):
                     img = PILImage.open(fp)
                     arr = np.array(img.convert('L'), dtype=float)
                     sharpness = float(np.var(np.gradient(arr)))
-                    print(f'[thumbnail] frame {i} ts={ts:.1f}s sharpness={sharpness:.1f}',
-                          flush=True)
+                    thumb_logger.debug(
+                        'Job %s frame %s ts=%.1fs sharpness=%.1f',
+                        job_id, i, ts, sharpness,
+                    )
                     scored.append((sharpness, fp))
                 except Exception as fe:
-                    print(f'[thumbnail] frame {i} error: {fe}', flush=True)
+                    frame_errors += 1
+                    thumb_logger.debug('Job %s frame %s failed to score: %s', job_id, i, fe)
 
             if not scored:
+                thumb_logger.warning('Job %s failed: could not extract usable frames', job_id)
                 thumbnail_jobs[job_id] = {
                     'status': 'error',
                     'error': 'Could not extract usable frames from video',
@@ -559,20 +676,37 @@ def _thumbnail_worker(job_id, filename, clipstart, clipend, clip_transcript):
 
             scored.sort(reverse=True)
             scored = scored[:8]
+            thumb_logger.info(
+                'Job %s extracted %s usable frames (%s frame errors), keeping top %s',
+                job_id, len(scored), frame_errors, len(scored),
+            )
 
             frame_b64s = []
+            encoded_sizes = []
             for _, fp in scored:
                 try:
-                    pil = PILImage.open(fp).convert('RGB').resize((640, 360), PILImage.LANCZOS)
+                    pil = PILImage.open(fp).convert('RGB')
+                    original_size = pil.size
+                    pil.thumbnail((1600, 1600), PILImage.LANCZOS)
                     buf = io.BytesIO()
-                    pil.save(buf, 'JPEG', quality=85)
+                    pil.save(buf, 'JPEG', quality=92, optimize=True)
+                    encoded_sizes.append((original_size, pil.size))
+                    thumb_logger.debug(
+                        'Job %s encoded frame %s: %sx%s -> %sx%s',
+                        job_id, os.path.basename(fp),
+                        original_size[0], original_size[1], pil.size[0], pil.size[1],
+                    )
                     frame_b64s.append(base64.b64encode(buf.getvalue()).decode())
                 except Exception as ee:
-                    print(f'[thumbnail] encode error: {ee}', flush=True)
+                    thumb_logger.debug('Job %s frame encode failed for %s: %s', job_id, fp, ee)
 
             if not frame_b64s:
+                thumb_logger.warning('Job %s failed: frame encoding produced no output', job_id)
                 thumbnail_jobs[job_id] = {'status': 'error', 'error': 'Frame encoding failed'}
                 return
+            if encoded_sizes:
+                largest = max(size[1][0] * size[1][1] for size in encoded_sizes)
+                thumb_logger.info('Job %s encoded %s frames for ranking (largest encoded frame area=%s)', job_id, len(frame_b64s), largest)
 
             # ── Claude Vision ranking ──
             api_key_val = read_api_key()
@@ -612,17 +746,16 @@ def _thumbnail_worker(job_id, filename, clipstart, clipend, clip_transcript):
                         if idx not in seen: ordered.append(frame_b64s[idx])
                     frame_b64s = ordered
             except Exception as ve:
-                print(f'[thumbnail] Vision ranking failed: {ve}', flush=True)
+                thumb_logger.warning('Job %s vision ranking failed; keeping sharpness order: %s', job_id, ve)
 
             # FIX 5: titles from clip_transcript (clip-specific range, sent by frontend)
-            print(f'[thumbnail] clip_transcript length: {len(clip_transcript)}', flush=True)
+            thumb_logger.info('Job %s clip transcript length=%s chars', job_id, len(clip_transcript))
             if not clip_transcript:
                 # Fall back: Whisper tiny on the full video
                 tiny       = get_whisper_tiny()
                 w_result   = tiny.transcribe(video_path)
                 clip_transcript = (w_result.get("text") or "")[:3000]
-                print(f'[thumbnail] whisper fallback transcript length: {len(clip_transcript)}',
-                      flush=True)
+                thumb_logger.info('Job %s used Whisper fallback transcript length=%s chars', job_id, len(clip_transcript))
 
             titles = []
             try:
@@ -650,13 +783,18 @@ def _thumbnail_worker(job_id, filename, clipstart, clipend, clip_transcript):
                     if len(titles) < 5:
                         titles = [str(t)[:60] for t in parsed[:8]]
             except Exception as te:
-                print(f'[thumbnail] Title generation failed: {te}', flush=True)
+                thumb_logger.warning('Job %s title generation failed: %s', job_id, te)
                 titles = ["Add Your Title Here"] * 8
+
+            thumb_logger.info(
+                'Job %s complete: %s ranked frames, %s titles, orientation=%s',
+                job_id, len(frame_b64s), len(titles), stream_info.get('orientation'),
+            )
 
             thumbnail_jobs[job_id] = {
                 'status':     'complete',
                 'result':     {'frames': frame_b64s, 'titles': titles,
-                               'clip_transcript': clip_transcript},
+                               'clip_transcript': clip_transcript, 'video_info': stream_info},
                 'created_at': now,
             }
 
@@ -664,7 +802,7 @@ def _thumbnail_worker(job_id, filename, clipstart, clipend, clip_transcript):
             shutil.rmtree(tmp_dir, ignore_errors=True)
 
     except Exception as exc:
-        print(f'[thumbnail] Worker exception: {exc}', flush=True)
+        thumb_logger.exception('Job %s worker exception', job_id)
         thumbnail_jobs[job_id] = {'status': 'error', 'error': str(exc)}
 
 
@@ -687,6 +825,10 @@ def thumbnail():
         return jsonify({'error': 'filename is required'}), 400
 
     job_id = 'thumb' + uuid.uuid4().hex[:8]
+    thumb_logger.info(
+        'Queueing thumbnail job %s for filename="%s" clipstart="%s" clipend="%s" transcript_chars=%s',
+        job_id, filename, clipstart, clipend, len(clip_transcript),
+    )
     thumbnail_jobs[job_id] = {
         'status':     'processing',
         'created_at': datetime.datetime.utcnow(),
@@ -705,6 +847,7 @@ def thumbnailstatus(jobid):
     """Poll thumbnail job status."""
     job = thumbnail_jobs.get(jobid)
     if not job:
+        thumb_logger.warning('Status poll for missing thumbnail job %s', jobid)
         return jsonify({'status': 'error', 'error': 'Job not found'}), 404
     if job['status'] == 'processing':
         return jsonify({'status': 'processing'})
@@ -785,7 +928,7 @@ Transcript:
         }]
     )
     raw = message.content[0].text.strip()
-    print(f"[clips] Claude raw (first 300 chars): {raw[:300]}")
+    logger.debug("[clips] Claude raw (first 300 chars): %s", raw[:300])
     return _parse_claude_json(raw)
 
 
@@ -800,8 +943,8 @@ def find_clips():
 
         # transcript is a pre-formatted timestamped string: "[0.0] word [0.4] another ..."
         transcript_text = transcript if isinstance(transcript, str) else ' '.join(str(w) for w in transcript)
-        print(f"[clips] Transcript length: {len(transcript_text)} chars")
-        print(f"[clips] Preview: {transcript_text[:200]}")
+        logger.info("[clips] Transcript length: %s chars", len(transcript_text))
+        logger.debug("[clips] Preview: %s", transcript_text[:200])
 
         api_key_path = os.path.join(os.path.expanduser('~'), 'Dropbox', 'Scripts', 'api_key.txt')
         with open(api_key_path, 'r') as f:
@@ -816,26 +959,27 @@ def find_clips():
             try:
                 candidates = _call_clips_claude(transcript_text, client)
             except Exception as ce:
-                print(f"[clips] Attempt {attempt+1} Claude call failed: {ce}")
+                logger.warning("[clips] Attempt %s Claude call failed: %s", attempt + 1, ce)
                 candidates = []
 
             valid = [
                 c for c in candidates
                 if 25 <= (c.get('end_time', 0) - c.get('start_time', 0)) <= 95
             ]
-            print(f"[clips] Attempt {attempt+1}: {len(candidates)} total, {len(valid)} valid (25-95s)")
+            logger.info(
+                "[clips] Attempt %s: %s total, %s valid (25-95s)",
+                attempt + 1, len(candidates), len(valid),
+            )
 
             if len(valid) >= 3:
                 break
             if attempt < MAX_RETRIES - 1:
-                print(f"[clips] Too few valid clips — retrying...")
+                logger.info("[clips] Too few valid clips; retrying")
 
         return jsonify({'candidates': valid})
 
     except Exception as e:
-        print(f"ERROR in /clips: {e}")
-        import traceback
-        traceback.print_exc()
+        logger.exception("ERROR in /clips")
         return jsonify({'error': str(e), 'candidates': []})
 
 
@@ -861,7 +1005,7 @@ def split_video():
             return jsonify({'error': 'Transcript too short', 'parts': []})
 
         transcript_text = transcript if isinstance(transcript, str) else ' '.join(str(w) for w in transcript)
-        print(f"[split] Transcript length: {len(transcript_text)} chars")
+        logger.info("[split] Transcript length: %s chars", len(transcript_text))
 
         # Validate n_parts
         if n_parts is not None:
@@ -921,9 +1065,9 @@ Transcript:
         )
 
         raw = message.content[0].text.strip()
-        print(f"[split] Claude raw (first 300 chars): {raw[:300]}")
+        logger.debug("[split] Claude raw (first 300 chars): %s", raw[:300])
         parts = _parse_claude_json(raw)
-        print(f"[split] Parsed {len(parts)} parts")
+        logger.info("[split] Parsed %s parts", len(parts))
 
         # Sort by part number to guarantee order
         parts.sort(key=lambda p: p.get('part', 0))
@@ -931,9 +1075,7 @@ Transcript:
         return jsonify({'parts': parts})
 
     except Exception as e:
-        print(f"ERROR in /split: {e}")
-        import traceback
-        traceback.print_exc()
+        logger.exception("ERROR in /split")
         return jsonify({'error': str(e), 'parts': []})
 
 
@@ -1067,9 +1209,9 @@ def export_clip():
             thumb_url = get_shared_link(thumb_dbx_path)
 
     except FileNotFoundError:
-        print("dropbox_credentials.json not found — skipping Dropbox link generation")
+        logger.warning("dropbox_credentials.json not found; skipping Dropbox link generation")
     except Exception as de:
-        print(f"Dropbox error: {de}")
+        logger.warning("Dropbox error during shared-link generation: %s", de)
 
     # ── Step D: Search source video record in Airtable ──
     api_key          = read_api_key()
@@ -1088,7 +1230,7 @@ def export_clip():
                 if records:
                     source_record_id = records[0]["id"]
         except Exception as ae:
-            print(f"Airtable source lookup failed: {ae}")
+            logger.warning("Airtable source lookup failed: %s", ae)
 
     # ── Step E: Create Airtable record (Video Shorts & Social) ──
     airtable_record_id = None
@@ -1128,7 +1270,7 @@ def export_clip():
                         "/tbll0KDqmrAlwQuAx/" + airtable_record_id
                     )
         except Exception as ae:
-            print(f"Airtable record creation failed: {ae}")
+            logger.warning("Airtable record creation failed: %s", ae)
 
     return jsonify({
         "success":               True,
@@ -1141,10 +1283,10 @@ def export_clip():
 
 
 if __name__ == "__main__":
-    print("Foundry Video Editor backend starting on http://localhost:5000")
+    logger.info("Foundry Video Editor backend starting on http://localhost:5000")
     api_key = read_api_key()
     if api_key:
-        print("API key loaded.")
+        logger.info("API key loaded.")
     else:
-        print(f"WARNING: API key not found at {API_KEY_PATH}")
+        logger.warning("API key not found at %s", API_KEY_PATH)
     app.run(host="0.0.0.0", port=5000, debug=False, threaded=True)

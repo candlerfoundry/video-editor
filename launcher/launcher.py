@@ -1,22 +1,22 @@
 """
-Foundry Video Editor — Desktop Launcher
+Foundry Video Editor - Desktop Launcher
 Starts the local backend silently, then opens the web app in the browser.
 Double-click this script (or the compiled .exe) to use.
 """
 
 import os
-import sys
 import shutil
 import subprocess
-import threading
+import sys
+import tempfile
 import time
+import tkinter as tk
 import urllib.request
 import webbrowser
-import tkinter as tk
 
-# ── App URL — update if Netlify site name changes ──
+# App URL - update if Netlify site name changes
 NETLIFY_URL = 'https://foundry-video-editor.netlify.app'
-HEALTH_URL  = 'http://localhost:5000/health'
+HEALTH_URL = 'http://localhost:5000/health'
 
 # Fallback Dropbox path for server.py
 DROPBOX_SERVER = os.path.join(
@@ -25,15 +25,15 @@ DROPBOX_SERVER = os.path.join(
     'foundry-video-editor-backend', 'server.py'
 )
 
-# ── Colors ──
-BG         = '#1A1A1A'
-LOG_BG     = '#111111'
-WHITE      = '#FFFFFF'
-MUTED      = '#6B6B6B'
-DOT_GRAY   = '#6B6B6B'
-DOT_GREEN  = '#2D6A4F'
-DOT_RED    = '#CC2200'
-ORANGE     = '#E8541A'
+# Colors
+BG = '#1A1A1A'
+LOG_BG = '#111111'
+WHITE = '#FFFFFF'
+MUTED = '#6B6B6B'
+DOT_GRAY = '#6B6B6B'
+DOT_GREEN = '#2D6A4F'
+DOT_RED = '#CC2200'
+ORANGE = '#E8541A'
 ORANGE_HOV = '#C94516'
 
 
@@ -41,10 +41,11 @@ class LauncherApp:
     def __init__(self, root):
         self.root = root
         self.proc = None
-        self._stderr_lines = []
+        self._backend_log_path = self._get_backend_log_path()
+        self._backend_log_handle = None
         self._build_window()
         self._build_ui()
-        threading.Thread(target=self._launch_sequence, daemon=True).start()
+        self.root.after(0, self._launch_sequence)
 
     def _build_window(self):
         self.root.title('Foundry Video Editor')
@@ -155,19 +156,26 @@ class LauncherApp:
     def _enable_btn(self):
         self.root.after(0, lambda: self._btn.config(state=tk.NORMAL))
 
-    def _read_stderr(self, proc):
-        """Daemon thread: read stderr line by line into buffer and log widget."""
+    def _get_backend_log_path(self):
+        local_app_data = os.environ.get('LOCALAPPDATA') or tempfile.gettempdir()
+        log_dir = os.path.join(local_app_data, 'Foundry Video Editor', 'logs')
+        os.makedirs(log_dir, exist_ok=True)
+        return os.path.join(log_dir, 'backend.log')
+
+    def _reset_backend_log(self):
+        with open(self._backend_log_path, 'w', encoding='utf-8') as handle:
+            handle.write('[launcher] Backend log initialized\n')
+
+    def _read_backend_log_tail(self, max_lines=20):
         try:
-            for raw_line in proc.stderr:
-                line = raw_line.decode('utf-8', errors='replace').rstrip()
-                if line:
-                    self._stderr_lines.append(line)
-                    self._log_line(line)
+            with open(self._backend_log_path, 'r', encoding='utf-8', errors='replace') as handle:
+                lines = handle.readlines()
         except Exception:
-            pass
+            return ['(backend log unavailable)']
+        tail = [line.rstrip() for line in lines[-max_lines:] if line.rstrip()]
+        return tail or ['(no backend log output captured)']
 
     def _show_copy_error_btn(self):
-        """Dynamically add a Copy Error button below the main action button."""
         def _do():
             copy_btn = tk.Button(
                 self._btn_frame,
@@ -182,28 +190,31 @@ class LauncherApp:
                 command=self._copy_error_to_clipboard,
             )
             copy_btn.pack(fill=tk.X, pady=(8, 0))
+
         self.root.after(0, _do)
 
     def _copy_error_to_clipboard(self):
-        text = '\n'.join(self._stderr_lines[-20:])
+        text = '\n'.join(self._read_backend_log_tail())
         self.root.clipboard_clear()
         self.root.clipboard_append(text)
 
     def _launch_sequence(self):
         server_path = self._find_server()
         if not server_path:
-            self._set_status('Error — see below', DOT_RED)
+            self._set_status('Error - see below', DOT_RED)
             self._log_line('server.py not found. Place this app in the')
             self._log_line('same folder as server.py, or ensure Dropbox is synced.')
             return
 
         python_exe = self._find_python()
         if not python_exe:
-            self._set_status('Error — see below', DOT_RED)
+            self._set_status('Error - see below', DOT_RED)
             self._log_line('Python not found. Please install Python from python.org')
             return
 
         self._log_line(f'[launcher] Python: {python_exe}')
+        self._log_line(f'[launcher] Using backend: {server_path}')
+        self._log_line(f'[launcher] Backend log: {self._backend_log_path}')
 
         req_path = os.path.join(os.path.dirname(server_path), 'requirements.txt')
         if os.path.isfile(req_path):
@@ -216,43 +227,40 @@ class LauncherApp:
                     capture_output=True,
                     creationflags=0x08000000,
                 )
-            except Exception as e:
-                self._log_line(f'[launcher] pip warning: {e}')
+            except Exception as exc:
+                self._log_line(f'[launcher] pip warning: {exc}')
 
         self._log_line('[launcher] Starting backend...')
         try:
+            self._reset_backend_log()
+            self._backend_log_handle = open(
+                self._backend_log_path, 'a', encoding='utf-8', buffering=1
+            )
             self.proc = subprocess.Popen(
                 [python_exe, server_path],
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
+                stdout=self._backend_log_handle,
+                stderr=subprocess.STDOUT,
                 creationflags=0x08000000,
             )
-        except Exception as e:
-            self._set_status('Error — see below', DOT_RED)
-            self._log_line(f'[launcher] Failed to start: {e}')
+        except Exception as exc:
+            self._set_status('Error - see below', DOT_RED)
+            self._log_line(f'[launcher] Failed to start: {exc}')
             return
 
-        # Start daemon thread to capture stderr continuously
-        threading.Thread(target=self._read_stderr, args=(self.proc,), daemon=True).start()
-
-        # Wait 2 seconds then check if process is still alive
         time.sleep(2)
         if self.proc.poll() is not None:
-            self._set_status('Backend failed to start — see error below', DOT_RED)
-            tail = self._stderr_lines[-20:] or ['(no stderr output captured)']
-            for line in tail:
+            self._set_status('Backend failed to start - see error below', DOT_RED)
+            for line in self._read_backend_log_tail():
                 self._log_line(line)
             self._show_copy_error_btn()
             return
 
-        # Process still alive — poll health endpoint for up to 15 seconds
         deadline = time.time() + 15
         while time.time() < deadline:
             if self.proc.poll() is not None:
-                self._set_status('Backend failed to start — see error below', DOT_RED)
-                time.sleep(0.3)  # let stderr reader catch up
-                tail = self._stderr_lines[-20:] or ['(no stderr output captured)']
-                for line in tail:
+                self._set_status('Backend failed to start - see error below', DOT_RED)
+                time.sleep(0.3)
+                for line in self._read_backend_log_tail():
                     self._log_line(line)
                 self._show_copy_error_btn()
                 return
@@ -269,10 +277,9 @@ class LauncherApp:
 
             time.sleep(0.5)
 
-        self._set_status('Backend failed to start — see error below', DOT_RED)
+        self._set_status('Backend failed to start - see error below', DOT_RED)
         self._log_line('[launcher] Backend did not respond within 15s.')
-        tail = self._stderr_lines[-20:] or ['(no stderr output captured)']
-        for line in tail:
+        for line in self._read_backend_log_tail():
             self._log_line(line)
         self._show_copy_error_btn()
 
@@ -328,6 +335,11 @@ class LauncherApp:
     def _on_close(self):
         if self.proc and self.proc.poll() is None:
             self.proc.kill()
+        if self._backend_log_handle:
+            try:
+                self._backend_log_handle.close()
+            except Exception:
+                pass
         self.root.destroy()
 
 

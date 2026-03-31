@@ -1,326 +1,313 @@
-# CANONICAL.md — Foundry Video Editor Backend
-# Source of truth for all critical implementations.
-# Every Claude Code session must read this file and verify server.py matches before editing.
-# Last updated: March 30, 2026
+# CANONICAL.md - Foundry Video Editor Backend
+# Source of truth for critical backend and thumbnail behavior.
+# Every editing session must compare server.py to this file before changing fragile paths.
+# Last updated: March 31, 2026
 #
 # HOW TO USE THIS FILE:
-# 1. At session start: read this file in full
-# 2. For each section: search server.py for the function and quote the current version
-# 3. If it matches canonical: proceed
-# 4. If it differs: restore canonical version before making any other changes
-# 5. After all edits: re-verify each section is still present and correct
-# 6. NEVER commit if any canonical feature is missing
-# 7. UPDATE THIS FILE whenever a canonical function is intentionally changed,
-#    a new fragile function is added, or a previously-regressed bug is fixed.
-#    Always include backend/CANONICAL.md in every git add that touches server.py or index.html.
+# 1. Read it before editing server.py or launcher/launcher.py.
+# 2. Verify the current implementation still matches the canonical sections below.
+# 3. If a canonical behavior changes intentionally, update this file in the same commit.
+# 4. Never commit server.py without also staging backend/CANONICAL.md.
 
 ---
 
-## 1. FLASK APP STARTUP — app.run MUST have threaded=True
+## 1. Flask startup and logging safety
+
+Canonical startup requirements:
+
+```python
+if hasattr(sys.stderr, "reconfigure"):
+    sys.stderr.reconfigure(line_buffering=True)
+sys.stdout = sys.stderr
+
+LOG_LEVEL_NAME = os.environ.get('FVE_LOG_LEVEL', 'INFO').upper()
+LOG_LEVEL = getattr(logging, LOG_LEVEL_NAME, logging.INFO)
+THUMBNAIL_DEBUG = os.environ.get('FVE_THUMBNAIL_DEBUG', '').strip().lower() in {'1', 'true', 'yes', 'on'}
+
+logging.basicConfig(
+    level=LOG_LEVEL,
+    format='%(asctime)s %(levelname)s %(name)s: %(message)s',
+    stream=sys.stderr,
+)
+
+logger = logging.getLogger('foundry_video_editor')
+thumb_logger = logging.getLogger('foundry_video_editor.thumbnail')
+if THUMBNAIL_DEBUG:
+    thumb_logger.setLevel(logging.DEBUG)
+else:
+    thumb_logger.setLevel(max(LOG_LEVEL, logging.INFO))
 
 if __name__ == '__main__':
-    print('[startup] Starting Foundry Video Editor backend...', flush=True)
-    print(f'[startup] Python: {sys.executable}', flush=True)
-    print(f'[startup] ffmpeg: {FFMPEG_EXE}', flush=True)
+    logger.info('[startup] Starting Foundry Video Editor backend...')
+    logger.info('[startup] Python: %s', sys.executable)
+    logger.info('[startup] ffmpeg: %s', FFMPEG_EXE)
     app.run(host='0.0.0.0', port=5000, threaded=True)
+```
 
-WHY: Without threaded=True Flask cannot handle concurrent requests.
-The health poll (every 3s) will timeout during thumbnail generation without this.
-REGRESSION RISK: High. Often dropped when server.py is restructured.
+Why:
+- `threaded=True` is required so `/health` keeps answering while long jobs run.
+- `sys.stdout = sys.stderr` protects older launcher builds that only drain stderr.
+- Thumbnail paths must use `logging`, not `print()`, so log volume is controlled and routable.
+- The same rule also applies to `/find_json`, `/clips`, `/split`, caption helpers, and export integrations.
+- Normal job lifecycle logs belong at `INFO`.
+- Per-frame diagnostics belong at `DEBUG` and must stay behind `FVE_THUMBNAIL_DEBUG`, off by default.
 
----
-
-## 2. FFMPEG PATH RESOLUTION — find_ffmpeg()
-
-CREATE_NO_WINDOW = 0x08000000
-
-def find_ffmpeg():
-    root = os.path.join(os.path.expanduser('~'), 'Dropbox')
-    candidates = [
-        os.path.join(root, 'Scripts', 'FFMPEG', 'ffmpeg.exe'),  # canonical first
-        os.path.join(root, 'Scripts', 'FFMPEG', 'bin', 'ffmpeg.exe'),
-        os.path.join(root, 'FFMPEG', 'ffmpeg.exe'),
-        os.path.join(root, 'ffmpeg', 'bin', 'ffmpeg.exe'),
-        'ffmpeg',  # system PATH fallback
-    ]
-    for p in candidates:
-        try:
-            r = subprocess.run([p, '-version'], capture_output=True, timeout=5,
-                               creationflags=CREATE_NO_WINDOW)
-            if r.returncode == 0:
-                print(f'[ffmpeg] Found at: {p}', flush=True)
-                return p
-        except Exception:
-            continue
-    print('[ffmpeg] ERROR: not found in any location', flush=True)
-    return None
-
-FFMPEG_EXE = find_ffmpeg()  # called once at module startup
-
-WHY: ffmpeg was previously hardcoded and broke when path changed.
-Canonical path is Dropbox/Scripts/FFMPEG/ffmpeg.exe.
-REGRESSION RISK: High. Hardcoded paths reappear when routes are rewritten.
+Regression risk: High.
 
 ---
 
-## 3. VIDEO PATH CACHE — prevents os.walk blocking health poll
+## 2. Launcher backend process I/O
 
-# At module level:
-video_path_cache = {}  # {filename: full_absolute_path_to_video_file}
+Canonical launcher pattern in `launcher/launcher.py`:
 
-def find_video_in_dropbox(filename):
-    dropbox_root = os.path.join(os.path.expanduser('~'), 'Dropbox')
-    for root, dirs, files in os.walk(dropbox_root):
-        if filename in files:
-            path = os.path.join(root, filename)
-            print(f'[find_video] Found: {path}', flush=True)
-            return path
-    print(f'[find_video] Not found: {filename}', flush=True)
-    return None
+```python
+self._backend_log_path = self._get_backend_log_path()
+self._backend_log_handle = open(self._backend_log_path, 'a', encoding='utf-8', buffering=1)
+self.proc = subprocess.Popen(
+    [python_exe, server_path],
+    stdout=self._backend_log_handle,
+    stderr=subprocess.STDOUT,
+    creationflags=0x08000000,
+)
+```
 
-WHY: os.walk across Dropbox takes 5-10 seconds and blocks Flask if called
-synchronously before starting a background thread. Cache the result from
-/find_json and reuse it in /thumbnail, /clips, /export_clip.
-REGRESSION RISK: Medium. Cache lookup often removed when routes are rewritten.
+Safe launcher patterns:
+- Redirect backend `stdout` and `stderr` to a log file.
+- Inherit console output directly.
+- Use pipes only if every piped stream is drained continuously for the full process lifetime.
 
----
+Unsafe launcher patterns:
+- `stdout=PIPE` with no reader.
+- `stdout=PIPE` while only draining `stderr`.
+- Verbose `print()` calls inside thumbnail loops.
 
-## 4. /find_json ROUTE
+Why this mattered:
+- The recurring disconnect during `Generate Thumbnail` was a process I/O deadlock.
+- Thumbnail generation produced enough output to fill an unread pipe.
+- Once the pipe filled, the Python backend blocked on write and `/health` timed out.
 
-@app.route('/find_json', methods=['POST'])
-def find_json():
-    try:
-        filename = request.json.get('filename', '')
-        print(f'[find_json] Searching for: {filename}', flush=True)
-
-        cached = video_path_cache.get(filename)
-        if cached and os.path.exists(cached):
-            video_folder = os.path.dirname(cached)
-        else:
-            video_path = find_video_in_dropbox(filename)
-            if not video_path:
-                return jsonify({'json_found': False, 'error': 'Video not found in Dropbox'})
-            video_path_cache[filename] = video_path
-            video_folder = os.path.dirname(video_path)
-
-        print(f'[find_json] Video folder: {video_folder}', flush=True)
-
-        matches = glob.glob(os.path.join(video_folder, '*Transcript (Words).json'))
-        if not matches:
-            matches = glob.glob(os.path.join(video_folder, '*Words*.json'))
-        if not matches:
-            parent = os.path.dirname(video_folder)
-            matches = glob.glob(os.path.join(parent, '*Transcript (Words).json'))
-
-        print(f'[find_json] JSON matches: {matches}', flush=True)
-
-        if not matches:
-            return jsonify({'json_found': False, 'error': 'No transcript found near this video'})
-
-        json_path = matches[0]
-        with open(json_path, 'r', encoding='utf-8') as f:
-            content = json.load(f)
-
-        return jsonify({'json_found': True, 'json_path': json_path, 'json_content': content})
-
-    except Exception as e:
-        print(f'[find_json] ERROR: {e}', flush=True)
-        return jsonify({'json_found': False, 'error': str(e)})
-
-CRITICAL: Return key is json_found (NOT found). Frontend checks data.json_found.
-CRITICAL: Always returns — never hangs. Entire body in try/except.
-REGRESSION RISK: High. Key name 'found' vs 'json_found' has broken this repeatedly.
+Regression risk: Critical.
 
 ---
 
-## 5. THUMBNAIL ROUTE — ASYNC JOB PATTERN
+## 3. ffmpeg path resolution
 
-# At module level:
-thumbnail_jobs = {}  # {job_id: {status, result, error, created_at}}
+`find_ffmpeg()` must probe Dropbox-installed ffmpeg first and log the chosen path.
 
-@app.route('/thumbnail', methods=['POST'])
-def thumbnail():
-    data = request.json
-    filename = data.get('filename')
-    clip_start = data.get('clip_start', 0)
-    clip_end = data.get('clip_end', None)
-    job_id = 'thumb_' + uuid.uuid4().hex[:8]
-    thumbnail_jobs[job_id] = {'status': 'processing', 'result': None,
-                              'error': None, 'created_at': time.time()}
-    t = threading.Thread(target=run_thumbnail_job,
-                         args=(job_id, filename, clip_start, clip_end))
-    t.daemon = True
-    t.start()
-    return jsonify({'job_id': job_id, 'status': 'processing'})
+Canonical requirements:
+- Prefer `Dropbox/Scripts/FFMPEG/ffmpeg.exe`
+- Fall back to `Dropbox/Scripts/FFMPEG/bin/ffmpeg.exe`
+- Fall back to Dropbox alternates
+- Fall back to system `ffmpeg`
+- Log success/failure with `logger`, not `print()`
 
-@app.route('/thumbnail_status/<job_id>', methods=['GET'])
-def thumbnail_status(job_id):
-    job = thumbnail_jobs.get(job_id)
-    if not job:
-        return jsonify({'status': 'error', 'error': 'job not found'})
-    if job['status'] == 'processing':
-        return jsonify({'status': 'processing'})
-    if job['status'] == 'error':
-        return jsonify({'status': 'error', 'error': job['error']})
-    return jsonify({'status': 'complete', **job['result']})
-
-WHY: Without async pattern, Flask blocks for 30-60s during thumbnail generation,
-causing health poll timeouts and yellow 'connecting' dot.
-REGRESSION RISK: Very high. Sync implementation reappears when route is rewritten.
-
-NOTE: Current implementation uses form data (not JSON), jobid (not job_id), and
-/thumbnailstatus/<jobid> (no underscore) to match index.html's polling calls.
-Both the route name and field name must match what index.html sends/expects.
+Regression risk: High.
 
 ---
 
-## 6. FRAME TIMESTAMP SPREAD — FULL VIDEO SAMPLING (updated session 15a)
+## 4. Video path cache
 
-# Inside _thumbnail_worker(), after getting video duration:
-# Always sample full video for thumbnail frame selection
-# (user wants to pick the best moment from anywhere in the video)
-start_t = 17  # skip intro
-end_t = total_duration
-timestamps = [start_t + i * (end_t - start_t) / 19 for i in range(20)]
-print(f'[thumbnail] timestamps from {start_t:.1f}s to {end_t:.1f}s ({len(timestamps)} frames)', flush=True)
+Canonical requirements:
+- Keep `video_path_cache = {}` at module scope.
+- `/find_json` populates it.
+- `/thumbnail`, `/clips`, and `/export_clip` reuse it before walking Dropbox.
+- `find_video_in_dropbox()` may still walk Dropbox as a fallback.
 
-WHY: Frames always come from the FULL video so users can pick the best moment
-from anywhere — not just within the selected clip range.
-The spread formula ensures even distribution across the full duration.
-REGRESSION RISK: CRITICAL. Must be present. Verify every session.
+Why:
+- Full Dropbox walks are expensive and should not happen on the request path unless necessary.
 
-NOTE: clip_start/clip_end params are still accepted by the route and passed to
-the worker (for future use / transcript context) but are NOT used for frame sampling.
+Regression risk: Medium.
 
 ---
 
-## 7. FRAME EXTRACTION — PIL + numpy only, NO OpenCV
+## 5. /find_json contract
 
-frames = []
-with tempfile.TemporaryDirectory() as tmpdir:
-    for i, ts in enumerate(timestamps):
-        out_path = os.path.join(tmpdir, f'frame_{i:03d}.jpg')
-        subprocess.run(
-            [FFMPEG_EXE, '-ss', str(ts), '-i', video_path,
-             '-frames:v', '1', '-q:v', '2', out_path],
-            capture_output=True, creationflags=CREATE_NO_WINDOW
-        )
-        if not os.path.exists(out_path):
-            continue
-        img = Image.open(out_path).convert('RGB')
-        gray = np.array(img.convert('L')).astype(float)
-        sharpness = float(np.var(np.gradient(gray)))
-        with open(out_path, 'rb') as f:
-            b64 = base64.b64encode(f.read()).decode()
-        frames.append({'b64': b64, 'sharpness': sharpness, 'ts': ts})
-        print(f'[thumbnail] frame {i} ts={ts:.1f}s sharpness={sharpness:.1f}', flush=True)
+Canonical requirements:
+- Route must always return `json_found`, not `found`.
+- Entire body stays wrapped in `try/except`.
+- It must return quickly and never hang forever.
+- Cache successful video paths into `video_path_cache`.
 
-    frames.sort(key=lambda x: x['sharpness'], reverse=True)
-    top8 = frames[:8]
+Frontend contract:
+- `index.html` checks `data.json_found`.
 
-CRITICAL: NEVER import cv2 or opencv. Use PIL (pillow) + numpy only.
-Required in requirements.txt: pillow, numpy
-REGRESSION RISK: High. OpenCV gets reintroduced when thumbnail route is rewritten.
+Logging rules:
+- `INFO`: lookup start, cache store, final chosen transcript JSON
+- `DEBUG`: folder listings and glob result details
+- `WARNING`: missing video or missing transcript JSON
+- `EXCEPTION`: unexpected route failure
+- do not add `print()` calls back to this route or Dropbox-walk helpers
+
+Regression risk: High.
 
 ---
 
-## 8. /clips ROUTE — KEY REQUIREMENTS
+## 6. Thumbnail route and async job contract
 
-Must:
-- Use Words JSON path from frontend (found by /find_json — do not re-search)
-- Send to claude-sonnet-4-6 (NEVER opus)
-- Include Foundry mission context in prompt
-- Require 30-90 second clips in prompt
-- Filter clips <25s or >95s; retry once if <3 valid remain
-- Space clips 45s apart minimum
-- Strip code fences: start=raw.find('['); end=raw.rfind(']'); raw=raw[start:end+1]
-- Return {candidates: [{start_time, end_time, hook_score, hook_line, why_it_works}]}
+Canonical requirements:
+- Keep `thumbnail_jobs` at module scope.
+- `/thumbnail` must return immediately after starting a daemon thread.
+- `/thumbnailstatus/<jobid>` must report `processing`, `complete`, or `error`.
+- Route naming and field naming must continue matching `index.html`:
+  - form data, not JSON
+  - `jobid`, not `job_id`
+  - `/thumbnailstatus/<jobid>`, not `/thumbnail_status/<job_id>`
 
-WHY: Clips were previously always 10 seconds (hardcoded duration) and always
-the same (stale cached JSON path). Both are fixed by passing fresh values from frontend.
-REGRESSION RISK: Medium.
+Canonical logging rules:
+- `/thumbnail` logs one `INFO` queue event per job.
+- `_thumbnail_worker()` logs one `INFO` start event and concise `INFO` summaries.
+- `/thumbnailstatus` should only log unexpected cases such as missing jobs.
+- Do not add `print()` statements to thumbnail execution paths.
 
----
+Why:
+- This route must remain truly asynchronous so health polling does not stall.
+- Noisy output here can reintroduce launcher deadlocks if someone later weakens process I/O handling.
 
-## 9. HEALTH POLL — index.html
-
-async function pollHealth() {
-    try {
-        const resp = await fetch('http://localhost:5000/health', {
-            signal: AbortSignal.timeout(2500)
-        });
-        const data = await resp.json();
-        setConnectionStatus(data.status === 'ok' ? 'connected' : 'disconnected');
-    } catch (e) {
-        setConnectionStatus('connecting');
-    }
-}
-pollHealth();
-setInterval(pollHealth, 3000);
-
-function setConnectionStatus(state) {
-    // NO early-return guard — if (backendOnline) return caused a regression
-    const dot = document.getElementById('status-dot');
-    const label = document.getElementById('status-label');
-    if (state === 'connected') {
-        dot.style.background = '#2D6A4F';
-        dot.style.animation = 'none';
-        label.textContent = 'Backend connected';
-    } else {
-        dot.style.background = '#F5A623';
-        dot.style.animation = 'blink 1s infinite';
-        label.textContent = 'Connecting...';
-    }
-}
-
-WHY: AbortSignal.timeout() is correct (not manual AbortController).
-Early-return guard caused stale UI — removed in session 13c-2, must not return.
-REGRESSION RISK: Medium.
+Regression risk: Very high.
 
 ---
 
-## 10. SIMULTANEOUS VIDEO PLAYBACK — index.html
+## 7. Thumbnail frame sampling
 
-// At top of <script>:
-let currentlyPlaying = null;
+Canonical requirements inside `_thumbnail_worker()`:
 
-function playVideo(videoEl) {
-    if (currentlyPlaying && currentlyPlaying !== videoEl) {
-        currentlyPlaying.pause();
-        currentlyPlaying.currentTime = 0;
-    }
-    currentlyPlaying = videoEl;
-    videoEl.play();
-}
+```python
+start_t = 17.0 if total_duration > 20.0 else 0.0
+end_t = max(start_t, total_duration - 0.25)
+if end_t <= start_t + 0.01:
+    timestamps = [round(start_t, 3)]
+else:
+    timestamps = [start_t + i * (end_t - start_t) / 19 for i in range(20)]
+thumb_logger.info(
+    'Job %s sampling %s timestamps from %.1fs to %.1fs',
+    job_id, len(timestamps), start_t, end_t,
+)
+```
 
-// On back-to-results navigation:
-if (currentlyPlaying) {
-    currentlyPlaying.pause();
-    currentlyPlaying = null;
-}
+Why:
+- Thumbnails sample the full video, not just the selected clip range.
+- Logging here should be one summary line, not a per-frame print loop.
 
-WHY: Multiple videos playing simultaneously has regressed in sessions 8.5 and 13a.
-REGRESSION RISK: High. currentlyPlaying gets dropped when JS is reorganized.
-
----
-
-## 11. /find_json RETURN KEY CONTRACT
-
-server.py MUST return:  { "json_found": true/false, ... }
-index.html MUST check:  if (data.json_found) { ... }
-
-NEVER use 'found' — always 'json_found'.
-This mismatch has broken auto-load multiple times.
-REGRESSION RISK: High.
+Regression risk: High.
 
 ---
 
-## 12. ZIP BUILD COMMAND — flat format
+## 8. Thumbnail extraction and logging
 
-cd /tmp/video-editor
+Canonical requirements:
+- Use `get_video_stream_info()` to capture raw size, display size, rotation, and orientation.
+- Use PIL plus numpy only. Do not reintroduce OpenCV.
+- Preserve aspect ratio during extraction; never force frames into a fixed 16:9 canvas before the frontend renders them.
+- Downscale only if needed, using high-quality resampling.
+- Include `video_info` in the completed thumbnail job result.
+
+Canonical logging rules:
+- `INFO`: cache miss, job start, timestamp summary, usable-frame summary, encode summary, transcript fallback, job completion.
+- `DEBUG`: per-frame sharpness and per-frame encode details.
+- `WARNING`: ranking/title-generation fallback and recoverable failures.
+- `EXCEPTION`: worker-level failure.
+
+Regression risk: High.
+
+---
+
+## 9. /clips and /split logging discipline
+
+Canonical requirements:
+- Both routes must use `logger`, not `print()`.
+- `INFO`: transcript length, attempt summaries, parsed result counts.
+- `DEBUG`: Claude raw preview snippets and transcript previews.
+- `WARNING`: retryable Claude/API failures.
+- `EXCEPTION`: route-level failures.
+
+Why:
+- These routes can produce large prompt/response debug output.
+- If they regress back to noisy `print()` loops, they can recreate the same launcher/backend I/O blockage pattern.
+
+Instruction for future coding sessions:
+- Before adding diagnostics to `/clips` or `/split`, prefer one summary line.
+- Only log raw model output snippets at `DEBUG`.
+- Never log full transcripts or full model responses at `INFO`.
+
+Regression risk: High.
+
+---
+
+## 10. Export and integration logging
+
+Canonical requirements:
+- Dropbox-link generation and Airtable integration must use `logger.warning(...)` for recoverable failures.
+- These integration failures should not crash the export route when the clip itself succeeded.
+- Do not add `print()` calls in export-side Dropbox/Airtable branches.
+
+Why:
+- These integrations can fail intermittently and are often edited during operational debugging.
+- Reintroducing `print()` in retry-prone integration paths recreates backend I/O risk.
+
+Regression risk: Medium.
+
+---
+
+## 11. Thumbnail preview rendering
+
+All thumbnail surfaces in `index.html` must use one aspect-ratio-preserving cover-fit helper:
+- main thumbnail editor canvas
+- export/dialog canvas
+- style preview mini canvases
+
+Required behavior:
+- compute crop from the image's natural dimensions
+- use `ctx.drawImage(img, sx, sy, sw, sh, 0, 0, W, H)`
+- set `imageSmoothingEnabled = true`
+- set `imageSmoothingQuality = 'high'`
+- size mini-canvas backing stores to displayed CSS size with `devicePixelRatio`
+- do not hardcode thumbnail previews or editor canvases to `16:9`
+- the UI must expose target thumbnail formats, currently `Instagram 4:5` and `YouTube Shorts 9:16`
+- style cards, editor canvases, and saved thumbnail previews must all resize to the selected target ratio
+- the full selected thumbnail crop must remain visible in previews; never show only a narrow strip because the viewport stayed landscape
+
+Why:
+- Backend extraction quality and frontend preview quality can regress independently.
+- A fixed landscape preview box can make a correctly extracted portrait crop look broken even when the image data is fine.
+
+Regression risk: High.
+
+---
+
+## 12. Health polling
+
+Canonical `index.html` behavior:
+- poll `http://localhost:5000/health`
+- use `AbortSignal.timeout(2500)`
+- run every 3 seconds
+- do not add an early-return guard that freezes the UI state
+
+Why:
+- This is the first signal that exposes a blocked or unreachable backend.
+
+Regression risk: Medium.
+
+---
+
+## 13. Simultaneous video playback
+
+Canonical `index.html` behavior:
+- maintain one `currentlyPlaying` reference
+- pause/reset the previous video before playing a new one
+- clear it when navigating back to results
+
+Regression risk: High.
+
+---
+
+## 14. Zip build command
+
+Use a flat zip layout for backend delivery:
+
+```bash
 zip -j foundry-video-editor-backend.zip backend/server.py backend/start_server.bat backend/requirements.txt
+```
 
-The -j flag strips folder paths. Files extract directly with no subfolder nesting.
-NEVER use: zip -r foundry-video-editor-backend.zip foundry-video-editor-backend/
-That creates nested folders that break the intern install workflow.
-REGRESSION RISK: Medium.
+Do not create nested folders inside the deliverable zip.
+
+Regression risk: Medium.
