@@ -160,6 +160,82 @@ def get_video_dimensions(video_path, ffmpeg_exe):
         return 1920, 1080
 
 
+def get_video_stream_info(video_path, ffmpeg_exe):
+    """
+    Returns raw stream dimensions plus display dimensions that account for rotation metadata.
+    """
+    def _probe(ffprobe_exe):
+        result = subprocess.run(
+            [ffprobe_exe, '-v', 'error', '-select_streams', 'v:0',
+             '-show_entries', 'stream=width,height,side_data_list:stream_tags=rotate',
+             '-of', 'json', video_path],
+            capture_output=True, text=True, timeout=10,
+            creationflags=CREATE_NO_WINDOW,
+        )
+        data = json.loads(result.stdout or '{}')
+        stream = (data.get('streams') or [{}])[0]
+        width = int(stream.get('width') or 1920)
+        height = int(stream.get('height') or 1080)
+
+        rotation = 0
+        tags = stream.get('tags') or {}
+        if tags.get('rotate') is not None:
+            try:
+                rotation = int(float(tags['rotate']))
+            except Exception:
+                rotation = 0
+
+        if not rotation:
+            for side_data in stream.get('side_data_list') or []:
+                if side_data.get('rotation') is None:
+                    continue
+                try:
+                    rotation = int(float(side_data['rotation']))
+                    break
+                except Exception:
+                    continue
+
+        rotation = rotation % 360
+        if rotation in (90, 270):
+            display_width, display_height = height, width
+        else:
+            display_width, display_height = width, height
+
+        info = {
+            'width': width,
+            'height': height,
+            'rotation': rotation,
+            'display_width': display_width,
+            'display_height': display_height,
+            'orientation': 'portrait' if display_height > display_width else 'landscape',
+        }
+        print(
+            f'[thumbnail] source stream {width}x{height}, rotation={rotation}, '
+            f'display={display_width}x{display_height}',
+            flush=True,
+        )
+        return info
+
+    ffprobe = ffmpeg_exe.replace('ffmpeg.exe', 'ffprobe.exe') if ffmpeg_exe != 'ffmpeg' else 'ffprobe'
+    try:
+        return _probe(ffprobe)
+    except Exception as e:
+        if ffprobe != 'ffprobe':
+            try:
+                return _probe('ffprobe')
+            except Exception:
+                pass
+        print(f'[thumbnail] ffprobe stream probe failed, using default metadata: {e}', flush=True)
+        return {
+            'width': 1920,
+            'height': 1080,
+            'rotation': 0,
+            'display_width': 1920,
+            'display_height': 1080,
+            'orientation': 'landscape',
+        }
+
+
 def get_caption_style(width, height):
     """
     Returns a dict of ffmpeg subtitle style params based on video dimensions.
@@ -506,6 +582,8 @@ def _thumbnail_worker(job_id, filename, clipstart, clipend, clip_transcript):
 
         tmp_dir = tempfile.mkdtemp()
         try:
+            stream_info = get_video_stream_info(video_path, FFMPEG_EXE)
+
             # ── Get total duration ──
             ffprobe_exe = FFMPEG_EXE.replace('ffmpeg.exe', 'ffprobe.exe') if (
                 FFMPEG_EXE and FFMPEG_EXE != 'ffmpeg'
@@ -524,9 +602,12 @@ def _thumbnail_worker(job_id, filename, clipstart, clipend, clip_transcript):
 
             # Always sample full video for thumbnail frame selection
             # (user wants to pick the best moment from anywhere in the video)
-            start_t = 17  # skip intro
-            end_t = total_duration
-            timestamps = [start_t + i * (end_t - start_t) / 19 for i in range(20)]
+            start_t = 17.0 if total_duration > 20.0 else 0.0
+            end_t = max(start_t, total_duration - 0.25)
+            if end_t <= start_t + 0.01:
+                timestamps = [round(start_t, 3)]
+            else:
+                timestamps = [start_t + i * (end_t - start_t) / 19 for i in range(20)]
             print(f'[thumbnail] timestamps from {start_t:.1f}s to {end_t:.1f}s ({len(timestamps)} frames)', flush=True)
 
             # ── Extract frames ──
@@ -563,9 +644,16 @@ def _thumbnail_worker(job_id, filename, clipstart, clipend, clip_transcript):
             frame_b64s = []
             for _, fp in scored:
                 try:
-                    pil = PILImage.open(fp).convert('RGB').resize((640, 360), PILImage.LANCZOS)
+                    pil = PILImage.open(fp).convert('RGB')
+                    original_size = pil.size
+                    pil.thumbnail((1600, 1600), PILImage.LANCZOS)
                     buf = io.BytesIO()
-                    pil.save(buf, 'JPEG', quality=85)
+                    pil.save(buf, 'JPEG', quality=92, optimize=True)
+                    print(
+                        f'[thumbnail] encoded frame {fp}: {original_size[0]}x{original_size[1]} '
+                        f'-> {pil.size[0]}x{pil.size[1]}',
+                        flush=True,
+                    )
                     frame_b64s.append(base64.b64encode(buf.getvalue()).decode())
                 except Exception as ee:
                     print(f'[thumbnail] encode error: {ee}', flush=True)
@@ -656,7 +744,7 @@ def _thumbnail_worker(job_id, filename, clipstart, clipend, clip_transcript):
             thumbnail_jobs[job_id] = {
                 'status':     'complete',
                 'result':     {'frames': frame_b64s, 'titles': titles,
-                               'clip_transcript': clip_transcript},
+                               'clip_transcript': clip_transcript, 'video_info': stream_info},
                 'created_at': now,
             }
 

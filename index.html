@@ -646,9 +646,9 @@
     .bold-corner { background: linear-gradient(135deg, #1a1a2e 0%, #2d2d5e 100%); }
     .kinetic     { background: linear-gradient(135deg, #0a1628 0%, #1a3a2a 60%, #2a5a1a 100%); }
     .style-preview-canvas {
-      display: block; width: 100%; height: 64px;
+      display: block; width: 100%; height: auto;
+      aspect-ratio: 16 / 9;
       border-radius: 6px; margin-bottom: 10px;
-      object-fit: cover;
     }
 
     /* ─── EDIT CAPTIONS SPECIFIC ─── */
@@ -3062,6 +3062,7 @@
   let _thumbTextColor      = '#ffffff';
   let _thumbShadowOn       = true;
   let _thumbOverlayOpacity = 0;      // 0-80
+  let _thumbVideoInfo      = null;
 
   // Wire thumb-file input
   document.getElementById('thumb-file').addEventListener('change', function () {
@@ -3169,6 +3170,7 @@
         _thumbFrames        = data.frames || [];
         _thumbSelectedFrame = 0;
         _thumbTitles        = data.titles || [];
+        _thumbVideoInfo     = data.video_info || null;
         thumbSetStep(4);
         setTimeout(() => { buildThumbHeroState(); thumbShowState('hero'); }, 400);
       },
@@ -3262,6 +3264,7 @@
           data => {
             if (data.frames && data.frames.length) {
               _thumbFrames = data.frames; _thumbSelectedFrame = 0;
+              _thumbVideoInfo = data.video_info || _thumbVideoInfo;
               if (data.titles && data.titles.length) _thumbTitles = data.titles;
               buildThumbHeroState();
             }
@@ -3348,10 +3351,100 @@
 
   function backToTitles() { thumbShowState('hero'); }
 
+  function getThumbImageSrc(b64) {
+    return 'data:image/jpeg;base64,' + b64;
+  }
+
+  function getCoverSourceRect(srcW, srcH, destW, destH) {
+    const srcRatio = srcW / srcH;
+    const destRatio = destW / destH;
+    if (srcRatio > destRatio) {
+      const sh = srcH;
+      const sw = sh * destRatio;
+      return { sx: (srcW - sw) / 2, sy: 0, sw, sh };
+    }
+    const sw = srcW;
+    const sh = sw / destRatio;
+    return { sx: 0, sy: (srcH - sh) / 2, sw, sh };
+  }
+
+  function drawImageCover(ctx, img, W, H) {
+    const crop = getCoverSourceRect(img.naturalWidth, img.naturalHeight, W, H);
+    ctx.imageSmoothingEnabled = true;
+    ctx.imageSmoothingQuality = 'high';
+    ctx.drawImage(img, crop.sx, crop.sy, crop.sw, crop.sh, 0, 0, W, H);
+  }
+
+  function renderFrameCanvas(canvas, b64, style, afterDraw) {
+    if (!canvas || !b64) return;
+    const ctx = canvas.getContext('2d');
+    const W = canvas.width;
+    const H = canvas.height;
+    const img = new Image();
+    img.onload = function () {
+      ctx.clearRect(0, 0, W, H);
+      drawImageCover(ctx, img, W, H);
+      applyThumbStyleOverlay(ctx, W, H, style);
+      if (afterDraw) afterDraw(ctx, W, H);
+    };
+    img.src = getThumbImageSrc(b64);
+  }
+
+  function prepareStylePreviewCanvas(canvas) {
+    const dpr = window.devicePixelRatio || 1;
+    const cssWidth = Math.max(1, Math.round(canvas.clientWidth || 160));
+    const cssHeight = Math.max(1, Math.round(canvas.clientHeight || Math.round(cssWidth * 9 / 16)));
+    const pixelWidth = Math.max(160, Math.round(cssWidth * dpr));
+    const pixelHeight = Math.max(90, Math.round(cssHeight * dpr));
+    if (canvas.width !== pixelWidth || canvas.height !== pixelHeight) {
+      canvas.width = pixelWidth;
+      canvas.height = pixelHeight;
+    }
+  }
+
+  function drawThumbTextBlock(ctx, W, title, fontSize, fontFamily, tx, ty, textColor, shadowOn, overlayOpacity) {
+    ctx.font = `700 ${fontSize}px ${fontFamily}, sans-serif`;
+    const lines = wrapText(ctx, title, W * 0.8);
+    const lineH = fontSize * 1.25;
+
+    if (overlayOpacity > 0) {
+      const boxH = lines.length * lineH + 28;
+      const boxW = Math.min(W * 0.88, W * 0.9);
+      ctx.fillStyle = `rgba(17,17,17,${overlayOpacity / 100})`;
+      ctx.beginPath();
+      if (ctx.roundRect) {
+        ctx.roundRect(tx - boxW / 2, ty - lines.length * lineH / 2 - 14, boxW, boxH, 8);
+      } else {
+        ctx.rect(tx - boxW / 2, ty - lines.length * lineH / 2 - 14, boxW, boxH);
+      }
+      ctx.fill();
+    }
+
+    ctx.save();
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    if (shadowOn) {
+      ctx.shadowColor = 'rgba(0,0,0,0.8)';
+      ctx.shadowBlur = 8;
+      ctx.shadowOffsetX = 2;
+      ctx.shadowOffsetY = 2;
+    }
+    ctx.fillStyle = textColor;
+    ctx.font = `700 ${fontSize}px ${fontFamily}, sans-serif`;
+    let lineY = ty - (lines.length - 1) * lineH / 2;
+    for (const line of lines) {
+      ctx.fillText(line, tx, lineY);
+      lineY += lineH;
+    }
+    ctx.restore();
+  }
+
   // ── Canvas rendering (object-fit cover + style overlay) ──
   function renderThumbCanvas() {
     const canvas = document.getElementById('thumb-canvas');
     const b64 = _thumbFrames[_thumbSelectedFrame];
+    renderFrameCanvas(canvas, b64, _thumbStyle);
+    return;
     if (!canvas || !b64) return;
     const ctx = canvas.getContext('2d');
     const W = 1280, H = 720;
@@ -3372,6 +3465,45 @@
 
   // Shared style overlay helper — used by renderThumbCanvas + downloadThumbPNG
   function applyThumbStyleOverlay(ctx, W, H, style) {
+    if (style === 'warm_bar') {
+      const fade = ctx.createLinearGradient(0, H * 0.48, 0, H);
+      fade.addColorStop(0, 'rgba(9,9,9,0)');
+      fade.addColorStop(1, 'rgba(9,9,9,0.78)');
+      ctx.fillStyle = fade;
+      ctx.fillRect(0, H * 0.48, W, H * 0.52);
+      ctx.fillStyle = 'rgba(9,9,9,0.76)';
+      ctx.fillRect(0, H * 0.72, W, H * 0.28);
+      ctx.fillStyle = '#E8541A';
+      ctx.fillRect(W * 0.05, H * 0.72 - 8, W * 0.30, 8);
+      return;
+    }
+    if (style === 'bold_corner') {
+      const scrim = ctx.createLinearGradient(0, 0, 0, H);
+      scrim.addColorStop(0, 'rgba(7,7,7,0.30)');
+      scrim.addColorStop(1, 'rgba(7,7,7,0.62)');
+      ctx.fillStyle = scrim;
+      ctx.fillRect(0, 0, W, H);
+      const vignette = ctx.createRadialGradient(W / 2, H / 2, H * 0.12, W / 2, H / 2, H * 0.72);
+      vignette.addColorStop(0, 'rgba(0,0,0,0)');
+      vignette.addColorStop(1, 'rgba(0,0,0,0.30)');
+      ctx.fillStyle = vignette;
+      ctx.fillRect(0, 0, W, H);
+      ctx.fillStyle = '#E8541A';
+      ctx.fillRect(W * 0.22, H * 0.63, W * 0.56, 6);
+      return;
+    }
+    if (style === 'kinetic_slash') {
+      const fade = ctx.createLinearGradient(0, H * 0.54, 0, H);
+      fade.addColorStop(0, 'rgba(17,17,17,0)');
+      fade.addColorStop(1, 'rgba(17,17,17,0.84)');
+      ctx.fillStyle = fade;
+      ctx.fillRect(0, H * 0.54, W, H * 0.46);
+      ctx.fillStyle = 'rgba(17,17,17,0.85)';
+      ctx.fillRect(0, H * 0.66, W, H * 0.34);
+      ctx.fillStyle = '#E8541A';
+      ctx.fillRect(0, H * 0.66, W, 8);
+      return;
+    }
     if (style === 'warm_bar') {
       // STYLE A: Caption Bar — dark bar at bottom 30%, CF Orange left border
       ctx.fillStyle = 'rgba(0,0,0,0.72)';
@@ -3401,6 +3533,13 @@
     const b64 = (frames || _thumbFrames)[selectedIdx !== undefined ? selectedIdx : _thumbSelectedFrame];
     if (!b64) return;
     const styles = ['warm_bar', 'bold_corner', 'kinetic_slash'];
+    styles.forEach(style => {
+      const cv = document.getElementById((prefix || 'style-canvas-') + style);
+      if (!cv) return;
+      prepareStylePreviewCanvas(cv);
+      renderFrameCanvas(cv, b64, style);
+    });
+    return;
     const W = 160, H = 90;
     styles.forEach(style => {
       const cv = document.getElementById((prefix || 'style-canvas-') + style);
@@ -3420,10 +3559,17 @@
 
   // Keep drawCoverFit as alias so dialog canvas code still works
   function drawCoverFit(ctx, img, W, H) {
+    drawImageCover(ctx, img, W, H);
+    return;
     const scale = Math.max(W / img.naturalWidth, H / img.naturalHeight);
     const sw = img.naturalWidth * scale, sh = img.naturalHeight * scale;
     ctx.drawImage(img, (W - sw) / 2, (H - sh) / 2, sw, sh);
   }
+
+  window.addEventListener('resize', () => {
+    updateStyleCardPreviews(_thumbFrames, _thumbSelectedFrame, 'style-canvas-');
+    updateStyleCardPreviews(_dlgFrames, _dlgSelectedFrame, 'dlg-style-canvas-');
+  });
 
   // ── Draggable text overlay div ──
   function updateThumbText() {
@@ -3528,6 +3674,21 @@
   function downloadThumbPNG() {
     const canvas = document.getElementById('thumb-canvas');
     const b64 = _thumbFrames[_thumbSelectedFrame];
+    if (!canvas || !b64) return;
+    renderFrameCanvas(canvas, b64, _thumbStyle, (ctx, W) => {
+      drawThumbTextBlock(
+        ctx, W, _thumbTitle, _thumbFontSize, _thumbFontFamily,
+        _thumbCanvasTX, _thumbCanvasTY, _thumbTextColor, _thumbShadowOn, _thumbOverlayOpacity
+      );
+      const stem = _thumbFile ? _thumbFile.name.replace(/\.(mp4|mov)$/i, '') : 'thumbnail';
+      canvas.toBlob(blob => {
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url; a.download = stem + ' - Thumbnail.png'; a.click();
+        setTimeout(() => URL.revokeObjectURL(url), 5000);
+      }, 'image/png');
+    });
+    return;
     if (!canvas || !b64) return;
     const ctx = canvas.getContext('2d');
     const W = 1280, H = 720;
@@ -3636,6 +3797,7 @@
   let _dlgTextColor      = '#ffffff';
   let _dlgShadowOn       = true;
   let _dlgOverlayOpacity = 0;
+  let _dlgVideoInfo      = null;
 
   function openDoneEditingModal() {
     document.getElementById('modal-pre-export').showModal();
@@ -3687,6 +3849,10 @@
     const btn = document.getElementById('btn-thumb-expand');
     const expanded = dlg.classList.toggle('expanded');
     btn.textContent = expanded ? 'Collapse \u2199' : 'Expand \u2197';
+    requestAnimationFrame(() => {
+      updateStyleCardPreviews(_dlgFrames, _dlgSelectedFrame, 'dlg-style-canvas-');
+      if (document.getElementById('dlg-state-editor').style.display !== 'none') dlgDrawCanvas();
+    });
   }
 
   function dlgShowState(state) {
@@ -3739,6 +3905,7 @@
         _dlgFrames        = data.frames || [];
         _dlgSelectedFrame = 0;
         _thumbTitles      = data.titles || [];
+        _dlgVideoInfo     = data.video_info || null;
         dlgSetStep(4);
         setTimeout(() => { dlgBuildHeroState(); dlgShowState('hero'); }, 400);
       },
@@ -3814,6 +3981,7 @@
           data => {
             if (data.frames && data.frames.length) {
               _dlgFrames = data.frames; _dlgSelectedFrame = 0;
+              _dlgVideoInfo = data.video_info || _dlgVideoInfo;
               if (data.titles && data.titles.length) _thumbTitles = data.titles;
               dlgBuildHeroState();
             }
@@ -3906,6 +4074,8 @@
   function dlgDrawCanvas() {
     const canvas = document.getElementById('dlg-canvas');
     const b64 = _dlgFrames[_dlgSelectedFrame];
+    renderFrameCanvas(canvas, b64, _dlgStyle);
+    return;
     if (!canvas || !b64) return;
     const ctx = canvas.getContext('2d');
     const W = 1280, H = 720;
@@ -3996,6 +4166,23 @@
   function dlgDoneWithThumbnail() {
     const canvas = document.getElementById('dlg-canvas');
     const b64 = _dlgFrames[_dlgSelectedFrame];
+    if (!canvas || !b64) { closeThumbDialog(); openExportFormDialog(); return; }
+    renderFrameCanvas(canvas, b64, _dlgStyle, (ctx, W) => {
+      drawThumbTextBlock(
+        ctx, W, _dlgTitle, _dlgFontSize, _dlgFontFamily,
+        _dlgCanvasTX, _dlgCanvasTY, _dlgTextColor, _dlgShadowOn, _dlgOverlayOpacity
+      );
+      canvas.toBlob(blob => {
+        if (thumbnailBlobUrl) URL.revokeObjectURL(thumbnailBlobUrl);
+        thumbnailBlob    = blob;
+        thumbnailBlobUrl = URL.createObjectURL(blob);
+        document.getElementById('thumb-preview-img').src = thumbnailBlobUrl;
+        document.getElementById('thumb-preview-panel').classList.add('active');
+        closeThumbDialog();
+        openExportFormDialog();
+      }, 'image/png');
+    });
+    return;
     if (!canvas || !b64) { closeThumbDialog(); openExportFormDialog(); return; }
     const ctx = canvas.getContext('2d');
     const W = 1280, H = 720;

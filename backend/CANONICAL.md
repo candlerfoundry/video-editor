@@ -1,7 +1,7 @@
 # CANONICAL.md — Foundry Video Editor Backend
 # Source of truth for all critical implementations.
 # Every Claude Code session must read this file and verify server.py matches before editing.
-# Last updated: March 30, 2026
+# Last updated: March 31, 2026
 #
 # HOW TO USE THIS FILE:
 # 1. At session start: read this file in full
@@ -179,9 +179,12 @@ Both the route name and field name must match what index.html sends/expects.
 # Inside _thumbnail_worker(), after getting video duration:
 # Always sample full video for thumbnail frame selection
 # (user wants to pick the best moment from anywhere in the video)
-start_t = 17  # skip intro
-end_t = total_duration
-timestamps = [start_t + i * (end_t - start_t) / 19 for i in range(20)]
+start_t = 17.0 if total_duration > 20.0 else 0.0
+end_t = max(start_t, total_duration - 0.25)
+if end_t <= start_t + 0.01:
+    timestamps = [round(start_t, 3)]
+else:
+    timestamps = [start_t + i * (end_t - start_t) / 19 for i in range(20)]
 print(f'[thumbnail] timestamps from {start_t:.1f}s to {end_t:.1f}s ({len(timestamps)} frames)', flush=True)
 
 WHY: Frames always come from the FULL video so users can pick the best moment
@@ -195,6 +198,10 @@ the worker (for future use / transcript context) but are NOT used for frame samp
 ---
 
 ## 7. FRAME EXTRACTION — PIL + numpy only, NO OpenCV
+
+stream_info = get_video_stream_info(video_path, FFMPEG_EXE)
+# stream_info must include width/height, rotation, display_width/display_height,
+# and an orientation label that reflects the rotated display frame.
 
 frames = []
 with tempfile.TemporaryDirectory() as tmpdir:
@@ -210,13 +217,21 @@ with tempfile.TemporaryDirectory() as tmpdir:
         img = Image.open(out_path).convert('RGB')
         gray = np.array(img.convert('L')).astype(float)
         sharpness = float(np.var(np.gradient(gray)))
-        with open(out_path, 'rb') as f:
-            b64 = base64.b64encode(f.read()).decode()
+        preview = img.copy()
+        preview.thumbnail((1600, 1600), Image.LANCZOS)  # preserve aspect ratio; never force 16:9
+        buf = io.BytesIO()
+        preview.save(buf, 'JPEG', quality=92, optimize=True)
+        b64 = base64.b64encode(buf.getvalue()).decode()
         frames.append({'b64': b64, 'sharpness': sharpness, 'ts': ts})
         print(f'[thumbnail] frame {i} ts={ts:.1f}s sharpness={sharpness:.1f}', flush=True)
 
     frames.sort(key=lambda x: x['sharpness'], reverse=True)
     top8 = frames[:8]
+
+thumbnail_jobs[job_id]['result'] must include video_info=stream_info
+
+CRITICAL: Never resize extracted frames to a fixed 640x360 or any other forced 16:9 size.
+That introduces distortion for portrait footage and throws away sharpness before the frontend sees the image.
 
 CRITICAL: NEVER import cv2 or opencv. Use PIL (pillow) + numpy only.
 Required in requirements.txt: pillow, numpy
@@ -224,7 +239,32 @@ REGRESSION RISK: High. OpenCV gets reintroduced when thumbnail route is rewritte
 
 ---
 
-## 8. /clips ROUTE — KEY REQUIREMENTS
+## 8. THUMBNAIL PREVIEW RENDERING — ONE COVER-FIT PIPELINE IN index.html
+
+All thumbnail surfaces must use one aspect-ratio-preserving crop helper:
+- main thumbnail editor canvas
+- export / dialog canvas
+- style-card mini canvases
+- any alias helpers such as drawCoverFit()
+
+Required behavior:
+- compute a cover-crop source rect from img.naturalWidth / img.naturalHeight
+- draw with ctx.drawImage(img, sx, sy, sw, sh, 0, 0, W, H)
+- set imageSmoothingEnabled=true and imageSmoothingQuality='high'
+- never stretch width and height independently
+
+Mini preview canvases must size their backing store to their displayed CSS size
+using devicePixelRatio so the style cards stay crisp and do not appear stretched or soft.
+
+WHY: The thumbnail regression was split across backend and frontend.
+Backend distortion came from forcing extracted frames into 640x360.
+Frontend distortion came from style preview canvases being displayed at a different CSS ratio than their backing pixels.
+
+REGRESSION RISK: High. Thumbnail UI often gets tweaked visually without preserving the render math.
+
+---
+
+## 9. /clips ROUTE — KEY REQUIREMENTS
 
 Must:
 - Use Words JSON path from frontend (found by /find_json — do not re-search)
@@ -242,7 +282,7 @@ REGRESSION RISK: Medium.
 
 ---
 
-## 9. HEALTH POLL — index.html
+## 10. HEALTH POLL — index.html
 
 async function pollHealth() {
     try {
@@ -279,7 +319,7 @@ REGRESSION RISK: Medium.
 
 ---
 
-## 10. SIMULTANEOUS VIDEO PLAYBACK — index.html
+## 11. SIMULTANEOUS VIDEO PLAYBACK — index.html
 
 // At top of <script>:
 let currentlyPlaying = null;
@@ -304,7 +344,7 @@ REGRESSION RISK: High. currentlyPlaying gets dropped when JS is reorganized.
 
 ---
 
-## 11. /find_json RETURN KEY CONTRACT
+## 12. /find_json RETURN KEY CONTRACT
 
 server.py MUST return:  { "json_found": true/false, ... }
 index.html MUST check:  if (data.json_found) { ... }
@@ -315,7 +355,7 @@ REGRESSION RISK: High.
 
 ---
 
-## 12. ZIP BUILD COMMAND — flat format
+## 13. ZIP BUILD COMMAND — flat format
 
 cd /tmp/video-editor
 zip -j foundry-video-editor-backend.zip backend/server.py backend/start_server.bat backend/requirements.txt
