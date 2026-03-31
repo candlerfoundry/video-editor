@@ -1911,15 +1911,16 @@
                    accept=".mp4,.MP4,.mov,.MOV,video/mp4,video/quicktime" />
           </div>
           <button class="btn fade-up-1" id="btn-generate-thumb"
-                  onclick="generateThumbnail()" disabled>
+                  onclick="openThumbnailComposerFromTab()" disabled>
             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor"
                  stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
               <rect x="3" y="3" width="18" height="18" rx="2"/>
               <circle cx="8.5" cy="8.5" r="1.5"/>
               <path d="M21 15l-5-5L5 21"/>
             </svg>
-            Generate Thumbnail
+            Open Shared Composer
           </button>
+          <p style="margin-top:10px;font-size:12px;color:var(--muted);line-height:1.6;">The standalone tab now opens the same shared thumbnail composer used by the clip workflow.</p>
         </div>
 
         <!-- STATE 2: Processing -->
@@ -2088,6 +2089,22 @@
               </button>
             </div>
 
+          </div>
+        </div>
+
+        <div id="thumb-tab-preview-panel" class="card" style="display:none; margin-top:20px;">
+          <h3 style="margin-bottom:12px;">Latest Thumbnail Draft</h3>
+          <div style="display:flex; gap:16px; align-items:flex-start; flex-wrap:wrap;">
+            <img id="thumb-tab-preview-img" src="" alt="Latest thumbnail draft"
+                 style="width:auto;height:auto;max-width:180px;max-height:220px;aspect-ratio:var(--thumb-preview-ratio,16 / 9);object-fit:contain;background:#111;border:1px solid var(--border);" />
+            <div style="display:flex; flex-direction:column; gap:10px; min-width:220px;">
+              <div id="thumb-tab-preview-meta" style="font-size:13px;color:var(--text-2);line-height:1.6;"></div>
+              <div style="display:flex; gap:8px; flex-wrap:wrap;">
+                <button class="btn-ghost btn-sm" type="button" onclick="downloadStandaloneThumbnail()">Download PNG</button>
+                <button class="btn-ghost btn-sm" type="button" onclick="reopenSharedThumbnailComposerFromTab()">Re-open Composer</button>
+                <button class="btn-ghost btn-sm" type="button" onclick="saveCurrentThumbnailDraft(true)">Save Draft</button>
+              </div>
+            </div>
           </div>
         </div>
 
@@ -2441,6 +2458,35 @@
     return true;
   }
 
+  function restoreProjectThumbnailDraft(project) {
+    const drafts = project?.thumbnail_drafts || [];
+    if (!drafts.length || !_thumbFile) return false;
+    const latestDraft = drafts[drafts.length - 1];
+    _sharedThumbnailDraft = buildDefaultThumbnailDraft({
+      entryPoint: latestDraft.entry_point || 'standalone',
+      file: _thumbFile,
+      sourceFilename: latestDraft.source_filename,
+      sourcePath: latestDraft.source_path,
+      clipStart: latestDraft.clip_start,
+      clipEnd: latestDraft.clip_end,
+      targetFormat: latestDraft.target_format || 'instagram',
+      style: latestDraft.style || 'warm_bar',
+      frames: latestDraft.available_frames || [],
+      suggestedTitles: latestDraft.suggested_titles || [],
+      textBoxes: latestDraft.text_boxes || null,
+      selectedFrameIndex: latestDraft.selected_frame_index || 0,
+      videoInfo: latestDraft.video_info || null,
+      draftId: latestDraft.draft_id,
+      logo: latestDraft.logo,
+    });
+    renderStandaloneThumbnailPreview(
+      '<strong>' + escHtml(_sharedThumbnailDraft.source_filename || _thumbFile.name) + '</strong><br>' +
+      'Restored draft with ' + escHtml(String((_sharedThumbnailDraft.text_boxes || []).length)) + ' text box slot(s)<br>' +
+      'Format: ' + escHtml(_sharedThumbnailDraft.target_format || 'instagram')
+    );
+    return true;
+  }
+
   async function maybeOfferProjectResume(projectResponse, view) {
     if (!projectResponse?.existing_project) return;
     const project = projectResponse.project;
@@ -2456,6 +2502,9 @@
 
     if (resume && view === 'clips') {
       restoreProjectClipState(project);
+    }
+    if (resume && view === 'thumbnails') {
+      restoreProjectThumbnailDraft(project);
     }
   }
 
@@ -3577,6 +3626,214 @@
   let _thumbOverlayOpacity = 0;      // 0-80
   let _thumbVideoInfo      = null;
   let _thumbTargetFormat   = 'instagram';
+  let _sharedThumbnailEntryPoint = 'standalone';
+  let _sharedThumbnailDraft = null;
+  let _standaloneThumbnailBlob = null;
+  let _standaloneThumbnailBlobUrl = null;
+
+  function makeThumbnailTextBox(text, overrides = {}) {
+    return {
+      id: overrides.id || 'text-1',
+      text: text || '',
+      color: overrides.color || '#ffffff',
+      background_color: overrides.background_color || '#111111',
+      background_opacity: overrides.background_opacity ?? 0,
+      font_family: overrides.font_family || 'Montserrat',
+      font_size: overrides.font_size ?? 64,
+      x: overrides.x ?? null,
+      y: overrides.y ?? null,
+      shadow: overrides.shadow ?? true,
+    };
+  }
+
+  function buildDefaultThumbnailDraft(options = {}) {
+    const targetFormat = options.targetFormat || 'instagram';
+    const style = options.style || 'warm_bar';
+    const pos = getDefaultThumbTextPosition(style, targetFormat);
+    const textBoxes = (options.textBoxes && options.textBoxes.length)
+      ? options.textBoxes
+      : [makeThumbnailTextBox(options.title || '', {
+          x: pos.x,
+          y: pos.y,
+          color: options.textColor || '#ffffff',
+          background_color: options.backgroundColor || '#111111',
+          background_opacity: options.backgroundOpacity ?? 0,
+          font_family: options.fontFamily || 'Montserrat',
+          font_size: options.fontSize ?? 64,
+          shadow: options.shadowOn ?? true,
+        })];
+
+    return {
+      draft_id: options.draftId || ('draft-' + Date.now()),
+      entry_point: options.entryPoint || 'standalone',
+      source_filename: options.file?.name || options.sourceFilename || '',
+      source_path: options.sourcePath || activeProject?.source_path || activeProject?.source_video?.path || '',
+      clip_start: options.clipStart ?? null,
+      clip_end: options.clipEnd ?? null,
+      style,
+      target_format: targetFormat,
+      selected_frame_index: options.selectedFrameIndex ?? 0,
+      selected_text_box_id: textBoxes[0].id,
+      text_boxes: textBoxes,
+      suggested_titles: options.suggestedTitles || [],
+      available_frames: options.frames || [],
+      video_info: options.videoInfo || null,
+      logo: options.logo || { enabled: false, placement: 'top_right', asset: null },
+    };
+  }
+
+  function getActiveThumbnailTextBox() {
+    if (!_sharedThumbnailDraft) return null;
+    const selectedId = _sharedThumbnailDraft.selected_text_box_id;
+    return _sharedThumbnailDraft.text_boxes.find(box => box.id === selectedId) || _sharedThumbnailDraft.text_boxes[0] || null;
+  }
+
+  function syncDraftFromDialogState() {
+    if (!_sharedThumbnailDraft) return null;
+    const box = getActiveThumbnailTextBox();
+    if (!box) return _sharedThumbnailDraft;
+    box.text = _dlgTitle;
+    box.color = _dlgTextColor;
+    box.background_color = _dlgBackgroundColor;
+    box.background_opacity = _dlgOverlayOpacity;
+    box.font_family = _dlgFontFamily;
+    box.font_size = _dlgFontSize;
+    box.x = _dlgCanvasTX;
+    box.y = _dlgCanvasTY;
+    box.shadow = _dlgShadowOn;
+    _sharedThumbnailDraft.style = _dlgStyle;
+    _sharedThumbnailDraft.target_format = _dlgTargetFormat;
+    _sharedThumbnailDraft.selected_frame_index = _dlgSelectedFrame;
+    _sharedThumbnailDraft.available_frames = _dlgFrames || [];
+    _sharedThumbnailDraft.suggested_titles = _thumbTitles || [];
+    _sharedThumbnailDraft.video_info = _dlgVideoInfo || null;
+    return _sharedThumbnailDraft;
+  }
+
+  function applyDraftToDialogState() {
+    if (!_sharedThumbnailDraft) return;
+    const box = getActiveThumbnailTextBox();
+    _dlgFrames = _sharedThumbnailDraft.available_frames || [];
+    _thumbTitles = _sharedThumbnailDraft.suggested_titles || [];
+    _dlgSelectedFrame = _sharedThumbnailDraft.selected_frame_index || 0;
+    _dlgStyle = _sharedThumbnailDraft.style || 'warm_bar';
+    _dlgTargetFormat = _sharedThumbnailDraft.target_format || 'instagram';
+    _dlgVideoInfo = _sharedThumbnailDraft.video_info || null;
+    _dlgTitle = box?.text || '';
+    _dlgFontFamily = box?.font_family || 'Montserrat';
+    _dlgFontSize = box?.font_size || 64;
+    _dlgTextColor = box?.color || '#ffffff';
+    _dlgBackgroundColor = box?.background_color || '#111111';
+    _dlgOverlayOpacity = box?.background_opacity ?? 0;
+    _dlgShadowOn = box?.shadow ?? true;
+    const pos = getDefaultThumbTextPosition(_dlgStyle, _dlgTargetFormat);
+    _dlgCanvasTX = box?.x ?? pos.x;
+    _dlgCanvasTY = box?.y ?? pos.y;
+  }
+
+  async function saveCurrentThumbnailDraft(showFeedback = false) {
+    if (!_sharedThumbnailDraft || !activeProject) return;
+    syncDraftFromDialogState();
+    const payload = {
+      ..._sharedThumbnailDraft,
+      context: _sharedThumbnailEntryPoint === 'clip' ? 'clip_export_dialog' : 'standalone_tab',
+    };
+    await updateProject('thumbnail_draft_saved', payload);
+    if (_sharedThumbnailEntryPoint === 'standalone') {
+      renderStandaloneThumbnailPreview();
+    }
+    if (showFeedback) alert('Thumbnail draft saved to the local project.');
+  }
+
+  function updateSharedComposerDoneLabel() {
+    const btn = document.getElementById('dlg-done-btn');
+    if (!btn) return;
+    btn.innerHTML = _sharedThumbnailEntryPoint === 'clip'
+      ? '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>Done &mdash; Use This Thumbnail'
+      : '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>Done &mdash; Save Thumbnail';
+  }
+
+  function renderStandaloneThumbnailPreview(metaText) {
+    const panel = document.getElementById('thumb-tab-preview-panel');
+    const img = document.getElementById('thumb-tab-preview-img');
+    const meta = document.getElementById('thumb-tab-preview-meta');
+    if (!panel || !img || !meta) return;
+    if (_standaloneThumbnailBlobUrl) {
+      img.src = _standaloneThumbnailBlobUrl;
+      img.style.display = '';
+    } else {
+      img.removeAttribute('src');
+      img.style.display = 'none';
+    }
+    meta.innerHTML = metaText || (
+      '<strong>' + escHtml(_sharedThumbnailDraft?.source_filename || _thumbFile?.name || 'Thumbnail draft') + '</strong><br>' +
+      'Format: ' + escHtml(_sharedThumbnailDraft?.target_format || 'instagram') + '<br>' +
+      'Style: ' + escHtml(_sharedThumbnailDraft?.style || 'warm_bar')
+    );
+    panel.style.display = 'block';
+  }
+
+  function downloadStandaloneThumbnail() {
+    if (!_standaloneThumbnailBlob) {
+      alert('Open the shared composer and click Done to rebuild this thumbnail PNG first.');
+      return;
+    }
+    const url = URL.createObjectURL(_standaloneThumbnailBlob);
+    const a = document.createElement('a');
+    const stem = _thumbFile ? _thumbFile.name.replace(/\.(mp4|mov)$/i, '') : 'thumbnail';
+    a.href = url;
+    a.download = stem + ' - Thumbnail.png';
+    a.click();
+    setTimeout(() => URL.revokeObjectURL(url), 5000);
+  }
+
+  function reopenSharedThumbnailComposerFromTab() {
+    if (!_thumbFile) {
+      alert('Load a video first.');
+      return;
+    }
+    _sharedThumbnailEntryPoint = 'standalone';
+    updateSharedComposerDoneLabel();
+    applyDraftToDialogState();
+    syncDlgTargetFormat(_dlgTargetFormat);
+    dlgBuildHeroState();
+    document.getElementById('dialog-thumb').showModal();
+    dlgShowState(_dlgFrames.length ? 'hero' : 'processing');
+    if (!_dlgFrames.length) dlgGenerateThumbnail();
+  }
+
+  function openThumbnailComposerFromTab() {
+    if (!_thumbFile) {
+      alert('Load a video first.');
+      return;
+    }
+    const reusableDraft = _sharedThumbnailDraft?.source_filename === _thumbFile.name ? _sharedThumbnailDraft : null;
+    _sharedThumbnailEntryPoint = 'standalone';
+    _sharedThumbnailDraft = buildDefaultThumbnailDraft({
+      entryPoint: 'standalone',
+      file: _thumbFile,
+      targetFormat: reusableDraft?.target_format || _thumbTargetFormat || 'instagram',
+      style: reusableDraft?.style || 'warm_bar',
+      frames: reusableDraft?.available_frames || [],
+      suggestedTitles: reusableDraft?.suggested_titles || [],
+      textBoxes: reusableDraft?.text_boxes || null,
+      selectedFrameIndex: reusableDraft?.selected_frame_index || 0,
+      videoInfo: reusableDraft?.video_info || null,
+      draftId: reusableDraft?.draft_id,
+      logo: reusableDraft?.logo,
+    });
+    applyDraftToDialogState();
+    updateSharedComposerDoneLabel();
+    document.getElementById('dialog-thumb').showModal();
+    if (_dlgFrames.length) {
+      syncDlgTargetFormat(_dlgTargetFormat);
+      dlgBuildHeroState();
+      dlgShowState('hero');
+      return;
+    }
+    dlgShowState('processing');
+    dlgGenerateThumbnail();
+  }
 
   // Wire thumb-file input
   document.getElementById('thumb-file').addEventListener('change', function () {
@@ -4012,7 +4269,7 @@
     }
   }
 
-  function drawThumbTextBlock(ctx, W, title, fontSize, fontFamily, tx, ty, textColor, shadowOn, overlayOpacity) {
+  function drawThumbTextBlock(ctx, W, title, fontSize, fontFamily, tx, ty, textColor, shadowOn, overlayOpacity, backgroundColor = '#111111') {
     ctx.font = `700 ${fontSize}px ${fontFamily}, sans-serif`;
     const lines = wrapText(ctx, title, W * 0.8);
     const lineH = fontSize * 1.25;
@@ -4020,7 +4277,8 @@
     if (overlayOpacity > 0) {
       const boxH = lines.length * lineH + 28;
       const boxW = Math.min(W * 0.88, W * 0.9);
-      ctx.fillStyle = `rgba(17,17,17,${overlayOpacity / 100})`;
+      const { r, g, b } = hexToRgb(backgroundColor);
+      ctx.fillStyle = `rgba(${r},${g},${b},${overlayOpacity / 100})`;
       ctx.beginPath();
       if (ctx.roundRect) {
         ctx.roundRect(tx - boxW / 2, ty - lines.length * lineH / 2 - 14, boxW, boxH, 8);
@@ -4047,6 +4305,18 @@
       lineY += lineH;
     }
     ctx.restore();
+  }
+
+  function hexToRgb(hex) {
+    const safe = (hex || '#111111').replace('#', '');
+    const normalized = safe.length === 3
+      ? safe.split('').map(ch => ch + ch).join('')
+      : safe.padEnd(6, '0').slice(0, 6);
+    return {
+      r: parseInt(normalized.slice(0, 2), 16),
+      g: parseInt(normalized.slice(2, 4), 16),
+      b: parseInt(normalized.slice(4, 6), 16),
+    };
   }
 
   // ── Canvas rendering (object-fit cover + style overlay) ──
@@ -4421,6 +4691,7 @@
   let _dlgFrames         = [];
   let _dlgSelectedFrame  = 0;
   let _dlgTextColor      = '#ffffff';
+  let _dlgBackgroundColor = '#111111';
   let _dlgShadowOn       = true;
   let _dlgOverlayOpacity = 0;
   let _dlgVideoInfo      = null;
@@ -4456,27 +4727,53 @@
 
   function openThumbDialog() {
     document.getElementById('modal-pre-export').close();
-    _thumbFile         = _clipFile;
-    _dlgStyle          = 'warm_bar';
-    _dlgTitle          = '';
-    _dlgFontFamily     = 'Montserrat';
-    _dlgFontSize       = 64;
-    _dlgFrames         = [];
-    _dlgSelectedFrame  = 0;
-    _dlgTextColor      = '#ffffff';
-    _dlgShadowOn       = true;
-    _dlgOverlayOpacity = 0;
-    _dlgTargetFormat   = _thumbTargetFormat;
+    if (!_clipFile) {
+      alert('Load a video first.');
+      return;
+    }
+    const reusableDraft = _sharedThumbnailDraft?.source_filename === _clipFile.name && _sharedThumbnailDraft?.clip_start === editorInTime && _sharedThumbnailDraft?.clip_end === editorOutTime
+      ? _sharedThumbnailDraft
+      : null;
+    _thumbFile = _clipFile;
+    _sharedThumbnailEntryPoint = 'clip';
+    _sharedThumbnailDraft = buildDefaultThumbnailDraft({
+      entryPoint: 'clip',
+      file: _clipFile,
+      clipStart: editorInTime,
+      clipEnd: editorOutTime,
+      targetFormat: reusableDraft?.target_format || _thumbTargetFormat || 'instagram',
+      style: reusableDraft?.style || 'warm_bar',
+      frames: reusableDraft?.available_frames || [],
+      suggestedTitles: reusableDraft?.suggested_titles || [],
+      textBoxes: reusableDraft?.text_boxes || null,
+      selectedFrameIndex: reusableDraft?.selected_frame_index || 0,
+      videoInfo: reusableDraft?.video_info || null,
+      draftId: reusableDraft?.draft_id,
+      logo: reusableDraft?.logo,
+    });
+    applyDraftToDialogState();
+    updateSharedComposerDoneLabel();
     syncDlgTargetFormat(_dlgTargetFormat);
     dlgShowState('processing');
     dlgSetStep(1);
     document.getElementById('dlg-footer-editor').style.display = 'none';
     document.getElementById('dialog-thumb').showModal();
+    if (_dlgFrames.length) {
+      dlgBuildHeroState();
+      dlgShowState('hero');
+      return;
+    }
     dlgGenerateThumbnail();
   }
 
   function reopenThumbDialog() {
-    if (_thumbHeroB64) {
+    if (_sharedThumbnailEntryPoint === 'standalone') {
+      reopenSharedThumbnailComposerFromTab();
+      return;
+    }
+    updateSharedComposerDoneLabel();
+    if (_sharedThumbnailDraft?.available_frames?.length) {
+      applyDraftToDialogState();
       dlgShowState('hero');
       dlgBuildHeroState();
       document.getElementById('dlg-footer-editor').style.display = 'none';
@@ -4522,16 +4819,18 @@
 
   async function dlgGenerateThumbnail() {
     if (!_thumbFile || !backendOnline) return;
+    const clipStart = _sharedThumbnailDraft?.clip_start;
+    const clipEnd = _sharedThumbnailDraft?.clip_end;
     let clip_transcript = '';
-    if (_wordsData && editorInTime < editorOutTime) {
+    if (_wordsData && clipStart !== null && clipStart !== undefined && clipEnd !== null && clipEnd !== undefined && clipStart < clipEnd) {
       clip_transcript = _wordsData
-        .filter(w => (w.start ?? 0) < editorOutTime && (w.end ?? w.start ?? 0) >= editorInTime)
+        .filter(w => (w.start ?? 0) < clipEnd && (w.end ?? w.start ?? 0) >= clipStart)
         .map(w => w.word).join(' ').trim();
     }
     const form = new FormData();
     form.append('filename',        _thumbFile.name);
-    form.append('clipstart',       editorInTime  > 0 ? String(editorInTime)  : '');
-    form.append('clipend',         editorOutTime > 0 ? String(editorOutTime) : '');
+    form.append('clipstart',       clipStart !== null && clipStart !== undefined ? String(clipStart) : '');
+    form.append('clipend',         clipEnd !== null && clipEnd !== undefined ? String(clipEnd) : '');
     form.append('clip_transcript', clip_transcript);
     let jobId;
     try {
@@ -4554,6 +4853,11 @@
         _dlgSelectedFrame = 0;
         _thumbTitles      = data.titles || [];
         _dlgVideoInfo     = data.video_info || null;
+        if (_sharedThumbnailDraft) {
+          _sharedThumbnailDraft.available_frames = _dlgFrames;
+          _sharedThumbnailDraft.suggested_titles = _thumbTitles;
+          _sharedThumbnailDraft.video_info = _dlgVideoInfo;
+        }
         dlgSetStep(4);
         setTimeout(() => { dlgBuildHeroState(); dlgShowState('hero'); }, 400);
       },
@@ -4565,6 +4869,7 @@
   }
 
   function dlgBuildHeroState() {
+    syncDraftFromDialogState();
     syncDlgTargetFormat(_dlgTargetFormat);
     // Frame grid
     const fg = document.getElementById('dlg-frame-grid');
@@ -4582,7 +4887,7 @@
       });
     }
 
-    _dlgStyle = 'warm_bar';
+    _dlgStyle = _sharedThumbnailDraft?.style || 'warm_bar';
     ['warm_bar', 'bold_corner', 'kinetic_slash'].forEach(s => {
       const el = document.getElementById('dlg-style-' + s);
       if (el) el.classList.toggle('selected', s === _dlgStyle);
@@ -4598,6 +4903,7 @@
         document.querySelectorAll('#dlg-titles-grid .title-card').forEach(c => c.classList.remove('selected'));
         card.classList.add('selected');
         _dlgTitle = t;
+        syncDraftFromDialogState();
         dlgOpenEditor();
       });
       grid.appendChild(card);
@@ -4610,6 +4916,7 @@
       c.classList.toggle('selected', i === idx);
     });
     updateStyleCardPreviews(_dlgFrames, idx, 'dlg-style-canvas-');
+    syncDraftFromDialogState();
     if (document.getElementById('dlg-state-editor').style.display !== 'none') dlgDrawCanvas();
   }
 
@@ -4619,6 +4926,7 @@
     _dlgCanvasTX = pos.x;
     _dlgCanvasTY = pos.y;
     updateStyleCardPreviews(_dlgFrames, _dlgSelectedFrame, 'dlg-style-canvas-');
+    syncDraftFromDialogState();
     if (document.getElementById('dlg-state-editor').style.display !== 'none') {
       dlgDrawCanvas();
       requestAnimationFrame(() => dlgUpdateText());
@@ -4627,12 +4935,14 @@
 
   async function dlgRedoFrames() {
     if (!_thumbFile || !backendOnline) return;
+    const clipStart = _sharedThumbnailDraft?.clip_start;
+    const clipEnd = _sharedThumbnailDraft?.clip_end;
     const btn = document.getElementById('dlg-btn-redo-frames');
     btn.disabled = true; const orig = btn.innerHTML; btn.textContent = 'Fetching\u2026';
     const form = new FormData();
     form.append('filename',  _thumbFile.name);
-    form.append('clipstart', editorInTime  > 0 ? String(editorInTime)  : '');
-    form.append('clipend',   editorOutTime > 0 ? String(editorOutTime) : '');
+    form.append('clipstart', clipStart !== null && clipStart !== undefined ? String(clipStart) : '');
+    form.append('clipend',   clipEnd !== null && clipEnd !== undefined ? String(clipEnd) : '');
     try {
       const startRes  = await fetch(BACKEND + '/thumbnail', { method: 'POST', body: form });
       const startData = await startRes.json();
@@ -4663,23 +4973,26 @@
       if (el) el.classList.toggle('selected', s === style);
     });
     updateStyleCardPreviews(_dlgFrames, _dlgSelectedFrame, 'dlg-style-canvas-');
+    syncDraftFromDialogState();
     if (document.getElementById('dlg-state-editor').style.display !== 'none') dlgDrawCanvas();
   }
 
   async function dlgRedoTitles() {
     if (!_thumbFile || !backendOnline) return;
+    const clipStart = _sharedThumbnailDraft?.clip_start;
+    const clipEnd = _sharedThumbnailDraft?.clip_end;
     const btn = document.getElementById('dlg-btn-redo-titles');
     btn.disabled = true; const orig = btn.innerHTML; btn.textContent = 'Generating\u2026';
     let clip_transcript = '';
-    if (_wordsData && editorInTime < editorOutTime) {
+    if (_wordsData && clipStart !== null && clipStart !== undefined && clipEnd !== null && clipEnd !== undefined && clipStart < clipEnd) {
       clip_transcript = _wordsData
-        .filter(w => (w.start ?? 0) < editorOutTime && (w.end ?? w.start ?? 0) >= editorInTime)
+        .filter(w => (w.start ?? 0) < clipEnd && (w.end ?? w.start ?? 0) >= clipStart)
         .map(w => w.word).join(' ').trim();
     }
     const form = new FormData();
     form.append('filename',        _thumbFile.name);
-    form.append('clipstart',       editorInTime  > 0 ? String(editorInTime)  : '');
-    form.append('clipend',         editorOutTime > 0 ? String(editorOutTime) : '');
+    form.append('clipstart',       clipStart !== null && clipStart !== undefined ? String(clipStart) : '');
+    form.append('clipend',         clipEnd !== null && clipEnd !== undefined ? String(clipEnd) : '');
     form.append('clip_transcript', clip_transcript);
     try {
       const startRes  = await fetch(BACKEND + '/thumbnail', { method: 'POST', body: form });
@@ -4700,31 +5013,35 @@
   }
 
   function dlgOpenEditor() {
-    _dlgFontFamily     = 'Montserrat';
-    _dlgFontSize       = 64;
-    _dlgTextColor      = '#ffffff';
-    _dlgShadowOn       = true;
-    _dlgOverlayOpacity = 0;
+    const box = getActiveThumbnailTextBox();
+    _dlgFontFamily = box?.font_family || 'Montserrat';
+    _dlgFontSize = box?.font_size || 64;
+    _dlgTextColor = box?.color || '#ffffff';
+    _dlgBackgroundColor = box?.background_color || '#111111';
+    _dlgShadowOn = box?.shadow ?? true;
+    _dlgOverlayOpacity = box?.background_opacity ?? 0;
 
     const fontSel = document.getElementById('dlg-font-select');
-    if (fontSel) fontSel.value = 'Montserrat';
+    if (fontSel) fontSel.value = _dlgFontFamily;
     const sizeSlider = document.getElementById('dlg-size-slider');
-    if (sizeSlider) sizeSlider.value = 64;
+    if (sizeSlider) sizeSlider.value = _dlgFontSize;
     const shadowChk = document.getElementById('dlg-shadow-toggle');
-    if (shadowChk) shadowChk.checked = true;
+    if (shadowChk) shadowChk.checked = _dlgShadowOn;
     const overlaySlider = document.getElementById('dlg-overlay-slider');
-    if (overlaySlider) overlaySlider.value = 0;
+    if (overlaySlider) overlaySlider.value = _dlgOverlayOpacity;
     const overlayVal = document.getElementById('dlg-overlay-val');
-    if (overlayVal) overlayVal.textContent = '0';
+    if (overlayVal) overlayVal.textContent = _dlgOverlayOpacity;
     const customColor = document.getElementById('dlg-color-custom');
-    if (customColor) customColor.value = '#ffffff';
+    if (customColor) customColor.value = _dlgTextColor;
+    const bgColorInput = document.getElementById('dlg-bg-color-custom');
+    if (bgColorInput) bgColorInput.value = _dlgBackgroundColor;
     document.querySelectorAll('#dlg-state-editor .color-swatch').forEach((b, i) => {
-      b.classList.toggle('selected', i === 0);
+      b.classList.toggle('selected', i === 0 && _dlgTextColor === '#ffffff');
     });
 
     const dlgPos = getDefaultThumbTextPosition(_dlgStyle, _dlgTargetFormat);
-    _dlgCanvasTX = dlgPos.x;
-    _dlgCanvasTY = dlgPos.y;
+    _dlgCanvasTX = box?.x ?? dlgPos.x;
+    _dlgCanvasTY = box?.y ?? dlgPos.y;
     syncDlgTargetFormat(_dlgTargetFormat);
     dlgShowState('editor');
     dlgDrawCanvas();
@@ -4767,7 +5084,8 @@
     drag.style.lineHeight    = '1.25';
     drag.style.letterSpacing = '-0.01em';
     const alpha = _dlgOverlayOpacity / 100;
-    drag.style.background    = alpha > 0 ? `rgba(17,17,17,${alpha})` : 'transparent';
+    const bg = hexToRgb(_dlgBackgroundColor);
+    drag.style.background    = alpha > 0 ? `rgba(${bg.r},${bg.g},${bg.b},${alpha})` : 'transparent';
     drag.style.padding       = alpha > 0 ? '6px 14px' : '4px 10px';
     drag.style.borderRadius  = alpha > 0 ? '4px' : '';
     drag.textContent         = _dlgTitle;
@@ -4775,6 +5093,7 @@
     if (sizeVal) sizeVal.textContent = _dlgFontSize;
     drag.style.left = (_dlgCanvasTX / scaleX) + 'px';
     drag.style.top  = (_dlgCanvasTY / scaleY) + 'px';
+    syncDraftFromDialogState();
   }
 
   function setDlgFontSize(val) {
@@ -4806,6 +5125,11 @@
     dlgUpdateText();
   }
 
+  function setDlgBackgroundColor(hex) {
+    _dlgBackgroundColor = hex;
+    dlgUpdateText();
+  }
+
   // Drag for dialog text overlay
   (function () {
     let dragging = false, startX, startY, origTX, origTY;
@@ -4824,6 +5148,7 @@
       _dlgCanvasTY = Math.max(40, Math.min((canvas?.height || 720) - 40,  origTY + dy));
       const drag = document.getElementById('dlg-text-drag');
       if (drag) { drag.style.left = (_dlgCanvasTX / scaleX) + 'px'; drag.style.top = (_dlgCanvasTY / scaleY) + 'px'; }
+      syncDraftFromDialogState();
     });
     document.addEventListener('mouseup', () => { dragging = false; });
   })();
@@ -4832,26 +5157,35 @@
   function dlgDoneWithThumbnail() {
     const canvas = document.getElementById('dlg-canvas');
     const b64 = _dlgFrames[_dlgSelectedFrame];
-    if (!canvas || !b64) { closeThumbDialog(); openExportFormDialog(); return; }
+    if (!canvas || !b64) {
+      closeThumbDialog();
+      if (_sharedThumbnailEntryPoint === 'clip') openExportFormDialog();
+      return;
+    }
     renderFrameCanvas(canvas, b64, _dlgStyle, (ctx, W) => {
+      syncDraftFromDialogState();
       drawThumbTextBlock(
         ctx, W, _dlgTitle, _dlgFontSize, _dlgFontFamily,
-        _dlgCanvasTX, _dlgCanvasTY, _dlgTextColor, _dlgShadowOn, _dlgOverlayOpacity
+        _dlgCanvasTX, _dlgCanvasTY, _dlgTextColor, _dlgShadowOn, _dlgOverlayOpacity, _dlgBackgroundColor
       );
       canvas.toBlob(blob => {
-        if (thumbnailBlobUrl) URL.revokeObjectURL(thumbnailBlobUrl);
-        thumbnailBlob    = blob;
-        thumbnailBlobUrl = URL.createObjectURL(blob);
-        document.getElementById('thumb-preview-img').src = thumbnailBlobUrl;
-        document.getElementById('thumb-preview-panel').classList.add('active');
-        updateProject('thumbnail_saved', {
-          title: _dlgTitle,
-          style: _dlgStyle,
-          target_format: _dlgTargetFormat,
-          context: 'clip_export_dialog',
-        });
+        saveCurrentThumbnailDraft(false);
+        if (_sharedThumbnailEntryPoint === 'clip') {
+          if (thumbnailBlobUrl) URL.revokeObjectURL(thumbnailBlobUrl);
+          thumbnailBlob = blob;
+          thumbnailBlobUrl = URL.createObjectURL(blob);
+          document.getElementById('thumb-preview-img').src = thumbnailBlobUrl;
+          document.getElementById('thumb-preview-panel').classList.add('active');
+        } else {
+          if (_standaloneThumbnailBlobUrl) URL.revokeObjectURL(_standaloneThumbnailBlobUrl);
+          _standaloneThumbnailBlob = blob;
+          _standaloneThumbnailBlobUrl = URL.createObjectURL(blob);
+          renderStandaloneThumbnailPreview();
+        }
         closeThumbDialog();
-        openExportFormDialog();
+        if (_sharedThumbnailEntryPoint === 'clip') {
+          openExportFormDialog();
+        }
       }, 'image/png');
     });
     return;
@@ -5284,6 +5618,9 @@
                 <input type="range" id="dlg-overlay-slider" min="0" max="80" value="0"
                        style="width:100%;accent-color:var(--orange);margin-top:4px;"
                        oninput="setDlgOverlay(this.value)">
+                <input type="color" id="dlg-bg-color-custom" value="#111111"
+                       style="width:34px;height:28px;border:1px solid var(--border);border-radius:6px;cursor:pointer;padding:0;margin-top:8px;"
+                       oninput="setDlgBackgroundColor(this.value)">
               </div>
             </div>
           </div>
@@ -5294,7 +5631,8 @@
   </div><!-- /.dialog-body -->
   <div class="dialog-footer" id="dlg-footer-editor" style="display:none;">
     <button class="btn-ghost" onclick="closeThumbDialog()">Cancel</button>
-    <button class="btn" onclick="dlgDoneWithThumbnail()">
+    <button class="btn-ghost" type="button" onclick="saveCurrentThumbnailDraft(true)">Save Draft</button>
+    <button class="btn" id="dlg-done-btn" onclick="dlgDoneWithThumbnail()">
       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
       Done &mdash; Use This Thumbnail
     </button>

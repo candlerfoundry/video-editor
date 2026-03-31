@@ -483,6 +483,80 @@ def compact_clip_candidate(item):
     }
 
 
+def normalize_text_box(item, fallback_id='text-1'):
+    item = item or {}
+    return {
+        'id': item.get('id') or fallback_id,
+        'text': item.get('text') or '',
+        'color': item.get('color') or '#ffffff',
+        'background_color': item.get('background_color') or '#111111',
+        'background_opacity': int(item.get('background_opacity') or 0),
+        'font_family': item.get('font_family') or 'Montserrat',
+        'font_size': int(item.get('font_size') or 64),
+        'x': item.get('x'),
+        'y': item.get('y'),
+        'shadow': bool(item.get('shadow', True)),
+    }
+
+
+def normalize_thumbnail_draft(payload):
+    payload = payload or {}
+    text_boxes = payload.get('text_boxes') or []
+    normalized_boxes = [
+        normalize_text_box(box, f'text-{index + 1}')
+        for index, box in enumerate(text_boxes)
+    ]
+    if not normalized_boxes:
+        normalized_boxes = [normalize_text_box({
+            'id': payload.get('selected_text_box_id') or 'text-1',
+            'text': payload.get('title') or '',
+            'color': payload.get('text_color') or '#ffffff',
+            'background_color': payload.get('background_color') or '#111111',
+            'background_opacity': payload.get('background_opacity') or 0,
+            'font_family': payload.get('font_family') or 'Montserrat',
+            'font_size': payload.get('font_size') or 64,
+            'x': payload.get('text_x'),
+            'y': payload.get('text_y'),
+            'shadow': payload.get('shadow_on', True),
+        })]
+
+    selected_text_box_id = payload.get('selected_text_box_id') or normalized_boxes[0]['id']
+    available_frames = payload.get('available_frames') or payload.get('frames') or []
+    suggested_titles = payload.get('suggested_titles') or payload.get('titles') or []
+    draft_id = payload.get('draft_id') or make_source_key(
+        payload.get('source_path') or '',
+        '|'.join([
+            str(payload.get('entry_point') or ''),
+            str(payload.get('context') or ''),
+            str(payload.get('clip_start') or ''),
+            str(payload.get('clip_end') or ''),
+        ]),
+    )[:16]
+
+    return {
+        'draft_id': draft_id,
+        'entry_point': payload.get('entry_point') or payload.get('context') or 'shared_composer',
+        'source_filename': payload.get('source_filename'),
+        'source_path': payload.get('source_path'),
+        'clip_start': payload.get('clip_start'),
+        'clip_end': payload.get('clip_end'),
+        'style': payload.get('style') or 'warm_bar',
+        'target_format': payload.get('target_format') or 'instagram',
+        'selected_frame_index': int(payload.get('selected_frame_index') or 0),
+        'selected_text_box_id': selected_text_box_id,
+        'text_boxes': normalized_boxes,
+        'logo': {
+            'enabled': bool((payload.get('logo') or {}).get('enabled', False)),
+            'placement': (payload.get('logo') or {}).get('placement') or 'top_right',
+            'asset': (payload.get('logo') or {}).get('asset'),
+        },
+        'suggested_titles': suggested_titles[:12],
+        'available_frames': available_frames[:12],
+        'video_info': payload.get('video_info') or {},
+        'saved_at': iso_now(),
+    }
+
+
 def summarize_project(project):
     source_video = project.get('source_video') or {}
     transcript = project.get('transcript') or {}
@@ -684,18 +758,12 @@ def update_project():
                     clip_entry,
                     ['start_time', 'end_time', 'hook_line'],
                 )
-            elif event_type == 'thumbnail_saved':
-                thumb_entry = {
-                    'title': payload.get('title'),
-                    'style': payload.get('style'),
-                    'target_format': payload.get('target_format'),
-                    'context': payload.get('context'),
-                    'saved_at': iso_now(),
-                }
+            elif event_type in {'thumbnail_saved', 'thumbnail_draft_saved'}:
+                thumb_entry = normalize_thumbnail_draft(payload)
                 upsert_project_list_item(
                     project.setdefault('thumbnail_drafts', []),
                     thumb_entry,
-                    ['title', 'style', 'target_format', 'context'],
+                    ['draft_id'],
                 )
             elif event_type == 'export_created':
                 export_entry = {

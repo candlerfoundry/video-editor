@@ -345,3 +345,45 @@ Canonical frontend workflow requirements in `index.html`:
 - Resuming should be lightweight in phase one; restoring saved clip candidate lists is enough. Do not redesign thumbnail editing or export flow around projects yet.
 
 Regression risk: High.
+
+---
+
+## 16. Shared thumbnail composer and editable draft model
+
+Canonical product rules:
+- There is one shared thumbnail composer, not separate standalone-vs-clip editors.
+- The standalone `Thumbnails` tab and the clip workflow are two entry points into that same composer.
+- The clip workflow should preload composer context when available: source video, clip start/end, candidate frames, suggested titles, and target aspect ratio.
+- Finished thumbnails are not auto-saved to Dropbox; only explicit export should create Dropbox output.
+
+Canonical frontend requirements in `index.html`:
+- The standalone `Thumbnails` tab launches the shared composer instead of maintaining a second independent thumbnail editor flow.
+- The clip workflow launches the same composer dialog with clip context preloaded.
+- The shared composer must keep working with the existing `/thumbnail` and `/thumbnailstatus/<jobid>` async backend contract.
+- Thumbnail edit state should be modeled as editable project data, not just a final PNG blob.
+
+Canonical editable thumbnail draft model:
+- Save draft entries into the local project under `thumbnail_drafts`.
+- Each draft should store at least:
+  - `draft_id`
+  - `entry_point`
+  - `source_filename` / `source_path`
+  - `clip_start` / `clip_end` when relevant
+  - `style`
+  - `target_format`
+  - `selected_frame_index`
+  - `available_frames`
+  - `suggested_titles`
+  - `selected_text_box_id`
+  - `text_boxes`
+  - `logo` placeholder metadata
+  - `video_info`
+- `text_boxes` is the forward-compatible editable structure even if only one text box is currently surfaced in the UI.
+- Each text box should preserve text content, position, font, text color, background color, background opacity, and shadow state.
+
+Canonical backend requirements:
+- `/projects/update` must accept richer thumbnail draft saves and persist them locally without exporting.
+- Keep local thumbnail drafts separate from `exports`.
+- Backward compatibility with the earlier lightweight thumbnail save event is acceptable, but the canonical structure is the richer draft model above.
+
+Regression risk: High.
