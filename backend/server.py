@@ -15,6 +15,7 @@ import datetime
 import glob
 import hashlib
 import io
+import mimetypes
 import os
 import json
 import logging
@@ -29,7 +30,7 @@ import unicodedata
 import uuid
 import anthropic
 import whisper
-from flask import Flask, jsonify, request, send_file
+from flask import Flask, abort, jsonify, request, send_file
 from flask_cors import CORS
 
 # The desktop launcher drains stderr but older builds may not drain stdout.
@@ -586,6 +587,33 @@ def summarize_project(project):
     }
 
 
+def get_project_source_path(project):
+    source_video = project.get('source_video') or {}
+    source_path = (source_video.get('path') or '').strip()
+    if source_path and os.path.isfile(source_path):
+        return source_path
+    return ''
+
+
+def load_transcript_words_from_json(json_path):
+    if not json_path or not os.path.isfile(json_path):
+        return []
+    with open(json_path, 'r', encoding='utf-8') as handle:
+        data = json.load(handle)
+
+    if isinstance(data, list):
+        return data
+    if isinstance(data, dict):
+        if isinstance(data.get('words'), list):
+            return data.get('words') or []
+        if isinstance(data.get('segments'), list):
+            words = []
+            for segment in data.get('segments') or []:
+                words.extend(segment.get('words') or [])
+            return words
+    return []
+
+
 def load_project(project_id):
     path = get_project_path(project_id)
     if not os.path.exists(path):
@@ -786,6 +814,72 @@ def open_project_for_source():
     except Exception as exc:
         logger.exception('[projects] Failed to open source project')
         return jsonify({'error': str(exc)}), 500
+
+
+@app.route('/projects/open_saved', methods=['POST'])
+def open_saved_project():
+    try:
+        data = request.get_json(force=True) or {}
+        project_id = (data.get('project_id') or '').strip()
+        if not project_id:
+            return jsonify({'error': 'project_id is required'}), 400
+
+        with project_store_lock:
+            project = load_project(project_id)
+            if not project:
+                return jsonify({'error': 'Project not found'}), 404
+
+            source_path = get_project_source_path(project)
+            transcript = project.get('transcript') or {}
+            transcript_path = (transcript.get('json_path') or '').strip()
+            transcript_words = load_transcript_words_from_json(transcript_path)
+
+            project['last_opened_at'] = iso_now()
+            save_project(project)
+
+        source_video = project.get('source_video') or {}
+        source_filename = source_video.get('filename') or os.path.basename(source_path or '')
+        if source_filename and source_path:
+            video_path_cache[source_filename] = source_path
+
+        return jsonify({
+            'project': project,
+            'summary': summarize_project(project),
+            'source_available': bool(source_path),
+            'source_path': source_path or source_video.get('path') or '',
+            'source_filename': source_filename,
+            'source_stream_url': (
+                f'http://localhost:5000/projects/source_video/{project_id}'
+                if source_path else ''
+            ),
+            'expected_filename': source_filename,
+            'transcript_filename': os.path.basename(transcript_path) if transcript_path else '',
+            'transcript_words': transcript_words,
+        })
+    except Exception as exc:
+        logger.exception('[projects] Failed to open saved project')
+        return jsonify({'error': str(exc)}), 500
+
+
+@app.route('/projects/source_video/<project_id>', methods=['GET'])
+def stream_project_source_video(project_id):
+    with project_store_lock:
+        project = load_project(project_id)
+    if not project:
+        abort(404)
+
+    source_path = get_project_source_path(project)
+    if not source_path:
+        abort(404)
+
+    mime_type, _ = mimetypes.guess_type(source_path)
+    return send_file(
+        source_path,
+        mimetype=mime_type or 'video/mp4',
+        conditional=True,
+        etag=False,
+        last_modified=None,
+    )
 
 
 @app.route('/projects/update', methods=['POST'])
@@ -1018,18 +1112,23 @@ def generate_transcript():
 @app.route("/generate_transcript_upload", methods=["POST"])
 def generate_transcript_upload():
     """
-    Accepts multipart/form-data: file (MP4).
+    Accepts multipart/form-data: file (MP4) or source_path.
     Runs Whisper medium, returns { "words": [...] }.
     """
     file = request.files.get("file")
-    if not file:
+    source_path = (request.form.get("source_path") or "").strip()
+    if not file and (not source_path or not os.path.isfile(source_path)):
         return jsonify({"error": "No file provided"}), 400
 
     tmp_dir = tempfile.mkdtemp()
     try:
-        src_ext    = os.path.splitext(file.filename or 'video.mp4')[1].lower() or '.mp4'
+        source_name = file.filename if file else os.path.basename(source_path or 'video.mp4')
+        src_ext    = os.path.splitext(source_name or 'video.mp4')[1].lower() or '.mp4'
         input_path = os.path.join(tmp_dir, 'source' + src_ext)
-        file.save(input_path)
+        if file:
+            file.save(input_path)
+        else:
+            shutil.copy2(source_path, input_path)
 
         model = get_whisper_model()
         result = model.transcribe(input_path, word_timestamps=True)
@@ -1583,7 +1682,8 @@ def export_clip():
         return jsonify({'error': 'ffmpeg not found. Expected at Dropbox\\Scripts\\FFMPEG\\ffmpeg.exe'}), 500
 
     file = request.files.get("file")
-    if not file:
+    source_path = (request.form.get("source_path") or "").strip()
+    if not file and (not source_path or not os.path.isfile(source_path)):
         return jsonify({"error": "No file provided"}), 400
 
     try:
@@ -1615,10 +1715,14 @@ def export_clip():
 
     tmp_dir = tempfile.mkdtemp()
     try:
-        src_ext    = os.path.splitext(file.filename or 'video.mp4')[1].lower() or '.mp4'
+        source_name = file.filename if file else os.path.basename(source_path or 'video.mp4')
+        src_ext    = os.path.splitext(source_name or 'video.mp4')[1].lower() or '.mp4'
         input_path = os.path.join(tmp_dir, 'source' + src_ext)
         temp_clip  = os.path.join(tmp_dir, 'temp_clip.mp4')
-        file.save(input_path)
+        if file:
+            file.save(input_path)
+        else:
+            shutil.copy2(source_path, input_path)
 
         # ── Step A: 9:16 vertical reframe ──
         # Pass 1: extract the in/out segment (stream copy, fast)

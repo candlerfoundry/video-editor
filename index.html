@@ -351,67 +351,23 @@
 
     .project-shell-stat,
     .sidebar-project-stat {
-      padding: 5px 9px;
+      padding: 3px 7px;
       border-radius: 999px;
       background: rgba(232, 84, 26, 0.08);
       color: var(--orange);
-      font-size: 11px;
+      font-size: 10px;
       font-weight: 600;
-    }
-    .recent-project-item {
-      border: 1px solid var(--border);
-      border-radius: 10px;
-      padding: 14px 14px 12px;
-      background: var(--bg);
-      transition: border-color 150ms ease, transform 150ms ease;
-    }
-    .recent-project-item:hover {
-      border-color: rgba(232,84,26,0.35);
-      transform: translateY(-1px);
-    }
-    .recent-project-top {
-      display: flex;
-      align-items: flex-start;
-      justify-content: space-between;
-      gap: 12px;
-      margin-bottom: 8px;
     }
     .recent-project-name {
-      font-size: 14px;
-      font-weight: 700;
+      font-size: 13px;
+      font-weight: 600;
       color: var(--text);
+      line-height: 1.35;
     }
     .recent-project-date {
-      font-size: 12px;
+      font-size: 10px;
       color: var(--muted);
       white-space: nowrap;
-    }
-    .recent-project-source {
-      font-size: 12.5px;
-      color: var(--text-2);
-      line-height: 1.55;
-      margin-bottom: 10px;
-      word-break: break-word;
-    }
-    .recent-project-stats {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 6px;
-      margin-bottom: 10px;
-    }
-    .recent-project-stat {
-      font-size: 11px;
-      font-weight: 600;
-      color: var(--muted);
-      background: var(--surface);
-      border: 1px solid var(--border);
-      border-radius: 999px;
-      padding: 4px 8px;
-    }
-    .recent-project-actions {
-      display: flex;
-      gap: 8px;
-      flex-wrap: wrap;
     }
     .sidebar-projects {
       margin: 8px 16px 14px;
@@ -444,10 +400,10 @@
     }
     .sidebar-projects:not([open]) summary::after { transform: rotate(-90deg); }
     .sidebar-projects-body {
-      padding: 0 10px 10px;
+      padding: 0 8px 8px;
       display: flex;
       flex-direction: column;
-      gap: 10px;
+      gap: 8px;
     }
     .sidebar-project-section {
       padding: 10px;
@@ -460,7 +416,7 @@
       align-items: center;
       justify-content: space-between;
       gap: 8px;
-      margin-bottom: 10px;
+      margin-bottom: 8px;
     }
     .sidebar-project-heading {
       font-size: 11px;
@@ -471,46 +427,94 @@
       margin-bottom: 8px;
     }
     .sidebar-project-name {
-      font-size: 14px;
+      font-size: 13px;
       font-weight: 700;
       color: var(--text);
       line-height: 1.3;
     }
     .sidebar-project-meta {
-      margin-top: 6px;
-      font-size: 11px;
+      margin-top: 4px;
+      font-size: 10px;
       color: var(--muted);
-      line-height: 1.5;
+      line-height: 1.45;
     }
     .sidebar-project-stats {
       display: flex;
       flex-wrap: wrap;
-      gap: 6px;
-      margin-top: 8px;
+      gap: 5px;
+      margin-top: 6px;
     }
     .sidebar-project-empty {
       font-size: 12px;
       color: var(--muted);
-      line-height: 1.6;
+      line-height: 1.5;
+    }
+    .sidebar-project-current {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+    .sidebar-project-current-top {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+    }
+    .sidebar-project-action {
+      flex-shrink: 0;
     }
     .sidebar-project-list {
       display: flex;
       flex-direction: column;
-      gap: 8px;
-      max-height: 320px;
+      gap: 6px;
+      max-height: 360px;
       overflow-y: auto;
       padding-right: 2px;
     }
-    .sidebar-project-item {
+    .sidebar-project-group {
       border: 1px solid var(--border);
-      border-radius: 10px;
-      padding: 10px 11px;
+      border-radius: 9px;
+      overflow: hidden;
       background: var(--bg);
+    }
+    .sidebar-project-group summary {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      padding: 7px 10px;
+      cursor: pointer;
+      list-style: none;
+      font-size: 10px;
+      font-weight: 700;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--muted);
+      background: rgba(247,247,245,0.92);
+    }
+    .sidebar-project-group summary::-webkit-details-marker { display: none; }
+    .sidebar-project-group summary::after {
+      content: '▾';
+      font-size: 10px;
+      transition: transform 150ms ease;
+    }
+    .sidebar-project-group:not([open]) summary::after { transform: rotate(-90deg); }
+    .sidebar-project-group-body {
+      padding: 4px;
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+    .sidebar-project-item {
+      border: 1px solid transparent;
+      border-radius: 8px;
+      padding: 8px 9px;
+      background: transparent;
       width: 100%;
       text-align: left;
       font-family: var(--font);
       cursor: pointer;
-      transition: border-color 150ms ease, background 150ms ease, transform 150ms ease;
+      transition: border-color 150ms ease, background 150ms ease;
     }
     .sidebar-project-item.active {
       border-color: rgba(232,84,26,0.34);
@@ -519,7 +523,6 @@
     .sidebar-project-item:hover {
       border-color: rgba(232,84,26,0.35);
       background: #fffaf7;
-      transform: translateY(-1px);
     }
     .sidebar-project-item-head {
       display: flex;
@@ -528,33 +531,46 @@
       gap: 8px;
     }
     .sidebar-project-item .recent-project-date {
-      font-size: 11px;
+      font-size: 10px;
     }
     .sidebar-project-summary {
-      margin-top: 6px;
-      font-size: 12px;
+      margin-top: 4px;
+      font-size: 11px;
       color: var(--text-2);
-      line-height: 1.5;
+      line-height: 1.4;
+    }
+    .sidebar-project-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-top: 4px;
+    }
+    .sidebar-project-dot {
+      width: 6px;
+      height: 6px;
+      border-radius: 999px;
+      background: rgba(232,84,26,0.55);
+      flex-shrink: 0;
     }
     .sidebar-project-status {
-      margin-top: 8px;
-      font-size: 11px;
+      font-size: 10px;
       font-weight: 600;
       color: var(--muted);
+      letter-spacing: 0.02em;
     }
     .project-inline-note {
-      margin-top: 10px;
-      padding: 10px 11px;
-      border-radius: 10px;
+      margin-top: 8px;
+      padding: 8px 9px;
+      border-radius: 9px;
       border: 1px solid var(--border);
       background: var(--sidebar-bg);
-      font-size: 12px;
-      line-height: 1.55;
+      font-size: 11px;
+      line-height: 1.45;
       color: var(--text-2);
     }
     .project-inline-note strong {
       display: block;
-      font-size: 12px;
+      font-size: 11px;
       color: var(--text);
       margin-bottom: 2px;
     }
@@ -1891,7 +1907,7 @@
           <section class="sidebar-project-section">
             <div class="sidebar-project-heading">Current Project</div>
             <div id="sidebar-current-project" class="sidebar-project-empty">
-              Choose a source video to start a local project for this session.
+              Pick a video to start, then come back here to continue where you left off.
             </div>
           </section>
           <section class="sidebar-project-section">
@@ -1900,7 +1916,7 @@
               <button class="btn-ghost btn-sm" type="button" onclick="loadRecentProjects()">Refresh</button>
             </div>
             <div id="sidebar-recent-projects" class="sidebar-project-list">
-              <div class="sidebar-project-empty">Recent source-video projects will show up here.</div>
+              <div class="sidebar-project-empty">Your recent videos will show up here.</div>
             </div>
           </section>
         </div>
@@ -2597,6 +2613,8 @@
   let recentProjectsLoaded = false;
   let pendingProjectResume = null;
   let projectRestoreBannerState = { clips: null, thumbnails: null };
+  let _clipObjectUrl = '';
+  let _thumbObjectUrl = '';
 
   function formatProjectDate(value) {
     if (!value) return 'Updated just now';
@@ -3048,6 +3066,337 @@
     });
   }
 
+  function getProjectCountSummary(project) {
+    const counts = getProjectCounts(project);
+    const parts = [];
+    if (counts.clip_candidates) parts.push(pluralizeProjectCount(counts.clip_candidates, 'clip', 'clips'));
+    if (counts.thumbnail_drafts) parts.push(pluralizeProjectCount(counts.thumbnail_drafts, 'thumbnail', 'thumbnails'));
+    if (counts.exports) parts.push(pluralizeProjectCount(counts.exports, 'export', 'exports'));
+    return parts.join(' / ');
+  }
+
+  function projectStatChips(counts) {
+    const entries = [
+      ['clips', counts?.clip_candidates || 0],
+      ['thumbs', counts?.thumbnail_drafts || 0],
+      ['exports', counts?.exports || 0],
+    ];
+    return entries
+      .filter(([, count]) => count > 0)
+      .map(([label, count]) => `<span class="project-shell-stat">${count} ${label}</span>`)
+      .join('');
+  }
+
+  function continueCurrentProject(targetTab) {
+    if (!activeProject?.id) return;
+    selectRecentProject(activeProject.id, targetTab || activeProject?.meta?.last_view || 'clips');
+  }
+
+  function renderProjectShells() {
+    const current = document.getElementById('sidebar-current-project');
+    if (!current) return;
+
+    if (!activeProject) {
+      current.className = 'sidebar-project-empty';
+      current.innerHTML = 'Pick a video to start, then continue it here.';
+      return;
+    }
+
+    const summary = getProjectCountSummary(activeProject);
+    const counts = getProjectCounts(activeProject);
+    const note = pendingProjectResume?.projectId === activeProject.id ? pendingProjectResume.note : null;
+    const lastView = activeProject?.meta?.last_view === 'thumbnails' ? 'thumbnails' : 'clips';
+    current.className = '';
+    current.innerHTML =
+      '<div class="sidebar-project-current">' +
+        '<div class="sidebar-project-current-top">' +
+          '<div>' +
+            '<div class="sidebar-project-name">' + escHtml(getProjectLabel(activeProject)) + '</div>' +
+            '<div class="sidebar-project-meta">Last updated ' + escHtml(formatProjectDate(activeProject.last_modified || activeProject.updated_at)) + '</div>' +
+          '</div>' +
+          '<button class="btn btn-sm sidebar-project-action" type="button" onclick="continueCurrentProject(\'' + escHtml(lastView) + '\')">Continue</button>' +
+        '</div>' +
+        (summary ? '<div class="sidebar-project-summary">' + escHtml(summary) + '</div>' : '') +
+        (projectStatChips(counts) ? '<div class="sidebar-project-stats">' + projectStatChips(counts) + '</div>' : '') +
+      '</div>' +
+      (note
+        ? '<div class="project-inline-note ' + escHtml(note.tone || 'warn') + '">' +
+            '<strong>' + escHtml(note.title || 'Continue project') + '</strong>' +
+            escHtml(note.body || '') +
+            (note.action ? '<br><button class="btn-ghost btn-sm" type="button" onclick="triggerProjectRelinkPicker()">' + escHtml(note.action) + '</button>' : '') +
+          '</div>'
+        : '');
+  }
+
+  function renderRecentProjects() {
+    const list = document.getElementById('sidebar-recent-projects');
+    if (!list) return;
+
+    if (!recentProjects.length) {
+      list.innerHTML = '<div class="sidebar-project-empty">Open a video once and it will stay here for quick return visits.</div>';
+      return;
+    }
+
+    const groups = { today: [], week: [], earlier: [] };
+    recentProjects.forEach(project => {
+      const stamp = new Date(project?.last_modified || project?.updated_at || project?.last_opened_at || 0);
+      if (!Number.isNaN(stamp.getTime())) {
+        const now = new Date();
+        const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+        const weekStart = new Date(today);
+        weekStart.setDate(today.getDate() - 6);
+        if (stamp >= today) {
+          groups.today.push(project);
+          return;
+        }
+        if (stamp >= weekStart) {
+          groups.week.push(project);
+          return;
+        }
+      }
+      groups.earlier.push(project);
+    });
+
+    const sections = [
+      ['Today', groups.today, true],
+      ['This Week', groups.week, groups.today.length === 0],
+      ['Earlier', groups.earlier, false],
+    ].filter(([, items]) => items.length);
+
+    list.innerHTML = sections.map(([label, items, open]) => (
+      '<details class="sidebar-project-group"' + (open ? ' open' : '') + '>' +
+        '<summary><span>' + escHtml(label) + '</span><span>' + escHtml(String(items.length)) + '</span></summary>' +
+        '<div class="sidebar-project-group-body">' +
+          items.map(project => {
+            const summary = getProjectCountSummary(project) || 'Saved project';
+            const isActive = activeProject?.id && activeProject.id === project.id;
+            const lastView = project?.meta?.last_view === 'thumbnails' ? 'thumbnails' : 'clips';
+            const hasSavedPath = !!(project?.source_path || project?.source_video?.path);
+            return (
+              '<button class="sidebar-project-item' + (isActive ? ' active' : '') + '" type="button" onclick="selectRecentProject(\'' + escHtml(project.id) + '\', \'' + lastView + '\')">' +
+                '<div class="sidebar-project-item-head">' +
+                  '<div class="recent-project-name">' + escHtml(getProjectLabel(project)) + '</div>' +
+                  '<div class="recent-project-date">' + escHtml(formatProjectDate(project.last_modified || project.updated_at)) + '</div>' +
+                '</div>' +
+                '<div class="sidebar-project-summary">' + escHtml(summary) + '</div>' +
+                (hasSavedPath ? '' : '<div class="sidebar-project-row"><span class="sidebar-project-dot"></span><span class="sidebar-project-status">Choose the original video once</span></div>') +
+              '</button>'
+            );
+          }).join('') +
+        '</div>' +
+      '</details>'
+    )).join('');
+  }
+
+  function getLoadedSourcePathForView(view) {
+    const file = getLoadedSourceFileForView(view);
+    return (file?.source_path || '').trim();
+  }
+
+  function projectMatchesLoadedFile(project, view) {
+    const file = getLoadedSourceFileForView(view);
+    const expected = project?.source_filename || project?.source_video?.filename || '';
+    const expectedPath = (project?.source_path || project?.source_video?.path || '').trim();
+    const loadedPath = getLoadedSourcePathForView(view);
+    if (expectedPath && loadedPath) return expectedPath === loadedPath;
+    return !!file && !!expected && file.name === expected;
+  }
+
+  function setPendingProjectResume(project, targetTab, note = null) {
+    pendingProjectResume = project ? {
+      projectId: project.id,
+      targetTab: targetTab || 'clips',
+      project,
+      note,
+      action: 'choose_video',
+    } : null;
+    renderProjectShells();
+  }
+
+  function handleProjectResumePrimaryAction() {
+    triggerProjectRelinkPicker();
+  }
+
+  function openProjectResumeDialog(project, targetTab, options = {}) {
+    if (!project) return;
+    const dialog = document.getElementById('dialog-project-resume');
+    const counts = getProjectCounts(project);
+    document.getElementById('resume-dialog-heading').textContent = options.heading || 'We found your saved work';
+    document.getElementById('resume-dialog-copy').textContent = options.copy || 'Oops, we misplaced the original video for these clips. Please click the original video so we can proceed.';
+    document.getElementById('resume-dialog-project-name').textContent = getProjectLabel(project);
+    document.getElementById('resume-dialog-project-copy').textContent = describeRestoreCounts(project) || 'Your saved project is ready to continue.';
+    document.getElementById('resume-dialog-stats').innerHTML = projectStatChips(counts) || '<span class="sidebar-project-stat">Saved project</span>';
+    document.getElementById('resume-dialog-meta').textContent = 'Last updated ' + formatProjectDate(project.last_modified || project.updated_at) + (project.source_filename ? ' | Looking for: ' + project.source_filename : '');
+    document.getElementById('resume-dialog-primary').textContent = options.primaryLabel || 'Choose original video';
+    document.getElementById('resume-dialog-secondary').textContent = options.secondaryLabel || 'Not now';
+
+    pendingProjectResume = {
+      ...(pendingProjectResume || {}),
+      projectId: project.id,
+      targetTab: targetTab || 'clips',
+      project,
+      action: options.action || 'choose_video',
+      note: options.note || pendingProjectResume?.note || null,
+    };
+    renderProjectShells();
+    if (dialog && !dialog.open) dialog.showModal();
+  }
+
+  function releaseStoredObjectUrl(view) {
+    if (view === 'thumbnails') {
+      if (_thumbObjectUrl) URL.revokeObjectURL(_thumbObjectUrl);
+      _thumbObjectUrl = '';
+      return;
+    }
+    if (_clipObjectUrl) URL.revokeObjectURL(_clipObjectUrl);
+    _clipObjectUrl = '';
+  }
+
+  function getPlayableVideoUrl(view) {
+    const file = getLoadedSourceFileForView(view);
+    if (!file) return '';
+    if (file.playback_url) return file.playback_url;
+    if (!(file instanceof Blob)) return '';
+    if (view === 'thumbnails') {
+      if (!_thumbObjectUrl) _thumbObjectUrl = URL.createObjectURL(file);
+      return _thumbObjectUrl;
+    }
+    if (!_clipObjectUrl) _clipObjectUrl = URL.createObjectURL(file);
+    return _clipObjectUrl;
+  }
+
+  function clearClipTranscriptState() {
+    _wordsData = null;
+    _transcriptWords = [];
+    setJsonStatus('not_found');
+  }
+
+  function hydrateClipProjectSource(projectResponse) {
+    const filename = projectResponse?.source_filename || projectResponse?.project?.source_filename || projectResponse?.project?.source_video?.filename || 'Video';
+    const sourcePath = projectResponse?.source_path || projectResponse?.project?.source_path || projectResponse?.project?.source_video?.path || '';
+    _clipFile = {
+      name: filename,
+      source_path: sourcePath,
+      playback_url: projectResponse?.source_stream_url || '',
+    };
+    showVideoLoaded(filename);
+    document.getElementById('clips-video').src = getPlayableVideoUrl('clips');
+    const transcriptWords = Array.isArray(projectResponse?.transcript_words) ? projectResponse.transcript_words : [];
+    if (transcriptWords.length) {
+      setWordsData(transcriptWords, projectResponse?.transcript_filename || 'Transcript');
+    } else {
+      clearClipTranscriptState();
+    }
+  }
+
+  function hydrateThumbnailProjectSource(projectResponse) {
+    const filename = projectResponse?.source_filename || projectResponse?.project?.source_filename || projectResponse?.project?.source_video?.filename || 'Video';
+    const sourcePath = projectResponse?.source_path || projectResponse?.project?.source_path || projectResponse?.project?.source_video?.path || '';
+    _thumbFile = {
+      name: filename,
+      source_path: sourcePath,
+      playback_url: projectResponse?.source_stream_url || '',
+    };
+    const drop = document.getElementById('thumb-drop');
+    drop.classList.add('loaded');
+    document.getElementById('thumb-dz-label').textContent = filename;
+    document.getElementById('btn-generate-thumb').disabled = false;
+  }
+
+  function hydrateProjectSource(projectResponse, view) {
+    if (view === 'thumbnails') {
+      hydrateThumbnailProjectSource(projectResponse);
+      return;
+    }
+    hydrateClipProjectSource(projectResponse);
+  }
+
+  async function tryResumeProjectFromSavedPath(project, view) {
+    if (!project?.id || !backendOnline) return null;
+    try {
+      const res = await fetch(BACKEND + '/projects/open_saved', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ project_id: project.id }),
+      });
+      const data = await res.json();
+      if (!res.ok || !data.project) return null;
+      if (!data.source_available || !data.source_stream_url) return { ...data, source_available: false };
+      hydrateProjectSource(data, view);
+      setActiveProject({ ...(data.summary || {}), ...data.project }, { refreshRecent: false });
+      await updateProject('source_selected', {
+        view,
+        source_path: data.source_path,
+      });
+      return data;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  async function openProjectForFile(file, view) {
+    if (!file || !backendOnline) return null;
+    try {
+      const res = await fetch(BACKEND + '/projects/open_source', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          filename: file.name,
+          source_path: file.source_path || '',
+        }),
+      });
+      const data = await res.json();
+      if (res.ok && data.project) {
+        const summary = data.summary || {};
+        setActiveProject({ ...summary, ...data.project });
+        await updateProject('source_selected', {
+          view,
+          source_path: data.resolved_source_path,
+        });
+        return data;
+      }
+    } catch (_) {}
+    return null;
+  }
+
+  async function selectRecentProject(projectId, targetTab) {
+    const project = recentProjects.find(item => item.id === projectId);
+    if (!project) return;
+    const view = targetTab || project?.meta?.last_view || 'clips';
+    setActiveProject(project, { refreshRecent: false });
+    switchTab(view);
+    dismissProjectRestoreBanner(view === 'thumbnails' ? 'clips' : 'thumbnails');
+
+    if (projectMatchesLoadedFile(project, view)) {
+      clearPendingProjectResume();
+      const projectResponse = await openProjectForFile(getLoadedSourceFileForView(view), view);
+      if (projectResponse?.project) {
+        finalizeProjectResume(projectResponse.project, view);
+      }
+      return;
+    }
+
+    const restored = await tryResumeProjectFromSavedPath(project, view);
+    if (restored?.project && restored.source_available) {
+      finalizeProjectResume(restored.project, view);
+      return;
+    }
+
+    setPendingProjectResume(project, view, {
+      tone: 'warn',
+      title: 'Original video needed',
+      body: 'Please choose ' + (project.source_filename || 'the original video') + ' so we can continue.',
+      action: 'Choose original video',
+    });
+    openProjectResumeDialog(project, view, {
+      heading: 'We found your saved work',
+      copy: 'Oops, we misplaced the original video for these clips. Please click the original video so we can proceed.',
+      primaryLabel: 'Choose original video',
+      secondaryLabel: 'Not now',
+      action: 'choose_video',
+    });
+  }
+
   // Fix 3: global video tracking for #edit-video (listeners set once at init)
   (function () {
     const editVid = document.getElementById('edit-video');
@@ -3104,6 +3453,7 @@
 
   function resetToStage1(e) {
     if (e) e.preventDefault();
+    releaseStoredObjectUrl('clips');
     _clipFile = null; _wordsData = null; _candidates = []; _splitParts = [];
     // Reset video card
     const clcV = document.getElementById('clc-video');
@@ -3148,9 +3498,10 @@
     if (!file) return;
 
     // Load video
+    releaseStoredObjectUrl('clips');
     _clipFile = file;
     const videoEl = document.getElementById('clips-video');
-    videoEl.src = URL.createObjectURL(file);
+    videoEl.src = getPlayableVideoUrl('clips');
 
     // Show filename + green checkmark in video card
     showVideoLoaded(file.name);
@@ -3294,7 +3645,8 @@
     try {
       // We can't pass a file-system path from browser; upload the file instead
       const form = new FormData();
-      form.append('file', _clipFile);
+      if (_clipFile instanceof Blob) form.append('file', _clipFile);
+      else if (_clipFile?.source_path) form.append('source_path', _clipFile.source_path);
       const res = await fetch(BACKEND + '/generate_transcript_upload', { method: 'POST', body: form });
       const d = await res.json();
       if (d.words) {
@@ -3599,7 +3951,7 @@
     if (!isOpen && _clipFile) {
       previewDiv.classList.add('active');
       const p = _splitParts[idx];
-      vid.src = URL.createObjectURL(_clipFile);
+      vid.src = getPlayableVideoUrl('clips');
       vid.load();
       vid.addEventListener('loadedmetadata', () => {
         if (currentlyPlaying && currentlyPlaying !== vid) {
@@ -3634,7 +3986,7 @@
     origOutTime   = editorOutTime;
 
     const vid = document.getElementById('edit-video');
-    vid.src = URL.createObjectURL(_clipFile);
+    vid.src = getPlayableVideoUrl('clips');
     vid.load();
     vid.addEventListener('loadedmetadata', function () {
       vid.currentTime = editorInTime;
@@ -3678,7 +4030,7 @@
     if (!isOpen && _clipFile) {
       previewDiv.classList.add('active');
       const c = _candidates[idx];
-      vid.src = URL.createObjectURL(_clipFile);
+      vid.src = getPlayableVideoUrl('clips');
       vid.load();
 
       // Fix 3: attach global tracking listeners once per video element
@@ -3717,7 +4069,7 @@
     origOutTime   = editorOutTime;
 
     const vid = document.getElementById('edit-video');
-    vid.src = URL.createObjectURL(_clipFile);
+    vid.src = getPlayableVideoUrl('clips');
     vid.load();
     vid.addEventListener('loadedmetadata', function () {
       vid.currentTime = editorInTime;
@@ -6441,7 +6793,8 @@
     const t2 = setTimeout(() => showStep(2), 3200);
 
     const form = new FormData();
-    form.append('file', _clipFile);
+    if (_clipFile instanceof Blob) form.append('file', _clipFile);
+    else if (_clipFile?.source_path) form.append('source_path', _clipFile.source_path);
     form.append('starttime', editorInTime);
     form.append('endtime', editorOutTime);
     form.append('suggested_name', filename);
@@ -6592,7 +6945,8 @@
     const suggestedName = baseName + ' - Clip (' + startFmt + '-' + endFmt + ').mp4';
 
     const form = new FormData();
-    form.append('file', _clipFile);
+    if (_clipFile instanceof Blob) form.append('file', _clipFile);
+    else if (_clipFile?.source_path) form.append('source_path', _clipFile.source_path);
     form.append('starttime', editorInTime);
     form.append('endtime', editorOutTime);
     form.append('suggested_name', suggestedName);

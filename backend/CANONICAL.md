@@ -344,14 +344,22 @@ Canonical frontend workflow requirements in `index.html`:
   - simple project labels
   - last modified timestamp
   - simple counts for clips, thumbnails, and exports
+  - compact grouped rows that still scale cleanly with 20+ projects
 - Raw Dropbox paths should stay hidden by default.
 - Recent-project clicks should help the user resume work, not just surface stored metadata.
 - When the user selects a source video, the app must check the local project store and resume the existing project context automatically when the matching source is available.
-- If the source video must be confirmed again, the relink/resume flow should stay lightweight and truthful:
-  - explain that the saved project was found
-  - explain that the source video may need to be confirmed once
-  - restore saved clips, thumbnail drafts, and export history automatically after relink when available
+- When a saved project already has an exact original-video path and that file still exists, resume should try that path silently first with no picker prompt.
+- If the original video must be confirmed again, the fallback flow should stay lightweight and truthful:
+  - ask only after the saved exact path is broken
+  - use plain English such as `Oops, we've misplaced the original video for these clips. Please click the original video so we can proceed.`
+  - show the expected original filename when possible
+  - restore saved clips, thumbnail drafts, and export history automatically after the user picks the original video
 - Resuming should not feel like starting over. Keep the main workspace focused on the current task, not project-management UI.
+
+Canonical backend/frontend resume requirements:
+- `server.py` should persist the exact original-video path under `project['source_video']['path']`.
+- The backend may expose a saved-project reopen route and a local stream route so the frontend can reopen that original video without a browser picker when the path still works.
+- The user should never see `relink`, `source file`, or similar technical wording in the default resume flow.
 
 Regression risk: High.
 
