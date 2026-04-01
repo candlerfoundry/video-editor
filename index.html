@@ -351,11 +351,11 @@
 
     .project-shell-stat,
     .sidebar-project-stat {
-      padding: 6px 10px;
+      padding: 5px 9px;
       border-radius: 999px;
       background: rgba(232, 84, 26, 0.08);
       color: var(--orange);
-      font-size: 12px;
+      font-size: 11px;
       font-weight: 600;
     }
     .recent-project-item {
@@ -444,13 +444,13 @@
     }
     .sidebar-projects:not([open]) summary::after { transform: rotate(-90deg); }
     .sidebar-projects-body {
-      padding: 0 12px 12px;
+      padding: 0 10px 10px;
       display: flex;
       flex-direction: column;
-      gap: 12px;
+      gap: 10px;
     }
     .sidebar-project-section {
-      padding: 12px;
+      padding: 10px;
       border: 1px solid var(--border);
       border-radius: 10px;
       background: var(--surface);
@@ -468,22 +468,16 @@
       letter-spacing: 0.08em;
       text-transform: uppercase;
       color: var(--muted);
-      margin-bottom: 10px;
+      margin-bottom: 8px;
     }
     .sidebar-project-name {
-      font-size: 15px;
+      font-size: 14px;
       font-weight: 700;
       color: var(--text);
       line-height: 1.3;
     }
-    .sidebar-project-source {
-      margin-top: 4px;
-      font-size: 12px;
-      color: var(--text-2);
-      line-height: 1.5;
-    }
     .sidebar-project-meta {
-      margin-top: 8px;
+      margin-top: 6px;
       font-size: 11px;
       color: var(--muted);
       line-height: 1.5;
@@ -491,34 +485,18 @@
     .sidebar-project-stats {
       display: flex;
       flex-wrap: wrap;
-      gap: 8px;
-      margin-top: 10px;
+      gap: 6px;
+      margin-top: 8px;
     }
     .sidebar-project-empty {
       font-size: 12px;
       color: var(--muted);
       line-height: 1.6;
     }
-    .sidebar-project-meta-toggle {
-      margin-top: 10px;
-      border-top: 1px solid var(--border);
-      padding-top: 10px;
-    }
-    .sidebar-project-meta-toggle summary {
-      padding: 0;
-      display: inline-flex;
-      font-size: 12px;
-      font-weight: 600;
-      letter-spacing: 0;
-      text-transform: none;
-      color: var(--text-2);
-      cursor: pointer;
-    }
-    .sidebar-project-meta-toggle summary::after { display: none; }
     .sidebar-project-list {
       display: flex;
       flex-direction: column;
-      gap: 10px;
+      gap: 8px;
       max-height: 320px;
       overflow-y: auto;
       padding-right: 2px;
@@ -526,12 +504,22 @@
     .sidebar-project-item {
       border: 1px solid var(--border);
       border-radius: 10px;
-      padding: 11px 11px 10px;
+      padding: 10px 11px;
       background: var(--bg);
+      width: 100%;
+      text-align: left;
+      font-family: var(--font);
+      cursor: pointer;
+      transition: border-color 150ms ease, background 150ms ease, transform 150ms ease;
     }
     .sidebar-project-item.active {
       border-color: rgba(232,84,26,0.34);
       background: var(--orange-tint);
+    }
+    .sidebar-project-item:hover {
+      border-color: rgba(232,84,26,0.35);
+      background: #fffaf7;
+      transform: translateY(-1px);
     }
     .sidebar-project-item-head {
       display: flex;
@@ -542,12 +530,81 @@
     .sidebar-project-item .recent-project-date {
       font-size: 11px;
     }
-    .sidebar-project-item .recent-project-actions {
-      margin-top: 10px;
+    .sidebar-project-summary {
+      margin-top: 6px;
+      font-size: 12px;
+      color: var(--text-2);
+      line-height: 1.5;
     }
-    .sidebar-project-item .btn-ghost {
-      padding: 7px 10px;
-      font-size: 11.5px;
+    .sidebar-project-status {
+      margin-top: 8px;
+      font-size: 11px;
+      font-weight: 600;
+      color: var(--muted);
+    }
+    .project-inline-note {
+      margin-top: 10px;
+      padding: 10px 11px;
+      border-radius: 10px;
+      border: 1px solid var(--border);
+      background: var(--sidebar-bg);
+      font-size: 12px;
+      line-height: 1.55;
+      color: var(--text-2);
+    }
+    .project-inline-note strong {
+      display: block;
+      font-size: 12px;
+      color: var(--text);
+      margin-bottom: 2px;
+    }
+    .project-inline-note.success {
+      background: #F0FAF5;
+      border-color: rgba(45,106,79,0.24);
+    }
+    .project-inline-note.warn {
+      background: #FFFBEB;
+      border-color: rgba(245,158,11,0.28);
+    }
+    .project-inline-note button {
+      margin-top: 8px;
+    }
+    .project-restore-banner {
+      display: none;
+      margin-bottom: 16px;
+      padding: 14px 16px;
+      border-radius: 12px;
+      border: 1px solid var(--border);
+      background: var(--surface);
+      box-shadow: var(--shadow-sm);
+    }
+    .project-restore-banner.show {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 14px;
+    }
+    .project-restore-banner.success {
+      background: #F0FAF5;
+      border-color: rgba(45,106,79,0.28);
+    }
+    .project-restore-banner.warn {
+      background: #FFFBEB;
+      border-color: rgba(245,158,11,0.3);
+    }
+    .project-restore-banner strong {
+      display: block;
+      font-size: 14px;
+      color: var(--text);
+      margin-bottom: 4px;
+    }
+    .project-restore-banner p {
+      font-size: 13px;
+      color: var(--text-2);
+      line-height: 1.55;
+    }
+    .project-restore-banner .btn-ghost {
+      flex-shrink: 0;
     }
     .recent-project-empty {
       font-size: 13px;
@@ -1416,13 +1473,44 @@
     }
     #dialog-export-flow,
     #dialog-post-save-thumbnail,
-    #dialog-existing-thumbnails { max-width: min(720px, 95vw); }
+    #dialog-existing-thumbnails,
+    #dialog-project-resume { max-width: min(720px, 95vw); }
     .modal-icon { font-size: 38px; text-align: center; margin-bottom: 12px; }
     .modal-heading {
       font-family: var(--font-serif); font-size: 20px; font-weight: 700;
       color: var(--text); margin-bottom: 8px; text-align: center;
     }
     .modal-body-text { font-size: 14px; color: var(--text-2); line-height: 1.65; text-align: center; }
+    .resume-summary-card {
+      margin-top: 18px;
+      padding: 16px;
+      border-radius: 12px;
+      border: 1px solid var(--border);
+      background: var(--surface);
+    }
+    .resume-summary-title {
+      font-size: 16px;
+      font-weight: 700;
+      color: var(--text);
+      margin-bottom: 6px;
+    }
+    .resume-summary-copy {
+      font-size: 13px;
+      color: var(--text-2);
+      line-height: 1.6;
+      margin-bottom: 10px;
+    }
+    .resume-summary-meta {
+      font-size: 12px;
+      color: var(--muted);
+      line-height: 1.55;
+      margin-top: 10px;
+    }
+    .resume-summary-stats {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+    }
     /* Export form */
     .export-form-row { margin-bottom: 18px; }
     .export-form-label {
@@ -1845,6 +1933,13 @@
 
       <!-- Body -->
       <div class="panel-body">
+        <div id="clips-project-banner" class="project-restore-banner">
+          <div>
+            <strong id="clips-project-banner-title"></strong>
+            <p id="clips-project-banner-body"></p>
+          </div>
+          <button class="btn-ghost btn-sm" type="button" onclick="dismissProjectRestoreBanner('clips')">Close</button>
+        </div>
 
         <!-- ── STAGE 1: Load (compact two-col row) ── -->
         <div id="clips-stage1">
@@ -2122,6 +2217,13 @@
       </div>
 
       <div class="panel-body">
+        <div id="thumb-project-banner" class="project-restore-banner">
+          <div>
+            <strong id="thumb-project-banner-title"></strong>
+            <p id="thumb-project-banner-body"></p>
+          </div>
+          <button class="btn-ghost btn-sm" type="button" onclick="dismissProjectRestoreBanner('thumbnails')">Close</button>
+        </div>
 
         <!-- STATE 1: Upload -->
         <div id="thumb-state-upload">
@@ -2493,6 +2595,8 @@
   let activeProject = null;
   let recentProjects = [];
   let recentProjectsLoaded = false;
+  let pendingProjectResume = null;
+  let projectRestoreBannerState = { clips: null, thumbnails: null };
 
   function formatProjectDate(value) {
     if (!value) return 'Updated just now';
@@ -2504,6 +2608,36 @@
       hour: 'numeric',
       minute: '2-digit',
     });
+  }
+
+  function pluralizeProjectCount(count, singular, plural) {
+    return count + ' ' + (count === 1 ? singular : plural);
+  }
+
+  function getProjectCounts(project) {
+    return project?.counts || project?.summary?.counts || {};
+  }
+
+  function getProjectLabel(project) {
+    return (project?.project_name || project?.source_video?.bare_stem || project?.source_filename || 'Project').trim();
+  }
+
+  function getProjectCountSummary(project) {
+    const counts = getProjectCounts(project);
+    const parts = [];
+    if (counts.clip_candidates) parts.push(pluralizeProjectCount(counts.clip_candidates, 'clip', 'clips'));
+    if (counts.thumbnail_drafts) parts.push(pluralizeProjectCount(counts.thumbnail_drafts, 'thumbnail', 'thumbnails'));
+    if (counts.exports) parts.push(pluralizeProjectCount(counts.exports, 'export', 'exports'));
+    return parts.join(' • ');
+  }
+
+  function describeRestoreCounts(project) {
+    const counts = getProjectCounts(project);
+    const pieces = [];
+    if (counts.clip_candidates) pieces.push(pluralizeProjectCount(counts.clip_candidates, 'saved clip', 'saved clips'));
+    if (counts.thumbnail_drafts) pieces.push(pluralizeProjectCount(counts.thumbnail_drafts, 'thumbnail draft', 'thumbnail drafts'));
+    if (counts.exports) pieces.push(pluralizeProjectCount(counts.exports, 'export', 'exports'));
+    return pieces.join(', ');
   }
 
   function projectStatChips(counts) {
@@ -2529,17 +2663,19 @@
       return;
     }
 
-    const counts = activeProject.counts || activeProject.summary?.counts || {};
-    const sourceFilename = activeProject.source_filename || activeProject.source_video?.filename || 'Source video';
-    const sourcePath = activeProject.source_path || activeProject.source_video?.path || '';
+    const summary = getProjectCountSummary(activeProject);
+    const note = pendingProjectResume?.projectId === activeProject.id ? pendingProjectResume.note : null;
     current.className = '';
     current.innerHTML =
-      '<div class="sidebar-project-name">' + escHtml(activeProject.project_name || 'Project') + '</div>' +
-      '<div class="sidebar-project-source">' + escHtml(sourceFilename) + '</div>' +
+      '<div class="sidebar-project-name">' + escHtml(getProjectLabel(activeProject)) + '</div>' +
       '<div class="sidebar-project-meta">Last updated ' + escHtml(formatProjectDate(activeProject.last_modified || activeProject.updated_at)) + '</div>' +
-      '<div class="sidebar-project-stats">' + (projectStatChips(counts) || '<span class="sidebar-project-stat">Local project ready</span>') + '</div>' +
-      (sourcePath
-        ? '<details class="sidebar-project-meta-toggle"><summary>Show details</summary><div class="sidebar-project-meta">Dropbox path: ' + escHtml(sourcePath) + '</div></details>'
+      '<div class="sidebar-project-summary">' + escHtml(summary || 'Saved project ready') + '</div>' +
+      (note
+        ? '<div class="project-inline-note ' + escHtml(note.tone || 'warn') + '">' +
+            '<strong>' + escHtml(note.title || 'Resume project') + '</strong>' +
+            escHtml(note.body || '') +
+            (note.action ? '<br><button class="btn-ghost btn-sm" type="button" onclick="triggerProjectRelinkPicker()">' + escHtml(note.action) + '</button>' : '') +
+          '</div>'
         : '');
   }
 
@@ -2553,27 +2689,19 @@
     }
 
     list.innerHTML = recentProjects.map(project => {
-      const counts = project.counts || {};
-      const statChips = [
-        counts.clip_candidates ? `<span class="recent-project-stat">${counts.clip_candidates} clips</span>` : '',
-        counts.thumbnail_drafts ? `<span class="recent-project-stat">${counts.thumbnail_drafts} thumbnails</span>` : '',
-        counts.exports ? `<span class="recent-project-stat">${counts.exports} exports</span>` : '',
-      ].filter(Boolean).join('');
+      const summary = getProjectCountSummary(project) || 'Saved project';
       const isActive = activeProject?.id && activeProject.id === project.id;
+      const lastView = project?.meta?.last_view === 'thumbnails' ? 'thumbnails' : 'clips';
 
       return (
-        '<div class="sidebar-project-item' + (isActive ? ' active' : '') + '">' +
+        '<button class="sidebar-project-item' + (isActive ? ' active' : '') + '" type="button" onclick="selectRecentProject(\'' + escHtml(project.id) + '\', \'' + lastView + '\')">' +
           '<div class="sidebar-project-item-head">' +
-            '<div class="recent-project-name">' + escHtml(project.project_name || 'Project') + '</div>' +
+            '<div class="recent-project-name">' + escHtml(getProjectLabel(project)) + '</div>' +
             '<div class="recent-project-date">' + escHtml(formatProjectDate(project.last_modified)) + '</div>' +
           '</div>' +
-          '<div class="sidebar-project-source">' + escHtml(project.source_filename || 'Source video') + '</div>' +
-          '<div class="sidebar-project-stats">' + (statChips || '<span class="sidebar-project-stat">Ready to resume</span>') + '</div>' +
-          '<div class="recent-project-actions">' +
-            '<button class="btn-ghost btn-sm" type="button" onclick="selectRecentProject(\'' + escHtml(project.id) + '\', \'clips\')">Open in Clips</button>' +
-            '<button class="btn-ghost btn-sm" type="button" onclick="selectRecentProject(\'' + escHtml(project.id) + '\', \'thumbnails\')">Open in Thumbnails</button>' +
-          '</div>' +
-        '</div>'
+          '<div class="sidebar-project-summary">' + escHtml(summary) + '</div>' +
+          '<div class="sidebar-project-status">' + escHtml(project.source_filename ? 'Click to resume this source video project' : 'Click to relink the source video and resume') + '</div>' +
+        '</button>'
       );
     }).join('');
   }
@@ -2598,6 +2726,110 @@
     if (options.refreshRecent !== false) {
       loadRecentProjects();
     }
+  }
+
+  function getLoadedSourceFileForView(view) {
+    return view === 'thumbnails' ? _thumbFile : _clipFile;
+  }
+
+  function projectMatchesLoadedFile(project, view) {
+    const file = getLoadedSourceFileForView(view);
+    const expected = project?.source_filename || project?.source_video?.filename || '';
+    return !!file && !!expected && file.name === expected;
+  }
+
+  function dismissProjectRestoreBanner(view) {
+    const banner = document.getElementById(view === 'thumbnails' ? 'thumb-project-banner' : 'clips-project-banner');
+    projectRestoreBannerState[view] = null;
+    if (banner) banner.className = 'project-restore-banner';
+  }
+
+  function showProjectRestoreBanner(view, tone, title, body) {
+    const prefix = view === 'thumbnails' ? 'thumb' : 'clips';
+    const banner = document.getElementById(prefix + '-project-banner');
+    const titleEl = document.getElementById(prefix + '-project-banner-title');
+    const bodyEl = document.getElementById(prefix + '-project-banner-body');
+    if (!banner || !titleEl || !bodyEl) return;
+    projectRestoreBannerState[view] = { tone, title, body };
+    banner.className = 'project-restore-banner show ' + tone;
+    titleEl.textContent = title;
+    bodyEl.textContent = body;
+  }
+
+  function clearPendingProjectResume() {
+    pendingProjectResume = null;
+    renderProjectShells();
+  }
+
+  function setPendingProjectResume(project, targetTab, note = null) {
+    pendingProjectResume = project ? {
+      projectId: project.id,
+      targetTab: targetTab || 'clips',
+      project,
+      note,
+      action: 'relink',
+    } : null;
+    renderProjectShells();
+  }
+
+  function closeProjectResumeDialog() {
+    document.getElementById('dialog-project-resume')?.close();
+  }
+
+  function triggerProjectRelinkPicker() {
+    const targetTab = pendingProjectResume?.targetTab || 'clips';
+    switchTab(targetTab);
+    closeProjectResumeDialog();
+    const inputId = targetTab === 'thumbnails' ? 'thumb-file' : 'clips-file';
+    document.getElementById(inputId)?.click();
+  }
+
+  async function resumePendingProjectWithCurrentFile() {
+    const pending = pendingProjectResume;
+    if (!pending?.project) return;
+    const file = getLoadedSourceFileForView(pending.targetTab);
+    if (!file) {
+      triggerProjectRelinkPicker();
+      return;
+    }
+    closeProjectResumeDialog();
+    const projectResponse = await openProjectForFile(file, pending.targetTab);
+    if (projectResponse?.project) {
+      finalizeProjectResume(projectResponse.project, pending.targetTab);
+    }
+  }
+
+  function handleProjectResumePrimaryAction() {
+    if (pendingProjectResume?.action === 'resume_current') {
+      resumePendingProjectWithCurrentFile();
+      return;
+    }
+    triggerProjectRelinkPicker();
+  }
+
+  function openProjectResumeDialog(project, targetTab, options = {}) {
+    if (!project) return;
+    const dialog = document.getElementById('dialog-project-resume');
+    const counts = getProjectCounts(project);
+    document.getElementById('resume-dialog-heading').textContent = options.heading || 'We found your saved project';
+    document.getElementById('resume-dialog-copy').textContent = options.copy || 'Choose the source video once and we will restore your saved work automatically.';
+    document.getElementById('resume-dialog-project-name').textContent = getProjectLabel(project);
+    document.getElementById('resume-dialog-project-copy').textContent = describeRestoreCounts(project) || 'Saved project data is ready to resume.';
+    document.getElementById('resume-dialog-stats').innerHTML = projectStatChips(counts) || '<span class="sidebar-project-stat">Saved project</span>';
+    document.getElementById('resume-dialog-meta').textContent = 'Last updated ' + formatProjectDate(project.last_modified || project.updated_at) + (project.source_filename ? ' • Source video: ' + project.source_filename : '');
+    document.getElementById('resume-dialog-primary').textContent = options.primaryLabel || 'Relink source video';
+    document.getElementById('resume-dialog-secondary').textContent = options.secondaryLabel || 'Keep current video';
+
+    pendingProjectResume = {
+      ...(pendingProjectResume || {}),
+      projectId: project.id,
+      targetTab: targetTab || 'clips',
+      project,
+      action: options.action || 'relink',
+      note: options.note || pendingProjectResume?.note || null,
+    };
+    renderProjectShells();
+    if (dialog && !dialog.open) dialog.showModal();
   }
 
   async function updateProject(eventType, payload = {}) {
@@ -2684,25 +2916,75 @@
     return true;
   }
 
+  function attemptProjectRestore(project, view) {
+    const counts = getProjectCounts(project);
+    if (view === 'thumbnails') {
+      if (restoreProjectThumbnailDraft(project)) {
+        return {
+          tone: 'success',
+          title: 'Saved thumbnail found',
+          body: 'We reopened your latest thumbnail draft for this source video.',
+        };
+      }
+      if (counts.thumbnail_drafts) {
+        return {
+          tone: 'warn',
+          title: 'Saved project found',
+          body: 'We found your saved thumbnail draft. Open the shared composer to continue from it.',
+        };
+      }
+      return {
+        tone: 'success',
+        title: 'Project ready',
+        body: 'This source video is linked and ready for a new thumbnail.',
+      };
+    }
+
+    if (restoreProjectClipState(project)) {
+      return {
+        tone: 'success',
+        title: 'Saved clips found',
+        body: 'We restored your saved clip list automatically' + (counts.exports ? ' and kept your export history in this project.' : '.'),
+      };
+    }
+    if (counts.clip_candidates && !_wordsData?.length) {
+      return {
+        tone: 'warn',
+        title: 'Saved project found',
+        body: 'We linked this source video. Load or generate the transcript once and we will bring the saved clips back.',
+      };
+    }
+    return {
+      tone: 'success',
+      title: 'Project ready',
+      body: 'This source video is linked and ready for your next clip pass.',
+    };
+  }
+
+  function finalizeProjectResume(project, view) {
+    const result = attemptProjectRestore(project, view);
+    showProjectRestoreBanner(view, result.tone, result.title, result.body);
+    clearPendingProjectResume();
+    return result;
+  }
+
   async function maybeOfferProjectResume(projectResponse, view) {
     if (!projectResponse?.existing_project) return;
-    const project = projectResponse.project;
-    const counts = projectResponse.summary?.counts || {};
-    const resume = window.confirm(
-      'A local project already exists for ' + (project.project_name || 'this source video') + '.\n\n' +
-      'Press OK to resume the saved project context, or Cancel to keep working from the current selection inside that same project.\n\n' +
-      'Saved items: ' +
-      (counts.clip_candidates || 0) + ' clip candidates, ' +
-      (counts.thumbnail_drafts || 0) + ' thumbnails, ' +
-      (counts.exports || 0) + ' exports.'
-    );
+    finalizeProjectResume(projectResponse.project, view);
+  }
 
-    if (resume && view === 'clips') {
-      restoreProjectClipState(project);
-    }
-    if (resume && view === 'thumbnails') {
-      restoreProjectThumbnailDraft(project);
-    }
+  function reconcilePendingProjectSelection(projectResponse, view) {
+    const pending = pendingProjectResume;
+    if (!pending?.projectId || pending.targetTab !== view || !projectResponse?.project) return;
+    if (projectResponse.project.id === pending.projectId) return;
+    const targetProject = pending.project;
+    clearPendingProjectResume();
+    showProjectRestoreBanner(
+      view,
+      'warn',
+      'Different source video selected',
+      'This video opened a different project. To resume ' + getProjectLabel(targetProject) + ', choose that source video from the sidebar project again.'
+    );
   }
 
   async function openProjectForFile(file, view) {
@@ -2730,9 +3012,40 @@
   function selectRecentProject(projectId, targetTab) {
     const project = recentProjects.find(item => item.id === projectId);
     if (!project) return;
+    const view = targetTab || project?.meta?.last_view || 'clips';
     setActiveProject(project, { refreshRecent: false });
-    switchTab(targetTab || 'clips');
-    alert('Project context loaded. Re-select the source video to continue editing with full local project data.');
+    switchTab(view);
+    dismissProjectRestoreBanner(view === 'thumbnails' ? 'clips' : 'thumbnails');
+
+    if (projectMatchesLoadedFile(project, view)) {
+      setPendingProjectResume(project, view, {
+        tone: 'success',
+        title: 'Matching video ready',
+        body: 'Use Resume project to bring back the saved work for this source video.',
+      });
+      openProjectResumeDialog(project, view, {
+        heading: 'Resume this project now?',
+        copy: 'You already have the matching source video loaded. We can restore the saved project right away.',
+        primaryLabel: 'Resume project',
+        secondaryLabel: 'Keep current video',
+        action: 'resume_current',
+      });
+      return;
+    }
+
+    setPendingProjectResume(project, view, {
+      tone: 'warn',
+      title: 'Relink source video',
+      body: 'Choose the source video once and we will restore the saved project automatically.',
+      action: 'Choose source video',
+    });
+    openProjectResumeDialog(project, view, {
+      heading: 'We found your saved project',
+      copy: 'Choose the source video once and we will bring back your saved clips, thumbnails, and exports automatically. This does not start the project over.',
+      primaryLabel: 'Relink source video',
+      secondaryLabel: 'Keep current video',
+      action: 'relink',
+    });
   }
 
   // Fix 3: global video tracking for #edit-video (listeners set once at init)
@@ -2843,6 +3156,7 @@
     showVideoLoaded(file.name);
 
     const projectResponse = await openProjectForFile(file, 'clips');
+    reconcilePendingProjectSelection(projectResponse, 'clips');
 
     // Auto-find JSON via backend
     showJsonSearching();
@@ -4124,6 +4438,7 @@
     document.getElementById('thumb-dz-label').textContent = file.name;
     document.getElementById('btn-generate-thumb').disabled = false;
     openProjectForFile(file, 'thumbnails').then(projectResponse => {
+      reconcilePendingProjectSelection(projectResponse, 'thumbnails');
       maybeOfferProjectResume(projectResponse, 'thumbnails');
     });
   });
@@ -6515,6 +6830,26 @@
       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
       Done &mdash; Use This Thumbnail
     </button>
+  </div>
+</dialog>
+
+<dialog id="dialog-project-resume">
+  <div class="dialog-header">
+    <h2>Resume Project</h2>
+  </div>
+  <div class="dialog-body">
+    <div class="modal-heading" id="resume-dialog-heading">We found your saved project</div>
+    <p class="modal-body-text" id="resume-dialog-copy"></p>
+    <div class="resume-summary-card">
+      <div class="resume-summary-title" id="resume-dialog-project-name"></div>
+      <div class="resume-summary-copy" id="resume-dialog-project-copy"></div>
+      <div class="resume-summary-stats" id="resume-dialog-stats"></div>
+      <div class="resume-summary-meta" id="resume-dialog-meta"></div>
+    </div>
+  </div>
+  <div class="dialog-footer">
+    <button class="btn-ghost" type="button" id="resume-dialog-secondary" onclick="closeProjectResumeDialog()">Keep current video</button>
+    <button class="btn" type="button" id="resume-dialog-primary" onclick="handleProjectResumePrimaryAction()">Relink source video</button>
   </div>
 </dialog>
 

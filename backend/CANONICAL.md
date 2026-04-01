@@ -336,16 +336,22 @@ Canonical frontend workflow requirements in `index.html`:
 - Left navigation is grouped into:
   - `SHORT CLIPS`: `Clips`, `Thumbnails`
   - `CAPTIONS`: `Caption Videos`, `Edit Captions`
-- Project context now lives in a collapsible left-sidebar section only, not as large cards in the main clips workspace.
+- The app is designed for interns and other first-time users, so low cognitive load should win over exposing extra system detail.
+- Project context now lives in a compact, collapsible left-sidebar section only, not as large cards in the main clips workspace.
 - The sidebar project section should keep the default view human-readable:
   - `Current Project`
   - `Recent Projects`
-  - source-video/project name
+  - simple project labels
   - last modified timestamp
   - simple counts for clips, thumbnails, and exports
-- Raw Dropbox paths should stay hidden by default and only appear in an on-demand details view when needed.
-- When the user selects a source video, the app must check the local project store and offer to resume the existing project context or continue in that same project.
-- Resuming should be lightweight in phase one; restoring saved clip candidate lists is enough. Do not redesign thumbnail editing or export flow around projects yet.
+- Raw Dropbox paths should stay hidden by default.
+- Recent-project clicks should help the user resume work, not just surface stored metadata.
+- When the user selects a source video, the app must check the local project store and resume the existing project context automatically when the matching source is available.
+- If the source video must be confirmed again, the relink/resume flow should stay lightweight and truthful:
+  - explain that the saved project was found
+  - explain that the source video may need to be confirmed once
+  - restore saved clips, thumbnail drafts, and export history automatically after relink when available
+- Resuming should not feel like starting over. Keep the main workspace focused on the current task, not project-management UI.
 
 Regression risk: High.
 
