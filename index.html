@@ -349,69 +349,14 @@
     }
     .card-accent h3 { font-size: 16px; font-weight: 700; margin-bottom: 8px; }
 
-    .project-shell {
-      display: none;
-      margin-bottom: 18px;
-      background: linear-gradient(135deg, #fff8f4 0%, #fff 100%);
-    }
-    .project-shell.active { display: block; }
-    .project-shell-kicker {
-      display: inline-block;
-      font-size: 11px;
-      font-weight: 700;
-      letter-spacing: 0.08em;
-      text-transform: uppercase;
-      color: var(--orange);
-      margin-bottom: 10px;
-    }
-    .project-shell-title {
-      font-size: 22px;
-      font-weight: 700;
-      color: var(--text);
-      margin-bottom: 6px;
-    }
-    .project-shell-meta {
-      font-size: 13px;
-      color: var(--text-2);
-      line-height: 1.6;
-      margin-bottom: 14px;
-      word-break: break-word;
-    }
-    .project-shell-stats {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 8px;
-    }
-    .project-shell-stat {
+    .project-shell-stat,
+    .sidebar-project-stat {
       padding: 6px 10px;
       border-radius: 999px;
       background: rgba(232, 84, 26, 0.08);
       color: var(--orange);
       font-size: 12px;
       font-weight: 600;
-    }
-
-    .recent-projects-card {
-      margin-bottom: 24px;
-    }
-    .recent-projects-head {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      gap: 12px;
-      margin-bottom: 14px;
-    }
-    .recent-projects-head h3 {
-      margin-bottom: 0;
-    }
-    .recent-projects-sub {
-      font-size: 12px;
-      color: var(--muted);
-    }
-    .recent-projects-list {
-      display: flex;
-      flex-direction: column;
-      gap: 10px;
     }
     .recent-project-item {
       border: 1px solid var(--border);
@@ -467,6 +412,142 @@
       display: flex;
       gap: 8px;
       flex-wrap: wrap;
+    }
+    .sidebar-projects {
+      margin: 8px 16px 14px;
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      background: rgba(255,255,255,0.78);
+      box-shadow: var(--shadow-sm);
+      overflow: hidden;
+    }
+    .sidebar-projects summary {
+      list-style: none;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      padding: 14px 16px;
+      cursor: pointer;
+      font-size: 12px;
+      font-weight: 700;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--muted);
+    }
+    .sidebar-projects summary::-webkit-details-marker { display: none; }
+    .sidebar-projects summary::after {
+      content: '▾';
+      font-size: 12px;
+      color: var(--muted);
+      transition: transform 150ms ease;
+    }
+    .sidebar-projects:not([open]) summary::after { transform: rotate(-90deg); }
+    .sidebar-projects-body {
+      padding: 0 12px 12px;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+    .sidebar-project-section {
+      padding: 12px;
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      background: var(--surface);
+    }
+    .sidebar-project-heading-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      margin-bottom: 10px;
+    }
+    .sidebar-project-heading {
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--muted);
+      margin-bottom: 10px;
+    }
+    .sidebar-project-name {
+      font-size: 15px;
+      font-weight: 700;
+      color: var(--text);
+      line-height: 1.3;
+    }
+    .sidebar-project-source {
+      margin-top: 4px;
+      font-size: 12px;
+      color: var(--text-2);
+      line-height: 1.5;
+    }
+    .sidebar-project-meta {
+      margin-top: 8px;
+      font-size: 11px;
+      color: var(--muted);
+      line-height: 1.5;
+    }
+    .sidebar-project-stats {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-top: 10px;
+    }
+    .sidebar-project-empty {
+      font-size: 12px;
+      color: var(--muted);
+      line-height: 1.6;
+    }
+    .sidebar-project-meta-toggle {
+      margin-top: 10px;
+      border-top: 1px solid var(--border);
+      padding-top: 10px;
+    }
+    .sidebar-project-meta-toggle summary {
+      padding: 0;
+      display: inline-flex;
+      font-size: 12px;
+      font-weight: 600;
+      letter-spacing: 0;
+      text-transform: none;
+      color: var(--text-2);
+      cursor: pointer;
+    }
+    .sidebar-project-meta-toggle summary::after { display: none; }
+    .sidebar-project-list {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      max-height: 320px;
+      overflow-y: auto;
+      padding-right: 2px;
+    }
+    .sidebar-project-item {
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 11px 11px 10px;
+      background: var(--bg);
+    }
+    .sidebar-project-item.active {
+      border-color: rgba(232,84,26,0.34);
+      background: var(--orange-tint);
+    }
+    .sidebar-project-item-head {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 8px;
+    }
+    .sidebar-project-item .recent-project-date {
+      font-size: 11px;
+    }
+    .sidebar-project-item .recent-project-actions {
+      margin-top: 10px;
+    }
+    .sidebar-project-item .btn-ghost {
+      padding: 7px 10px;
+      font-size: 11.5px;
     }
     .recent-project-empty {
       font-size: 13px;
@@ -1333,7 +1414,9 @@
       border-top: 1px solid var(--border); background: var(--sidebar-bg);
       border-radius: 0 0 var(--r-lg) var(--r-lg); flex-shrink: 0;
     }
-    #modal-pre-export { max-width: 400px; }
+    #dialog-export-flow,
+    #dialog-post-save-thumbnail,
+    #dialog-existing-thumbnails { max-width: min(720px, 95vw); }
     .modal-icon { font-size: 38px; text-align: center; margin-bottom: 12px; }
     .modal-heading {
       font-family: var(--font-serif); font-size: 20px; font-weight: 700;
@@ -1357,6 +1440,68 @@
       display: block; width: 100%; font-size: 13px; color: var(--muted);
       font-family: var(--font-mono); padding: 9px 12px; background: var(--sidebar-bg);
       border: 1px solid var(--border); border-radius: 8px;
+    }
+    .export-flow-intro {
+      margin-bottom: 18px;
+      font-size: 13px;
+      color: var(--text-2);
+      line-height: 1.65;
+    }
+    .export-folder-card {
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      background: var(--surface);
+      padding: 16px;
+      margin-bottom: 14px;
+    }
+    .export-folder-card h3 {
+      font-size: 15px;
+      margin-bottom: 6px;
+    }
+    .export-folder-status {
+      font-size: 13px;
+      color: var(--text-2);
+      line-height: 1.6;
+      margin-top: 6px;
+    }
+    .export-folder-name {
+      font-size: 18px;
+      font-weight: 700;
+      color: var(--text);
+      margin-top: 6px;
+    }
+    .export-folder-actions,
+    .post-save-actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin-top: 14px;
+    }
+    .export-folder-choice {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      padding: 14px;
+      border: 1px dashed var(--border-2);
+      border-radius: 10px;
+      background: var(--sidebar-bg);
+      margin-top: 12px;
+    }
+    .export-folder-selected {
+      margin-top: 14px;
+      padding: 12px 14px;
+      border-radius: 10px;
+      border: 1px solid rgba(45,106,79,0.22);
+      background: rgba(45,106,79,0.08);
+      color: var(--text);
+      font-size: 13px;
+      line-height: 1.6;
+    }
+    .post-save-note {
+      margin-top: 10px;
+      font-size: 13px;
+      color: var(--text-2);
+      line-height: 1.6;
     }
     /* Thumbnail preview strip in clip panel */
     #thumb-preview-panel {
@@ -1652,6 +1797,27 @@
         </button>
       </div>
 
+      <details class="sidebar-projects" id="sidebar-projects" open>
+        <summary>Projects</summary>
+        <div class="sidebar-projects-body">
+          <section class="sidebar-project-section">
+            <div class="sidebar-project-heading">Current Project</div>
+            <div id="sidebar-current-project" class="sidebar-project-empty">
+              Choose a source video to start a local project for this session.
+            </div>
+          </section>
+          <section class="sidebar-project-section">
+            <div class="sidebar-project-heading-row">
+              <div class="sidebar-project-heading" style="margin-bottom:0;">Recent Projects</div>
+              <button class="btn-ghost btn-sm" type="button" onclick="loadRecentProjects()">Refresh</button>
+            </div>
+            <div id="sidebar-recent-projects" class="sidebar-project-list">
+              <div class="sidebar-project-empty">Recent source-video projects will show up here.</div>
+            </div>
+          </section>
+        </div>
+      </details>
+
     </nav>
 
     <div class="sidebar-footer">
@@ -1669,43 +1835,16 @@
     <div class="tab-panel active" id="tab-clips">
 
       <!-- Hero banner -->
-      <div class="section-hero">
+      <div class="section-hero" style="height:132px;padding-top:24px;padding-bottom:24px;">
         <div class="section-hero-bg" style="background-image: url('Graphic_3.png')"></div>
         <div class="section-hero-text fade-up">
           <h1>Clip Creator</h1>
-          <p>Load a video and transcript to find high-impact moments for social media. Claude identifies quotable statements, emotional peaks, and self-contained segments.</p>
-        </div>
-        <div class="section-hero-action fade-up-1">
-          <button class="btn btn-hero" onclick="_clipMode === 'split' ? splitVideo() : findClips()">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
-              <circle cx="6" cy="6" r="3"/><circle cx="6" cy="18" r="3"/>
-              <path d="M20 4L8.12 15.88M14.47 14.48L20 20M8.12 8.12L12 12"/>
-            </svg>
-            Find Clips
-          </button>
+          <p>Load a source video, find the strongest moments, review candidates, and finish the clip before saving it to the right project folder.</p>
         </div>
       </div>
 
       <!-- Body -->
       <div class="panel-body">
-
-        <div class="card project-shell fade-up" id="clips-project-shell">
-          <span class="project-shell-kicker">Active Project</span>
-          <div class="project-shell-title" id="clips-project-title"></div>
-          <div class="project-shell-meta" id="clips-project-meta"></div>
-          <div class="project-shell-stats" id="clips-project-stats"></div>
-        </div>
-
-        <div class="card recent-projects-card fade-up-1" data-recent-projects="clips">
-          <div class="recent-projects-head">
-            <div>
-              <h3>Recent Projects</h3>
-              <div class="recent-projects-sub">One project per source video, stored locally on this app install.</div>
-            </div>
-            <button class="btn-ghost" type="button" onclick="loadRecentProjects()">Refresh</button>
-          </div>
-          <div class="recent-projects-list"></div>
-        </div>
 
         <!-- ── STAGE 1: Load (compact two-col row) ── -->
         <div id="clips-stage1">
@@ -1714,12 +1853,12 @@
 
             <!-- Left: Single MP4 picker -->
             <div>
-              <div class="clc-label" style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.06em;color:var(--muted);margin-bottom:6px;">Video File</div>
+              <div class="clc-label" style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.06em;color:var(--muted);margin-bottom:6px;">Source Video</div>
               <div class="clips-load-card" id="clc-video" onclick="document.getElementById('clips-file').click()">
                 <div class="clc-icon">🎬</div>
                 <div class="clc-body">
                   <div class="clc-value muted" id="clc-video-value">Browse for video</div>
-                  <div style="font-size:11px;color:var(--muted);margin-top:2px;">Select your MP4 or MOV &mdash; transcript loads automatically</div>
+                  <div style="font-size:11px;color:var(--muted);margin-top:2px;">Select your MP4 or MOV. The transcript will load automatically when it is available.</div>
                 </div>
                 <input type="file" accept=".mp4,.MP4,.mov,.MOV,video/mp4,video/quicktime" id="clips-file" style="display:none;" />
               </div>
@@ -1727,7 +1866,7 @@
 
             <!-- Right: JSON status card -->
             <div>
-              <div class="clc-label" style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.06em;color:var(--muted);margin-bottom:6px;">Transcript JSON</div>
+              <div class="clc-label" style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.06em;color:var(--muted);margin-bottom:6px;">Transcript</div>
               <div class="clips-load-card" id="clc-json" style="cursor:default;">
                 <div class="clc-icon">📄</div>
                 <div class="clc-body">
@@ -1757,7 +1896,7 @@
                 <circle cx="6" cy="6" r="3"/><circle cx="6" cy="18" r="3"/>
                 <path d="M20 4L8.12 15.88M14.47 14.48L20 20M8.12 8.12L12 12"/>
               </svg>
-              Find Viral Clips
+              Find Clips
             </button>
           </div>
 
@@ -1884,7 +2023,7 @@
               <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
                 <polyline points="20 6 9 17 4 12"/>
               </svg>
-              Continue to Export
+              Done Editing - Next
             </button>
           </div>
 
@@ -1983,24 +2122,6 @@
       </div>
 
       <div class="panel-body">
-
-        <div class="card project-shell fade-up" id="thumb-project-shell">
-          <span class="project-shell-kicker">Active Project</span>
-          <div class="project-shell-title" id="thumb-project-title"></div>
-          <div class="project-shell-meta" id="thumb-project-meta"></div>
-          <div class="project-shell-stats" id="thumb-project-stats"></div>
-        </div>
-
-        <div class="card recent-projects-card fade-up-1" data-recent-projects="thumbnails">
-          <div class="recent-projects-head">
-            <div>
-              <h3>Recent Projects</h3>
-              <div class="recent-projects-sub">Resume source-video projects without cluttering Dropbox.</div>
-            </div>
-            <button class="btn-ghost" type="button" onclick="loadRecentProjects()">Refresh</button>
-          </div>
-          <div class="recent-projects-list"></div>
-        </div>
 
         <!-- STATE 1: Upload -->
         <div id="thumb-state-upload">
@@ -2399,88 +2520,62 @@
   }
 
   function renderProjectShells() {
-    const shells = [
-      {
-        shellId: 'clips-project-shell',
-        titleId: 'clips-project-title',
-        metaId: 'clips-project-meta',
-        statsId: 'clips-project-stats',
-      },
-      {
-        shellId: 'thumb-project-shell',
-        titleId: 'thumb-project-title',
-        metaId: 'thumb-project-meta',
-        statsId: 'thumb-project-stats',
-      },
-    ];
+    const current = document.getElementById('sidebar-current-project');
+    if (!current) return;
 
-    shells.forEach(({ shellId, titleId, metaId, statsId }) => {
-      const shell = document.getElementById(shellId);
-      const title = document.getElementById(titleId);
-      const meta = document.getElementById(metaId);
-      const stats = document.getElementById(statsId);
-      if (!shell || !title || !meta || !stats) return;
+    if (!activeProject) {
+      current.className = 'sidebar-project-empty';
+      current.innerHTML = 'Choose a source video to start a local project for this session.';
+      return;
+    }
 
-      if (!activeProject) {
-        shell.classList.remove('active');
-        title.textContent = '';
-        meta.textContent = '';
-        stats.innerHTML = '';
-        return;
-      }
-
-      const counts = activeProject.counts || activeProject.summary?.counts || {};
-      const sourceFilename = activeProject.source_filename || activeProject.source_video?.filename || 'Source video';
-      const sourcePath = activeProject.source_path || activeProject.source_video?.path || '';
-      title.textContent = activeProject.project_name || 'Project';
-      meta.innerHTML =
-        '<strong>' + escHtml(sourceFilename) + '</strong>' +
-        (sourcePath ? '<br><span>' + escHtml(sourcePath) + '</span>' : '') +
-        '<br><span>Last modified ' + escHtml(formatProjectDate(activeProject.last_modified || activeProject.updated_at)) + '</span>';
-      stats.innerHTML = projectStatChips(counts) || '<span class="project-shell-stat">Local project ready</span>';
-      shell.classList.add('active');
-    });
+    const counts = activeProject.counts || activeProject.summary?.counts || {};
+    const sourceFilename = activeProject.source_filename || activeProject.source_video?.filename || 'Source video';
+    const sourcePath = activeProject.source_path || activeProject.source_video?.path || '';
+    current.className = '';
+    current.innerHTML =
+      '<div class="sidebar-project-name">' + escHtml(activeProject.project_name || 'Project') + '</div>' +
+      '<div class="sidebar-project-source">' + escHtml(sourceFilename) + '</div>' +
+      '<div class="sidebar-project-meta">Last updated ' + escHtml(formatProjectDate(activeProject.last_modified || activeProject.updated_at)) + '</div>' +
+      '<div class="sidebar-project-stats">' + (projectStatChips(counts) || '<span class="sidebar-project-stat">Local project ready</span>') + '</div>' +
+      (sourcePath
+        ? '<details class="sidebar-project-meta-toggle"><summary>Show details</summary><div class="sidebar-project-meta">Dropbox path: ' + escHtml(sourcePath) + '</div></details>'
+        : '');
   }
 
   function renderRecentProjects() {
-    document.querySelectorAll('[data-recent-projects]').forEach(card => {
-      const list = card.querySelector('.recent-projects-list');
-      const tabTarget = card.dataset.recentProjects || 'clips';
-      if (!list) return;
+    const list = document.getElementById('sidebar-recent-projects');
+    if (!list) return;
 
-      if (!recentProjects.length) {
-        list.innerHTML = '<div class="recent-project-empty">Select a source video to create the first local project. Recent clips, thumbnails, and exports will show up here.</div>';
-        return;
-      }
+    if (!recentProjects.length) {
+      list.innerHTML = '<div class="sidebar-project-empty">Select a source video to create the first local project. Recent clips, thumbnails, and exports will appear here.</div>';
+      return;
+    }
 
-      list.innerHTML = recentProjects.map(project => {
-        const counts = project.counts || {};
-        const statChips = [
-          counts.clip_candidates ? `<span class="recent-project-stat">${counts.clip_candidates} candidates</span>` : '',
-          counts.edited_clips ? `<span class="recent-project-stat">${counts.edited_clips} edited</span>` : '',
-          counts.thumbnail_drafts ? `<span class="recent-project-stat">${counts.thumbnail_drafts} thumbnails</span>` : '',
-          counts.exports ? `<span class="recent-project-stat">${counts.exports} exports</span>` : '',
-        ].filter(Boolean).join('');
+    list.innerHTML = recentProjects.map(project => {
+      const counts = project.counts || {};
+      const statChips = [
+        counts.clip_candidates ? `<span class="recent-project-stat">${counts.clip_candidates} clips</span>` : '',
+        counts.thumbnail_drafts ? `<span class="recent-project-stat">${counts.thumbnail_drafts} thumbnails</span>` : '',
+        counts.exports ? `<span class="recent-project-stat">${counts.exports} exports</span>` : '',
+      ].filter(Boolean).join('');
+      const isActive = activeProject?.id && activeProject.id === project.id;
 
-        return (
-          '<div class="recent-project-item">' +
-            '<div class="recent-project-top">' +
-              '<div class="recent-project-name">' + escHtml(project.project_name || 'Project') + '</div>' +
-              '<div class="recent-project-date">' + escHtml(formatProjectDate(project.last_modified)) + '</div>' +
-            '</div>' +
-            '<div class="recent-project-source">' +
-              escHtml(project.source_filename || 'Source video') +
-              (project.source_path ? '<br>' + escHtml(project.source_path) : '') +
-            '</div>' +
-            '<div class="recent-project-stats">' + (statChips || '<span class="recent-project-stat">Ready to resume</span>') + '</div>' +
-            '<div class="recent-project-actions">' +
-              '<button class="btn-ghost btn-sm" type="button" onclick="selectRecentProject(\'' + escHtml(project.id) + '\', \'' + escHtml(tabTarget) + '\')">Open Project</button>' +
-              '<button class="btn-ghost btn-sm" type="button" onclick="selectRecentProject(\'' + escHtml(project.id) + '\', \'thumbnails\')">Open in Thumbnails</button>' +
-            '</div>' +
-          '</div>'
-        );
-      }).join('');
-    });
+      return (
+        '<div class="sidebar-project-item' + (isActive ? ' active' : '') + '">' +
+          '<div class="sidebar-project-item-head">' +
+            '<div class="recent-project-name">' + escHtml(project.project_name || 'Project') + '</div>' +
+            '<div class="recent-project-date">' + escHtml(formatProjectDate(project.last_modified)) + '</div>' +
+          '</div>' +
+          '<div class="sidebar-project-source">' + escHtml(project.source_filename || 'Source video') + '</div>' +
+          '<div class="sidebar-project-stats">' + (statChips || '<span class="sidebar-project-stat">Ready to resume</span>') + '</div>' +
+          '<div class="recent-project-actions">' +
+            '<button class="btn-ghost btn-sm" type="button" onclick="selectRecentProject(\'' + escHtml(project.id) + '\', \'clips\')">Open in Clips</button>' +
+            '<button class="btn-ghost btn-sm" type="button" onclick="selectRecentProject(\'' + escHtml(project.id) + '\', \'thumbnails\')">Open in Thumbnails</button>' +
+          '</div>' +
+        '</div>'
+      );
+    }).join('');
   }
 
   async function loadRecentProjects() {
@@ -4956,6 +5051,9 @@
   let thumbnailBlobUrl = null;   // object URL for in-app display
   let _exportThumbnailMode = 'video_only';
   let _selectedReuseThumbnailDraftId = null;
+  let _selectedExportFolder = '';
+  let _lastFolderLookup = null;
+  let _savedClipExport = null;
   let _dlgStyle          = 'lower_third';
   let _dlgTitle          = '';
   let _dlgFontFamily     = 'Montserrat';
@@ -5040,47 +5138,279 @@
     });
   }
 
-  function setExportThumbnailPreview(blobUrl, metaText) {
-    const thumbRow = document.getElementById('export-thumb-preview-row');
-    const thumbImg = document.getElementById('export-thumb-img');
-    const meta = document.getElementById('export-thumb-preview-meta');
-    if (!thumbRow || !thumbImg || !meta) return;
-    if (blobUrl) {
-      thumbImg.src = blobUrl;
-      thumbRow.style.display = 'flex';
-      meta.textContent = metaText || 'Will be saved alongside your clip';
-    } else {
-      thumbRow.style.display = 'none';
-      thumbImg.removeAttribute('src');
+  function getSuggestedExportFolderName() {
+    const base =
+      activeProject?.project_name ||
+      activeProject?.source_video?.bare_stem ||
+      (_clipFile ? _clipFile.name.replace(/\.(mp4|mov)$/i, '') : 'Source Video');
+    return String(base || 'Source Video').trim();
+  }
+
+  function closeExportFlowDialogs() {
+    document.getElementById('dialog-export-flow')?.close();
+    document.getElementById('dialog-post-save-thumbnail')?.close();
+    document.getElementById('dialog-existing-thumbnails')?.close();
+  }
+
+  function setExportPanelStatus(message, isError = false) {
+    const statusEl = document.getElementById('export-status');
+    if (!statusEl) return;
+    statusEl.style.display = 'block';
+    statusEl.innerHTML = isError
+      ? '<div class="export-error"><strong>Export update:</strong> ' + escHtml(message) + '</div>'
+      : '<div class="export-success">' +
+          '<svg class="export-success-icon" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>' +
+          '<div class="export-success-text"><strong>' + escHtml(message) + '</strong></div>' +
+        '</div>';
+  }
+
+  function renderExportFolderLookup(data) {
+    _lastFolderLookup = data || null;
+    const result = document.getElementById('export-folder-result');
+    const selected = document.getElementById('export-folder-selected');
+    const saveBtn = document.getElementById('btn-save-clip-folder');
+    if (!result || !selected || !saveBtn) return;
+
+    _selectedExportFolder = '';
+    saveBtn.disabled = true;
+    selected.style.display = 'none';
+
+    const suggested = data?.suggested_folder_name || getSuggestedExportFolderName();
+    const folderFound = !!data?.folder_exists;
+
+    result.innerHTML =
+      '<div class="export-folder-card">' +
+        '<h3>' + (folderFound ? 'Project folder found' : 'Project folder needed') + '</h3>' +
+        '<div class="export-folder-name">' + escHtml(folderFound ? data.matched_folder_name : suggested) + '</div>' +
+        '<div class="export-folder-status">' +
+          (folderFound
+            ? 'We found a matching folder for this source video inside Social Media Clips. Confirm it before saving the clip.'
+            : 'No matching folder was found for this source video yet. Create the suggested folder or choose another existing folder before saving.') +
+        '</div>' +
+        '<div class="export-folder-actions">' +
+          (folderFound
+            ? '<button type="button" class="btn" onclick="confirmExportFolderSelection(decodeURIComponent(\'' + encodeURIComponent(data.matched_folder_name || '') + '\'))">Use This Folder</button>'
+            : '<button type="button" class="btn" onclick="createSuggestedExportFolder()">Create "' + escHtml(suggested) + '" Folder</button>') +
+          '<button type="button" class="btn-ghost" onclick="lookupExportFolder()">Check Again</button>' +
+        '</div>' +
+        '<div class="export-folder-choice">' +
+          '<label class="export-form-label" for="export-existing-folder-select">Choose Another Folder</label>' +
+          '<select id="export-existing-folder-select" class="export-form-select"></select>' +
+          '<button type="button" class="btn-ghost" onclick="useSelectedExistingFolder()">Use Selected Folder</button>' +
+        '</div>' +
+      '</div>';
+
+    const picker = document.getElementById('export-existing-folder-select');
+    if (!picker) return;
+    picker.innerHTML = '<option value="">Choose an existing folder</option>';
+    const folders = Array.isArray(data?.available_folders) ? data.available_folders : [];
+    folders.forEach(name => {
+      const option = document.createElement('option');
+      option.value = name;
+      option.textContent = name;
+      picker.appendChild(option);
+    });
+  }
+
+  function confirmExportFolderSelection(folderName) {
+    _selectedExportFolder = String(folderName || '').trim();
+    const selected = document.getElementById('export-folder-selected');
+    const saveBtn = document.getElementById('btn-save-clip-folder');
+    if (!selected || !saveBtn || !_selectedExportFolder) return;
+    selected.style.display = 'block';
+    selected.innerHTML = '<strong>Save folder selected:</strong> ' + escHtml(_selectedExportFolder);
+    saveBtn.disabled = false;
+  }
+
+  async function lookupExportFolder() {
+    const statusEl = document.getElementById('export-flow-status');
+    const result = document.getElementById('export-folder-result');
+    if (!statusEl || !result) return;
+    statusEl.style.display = 'block';
+    statusEl.innerHTML =
+      '<div style="padding:0 0 4px;">' +
+      '<div class="export-progress-bar"><div class="export-shimmer"></div></div>' +
+      '<p class="export-progress-label">Checking the project folder in Dropbox…</p></div>';
+    result.innerHTML = '';
+    try {
+      const res = await fetch(BACKEND + '/project_export_folder/check', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          project_name: activeProject?.project_name || '',
+          source_filename: activeProject?.source_filename || activeProject?.source_video?.filename || (_clipFile?.name || ''),
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Could not check the Dropbox folder.');
+      renderExportFolderLookup(data);
+      statusEl.style.display = 'none';
+    } catch (err) {
+      statusEl.innerHTML = '<div class="export-error"><strong>Could not check the folder:</strong> ' + escHtml(err.message) + '</div>';
     }
   }
 
-  async function applyReuseThumbnailDraft(draftId) {
+  async function createSuggestedExportFolder() {
+    const suggested = _lastFolderLookup?.suggested_folder_name || getSuggestedExportFolderName();
+    const statusEl = document.getElementById('export-flow-status');
+    if (!statusEl) return;
+    statusEl.style.display = 'block';
+    statusEl.innerHTML =
+      '<div style="padding:0 0 4px;">' +
+      '<div class="export-progress-bar"><div class="export-shimmer"></div></div>' +
+      '<p class="export-progress-label">Creating the project folder in Dropbox…</p></div>';
+    try {
+      const res = await fetch(BACKEND + '/project_export_folder/create', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ folder_name: suggested }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Could not create the folder.');
+      statusEl.style.display = 'none';
+      confirmExportFolderSelection(data.folder_name);
+      await lookupExportFolder();
+      confirmExportFolderSelection(data.folder_name);
+    } catch (err) {
+      statusEl.innerHTML = '<div class="export-error"><strong>Folder creation failed:</strong> ' + escHtml(err.message) + '</div>';
+    }
+  }
+
+  function useSelectedExistingFolder() {
+    const picker = document.getElementById('export-existing-folder-select');
+    if (!picker || !picker.value) {
+      alert('Choose a folder before continuing.');
+      return;
+    }
+    confirmExportFolderSelection(picker.value);
+  }
+
+  function openExistingThumbnailDialog() {
+    document.getElementById('dialog-post-save-thumbnail')?.close();
+    renderExistingThumbnailChoices();
+    document.getElementById('dialog-existing-thumbnails')?.showModal();
+  }
+
+  function renderExistingThumbnailChoices() {
+    const list = document.getElementById('post-save-existing-thumbnails');
+    if (!list) return;
+    const drafts = getCurrentProjectThumbnailDrafts();
+    if (!drafts.length) {
+      list.innerHTML = '<div class="sidebar-project-empty">No saved thumbnails are available for this source video yet.</div>';
+      return;
+    }
+
+    list.innerHTML = drafts.map(draft => {
+      const box = (draft.text_boxes || [])[0] || {};
+      return (
+        '<div class="recent-project-item">' +
+          '<div class="recent-project-top">' +
+            '<div class="recent-project-name">' + escHtml(box.text || draft.source_filename || 'Thumbnail draft') + '</div>' +
+            '<div class="recent-project-date">' + escHtml(formatProjectDate(draft.saved_at)) + '</div>' +
+          '</div>' +
+          '<div class="recent-project-source">' +
+            'Format: ' + escHtml(draft.target_format || 'instagram') +
+            (draft.clip_start !== null && draft.clip_start !== undefined ? '<br>Clip context: ' + escHtml(formatTime(draft.clip_start)) + ' - ' + escHtml(formatTime(draft.clip_end || draft.clip_start)) : '') +
+          '</div>' +
+          '<div class="recent-project-actions">' +
+            '<button type="button" class="btn" onclick="attachExistingThumbnailDraft(\'' + escHtml(draft.draft_id) + '\')">Use This Thumbnail</button>' +
+            '<button type="button" class="btn-ghost btn-sm" onclick="editExistingThumbnailDraft(\'' + escHtml(draft.draft_id) + '\')">Edit</button>' +
+            '<button type="button" class="btn-ghost btn-sm" onclick="duplicateAndEditThumbnailDraft(\'' + escHtml(draft.draft_id) + '\')">Duplicate &amp; Edit</button>' +
+          '</div>' +
+        '</div>'
+      );
+    }).join('');
+  }
+
+  function openPostSaveThumbnailDialog() {
+    const projectDrafts = getCurrentProjectThumbnailDrafts();
+    const summary = document.getElementById('post-save-thumbnail-summary');
+    const note = document.getElementById('post-save-thumbnail-note');
+    const useExistingBtn = document.getElementById('btn-post-save-existing');
+    if (summary) {
+      summary.textContent = 'Your clip is saved. Do you want to add a thumbnail now?';
+    }
+    if (note) {
+      note.textContent = projectDrafts.length
+        ? 'We found ' + projectDrafts.length + ' saved thumbnail' + (projectDrafts.length === 1 ? '' : 's') + ' for this source-video project.'
+        : 'There are no saved thumbnails for this source-video project yet, so the next step would be creating one.';
+    }
+    if (useExistingBtn) useExistingBtn.disabled = !projectDrafts.length;
+    document.getElementById('dialog-post-save-thumbnail')?.showModal();
+  }
+
+  async function attachThumbnailBlobToSavedClip(blob, mode, draftId = '') {
+    if (!_savedClipExport?.filename || !_savedClipExport?.folder_name) {
+      alert('Save the clip first before attaching a thumbnail.');
+      return;
+    }
+    const statusEl = document.getElementById('post-save-thumbnail-status');
+    if (statusEl) {
+      statusEl.style.display = 'block';
+      statusEl.innerHTML =
+        '<div style="padding:0 0 4px;">' +
+        '<div class="export-progress-bar"><div class="export-shimmer"></div></div>' +
+        '<p class="export-progress-label">Saving thumbnail to Dropbox…</p></div>';
+    }
+    const form = new FormData();
+    form.append('thumbnail', blob, _savedClipExport.filename.replace(/\.mp4$/i, '') + ' - Thumbnail.png');
+    form.append('suggested_name', _savedClipExport.filename);
+    form.append('target_folder', _savedClipExport.folder_name);
+    if (_savedClipExport.airtable_record_id) form.append('airtable_record_id', _savedClipExport.airtable_record_id);
+    try {
+      const res = await fetch(BACKEND + '/export_thumbnail', { method: 'POST', body: form });
+      const data = await res.json();
+      if (!res.ok || !data.success) throw new Error(data.error || 'Could not save the thumbnail.');
+      document.getElementById('dialog-post-save-thumbnail')?.close();
+      document.getElementById('dialog-existing-thumbnails')?.close();
+      setExportPanelStatus('Clip and thumbnail saved to Dropbox.');
+      await updateProject('export_created', {
+        filename: _savedClipExport.filename,
+        clip_type: _savedClipExport.clip_type,
+        clip_dropbox_url: _savedClipExport.clip_dropbox_url,
+        thumbnail_dropbox_url: data.thumbnail_dropbox_url,
+        thumbnail_mode: mode,
+        thumbnail_draft_id: draftId,
+      });
+      if (statusEl) statusEl.style.display = 'none';
+    } catch (err) {
+      if (statusEl) {
+        statusEl.style.display = 'block';
+        statusEl.innerHTML = '<div class="export-error"><strong>Thumbnail save failed:</strong> ' + escHtml(err.message) + '</div>';
+      }
+    }
+  }
+
+  async function attachExistingThumbnailDraft(draftId) {
     const draft = getCurrentProjectThumbnailDrafts().find(item => item.draft_id === draftId);
-    if (!draft) return;
-    _selectedReuseThumbnailDraftId = draftId;
+    if (!draft) {
+      alert('That thumbnail is no longer available.');
+      return;
+    }
     try {
       const blob = await renderThumbnailDraftToBlob(draft);
-      if (thumbnailBlobUrl) URL.revokeObjectURL(thumbnailBlobUrl);
-      thumbnailBlob = blob;
-      thumbnailBlobUrl = URL.createObjectURL(blob);
-      setThumbPreviewRatio(draft.target_format || 'instagram');
-      setExportThumbnailPreview(thumbnailBlobUrl, 'Using saved project thumbnail draft');
-      renderExportThumbnailChoices();
+      await attachThumbnailBlobToSavedClip(blob, 'reuse_existing', draftId);
     } catch (err) {
       alert(err.message);
     }
   }
 
-  function openThumbnailComposerForExport() {
-    document.getElementById('dialog-export').close();
+  function openThumbnailComposerForSavedClip() {
+    document.getElementById('dialog-post-save-thumbnail')?.close();
+    document.getElementById('dialog-existing-thumbnails')?.close();
     openThumbDialog();
+  }
+
+  function skipThumbnailForNow() {
+    document.getElementById('dialog-post-save-thumbnail')?.close();
+    setExportPanelStatus('Clip saved to Dropbox. Thumbnail skipped for now.');
   }
 
   function editExistingThumbnailDraft(draftId) {
     const draft = getCurrentProjectThumbnailDrafts().find(item => item.draft_id === draftId);
     if (!draft) return;
-    document.getElementById('dialog-export').close();
+    document.getElementById('dialog-existing-thumbnails')?.close();
+    document.getElementById('dialog-post-save-thumbnail')?.close();
     _thumbFile = _clipFile;
     _sharedThumbnailEntryPoint = 'clip';
     _sharedThumbnailDraft = cloneDraftForCurrentClip(draft, false);
@@ -5101,7 +5431,8 @@
   function duplicateAndEditThumbnailDraft(draftId) {
     const draft = getCurrentProjectThumbnailDrafts().find(item => item.draft_id === draftId);
     if (!draft) return;
-    document.getElementById('dialog-export').close();
+    document.getElementById('dialog-existing-thumbnails')?.close();
+    document.getElementById('dialog-post-save-thumbnail')?.close();
     _thumbFile = _clipFile;
     _sharedThumbnailEntryPoint = 'clip';
     _sharedThumbnailDraft = cloneDraftForCurrentClip(draft, true);
@@ -5119,101 +5450,12 @@
     dlgGenerateThumbnail();
   }
 
-  function renderExportThumbnailChoices() {
-    const help = document.getElementById('export-thumb-help');
-    const createPanel = document.getElementById('export-thumb-create-panel');
-    const existingPanel = document.getElementById('export-thumb-existing-panel');
-    const list = document.getElementById('export-existing-thumbnails');
-    if (!help || !createPanel || !existingPanel || !list) return;
-
-    document.getElementById('export-thumb-mode-video')?.classList.toggle('active', _exportThumbnailMode === 'video_only');
-    document.getElementById('export-thumb-mode-create')?.classList.toggle('active', _exportThumbnailMode === 'create_new');
-    document.getElementById('export-thumb-mode-existing')?.classList.toggle('active', _exportThumbnailMode === 'reuse_existing');
-
-    createPanel.style.display = _exportThumbnailMode === 'create_new' ? 'block' : 'none';
-    existingPanel.style.display = _exportThumbnailMode === 'reuse_existing' ? 'block' : 'none';
-
-    if (_exportThumbnailMode === 'video_only') {
-      help.textContent = 'Export the edited clip without attaching a thumbnail.';
-      setExportThumbnailPreview('', '');
-    } else if (_exportThumbnailMode === 'create_new') {
-      help.textContent = 'Use the shared thumbnail composer with this clip preloaded, then return here to export.';
-      const hasClipDraft = !!(
-        _sharedThumbnailDraft?.available_frames?.length &&
-        _sharedThumbnailDraft?.source_filename === _clipFile?.name &&
-        _sharedThumbnailDraft?.clip_start === editorInTime &&
-        _sharedThumbnailDraft?.clip_end === editorOutTime
-      );
-      const meta = document.getElementById('export-thumb-create-meta');
-      if (meta) {
-        meta.textContent = hasClipDraft
-          ? 'A clip thumbnail is already prepared. You can export as-is or re-open the composer to keep editing.'
-          : 'Open the shared composer with this clip preloaded.';
-      }
-      if (hasClipDraft && thumbnailBlobUrl) {
-        setExportThumbnailPreview(thumbnailBlobUrl, 'Using current clip thumbnail');
-      } else {
-        setExportThumbnailPreview('', '');
-      }
-    } else {
-      help.textContent = 'Choose an editable thumbnail draft already saved in this project.';
-      const drafts = getCurrentProjectThumbnailDrafts();
-      if (!drafts.length) {
-        list.innerHTML = '<div class="recent-project-empty">No saved thumbnail drafts exist for this source video yet.</div>';
-      } else {
-        list.innerHTML = drafts.map(draft => {
-          const box = (draft.text_boxes || [])[0] || {};
-          const selected = draft.draft_id === _selectedReuseThumbnailDraftId;
-          return (
-            '<div class="recent-project-item" style="' + (selected ? 'border-color: var(--orange); background: var(--orange-tint);' : '') + '">' +
-              '<div class="recent-project-top">' +
-                '<div class="recent-project-name">' + escHtml(box.text || draft.source_filename || 'Thumbnail draft') + '</div>' +
-                '<div class="recent-project-date">' + escHtml(formatProjectDate(draft.saved_at)) + '</div>' +
-              '</div>' +
-              '<div class="recent-project-source">' +
-                'Format: ' + escHtml(draft.target_format || 'instagram') +
-                (draft.clip_start !== null && draft.clip_start !== undefined ? '<br>Clip context: ' + escHtml(formatTime(draft.clip_start)) + ' - ' + escHtml(formatTime(draft.clip_end || draft.clip_start)) : '') +
-              '</div>' +
-              '<div class="recent-project-actions">' +
-                '<button type="button" class="btn-ghost btn-sm" onclick="applyReuseThumbnailDraft(\'' + escHtml(draft.draft_id) + '\')">Use This Thumbnail</button>' +
-                '<button type="button" class="btn-ghost btn-sm" onclick="editExistingThumbnailDraft(\'' + escHtml(draft.draft_id) + '\')">Edit</button>' +
-                '<button type="button" class="btn-ghost btn-sm" onclick="duplicateAndEditThumbnailDraft(\'' + escHtml(draft.draft_id) + '\')">Duplicate &amp; Edit</button>' +
-              '</div>' +
-            '</div>'
-          );
-        }).join('');
-      }
-      if (_selectedReuseThumbnailDraftId && thumbnailBlobUrl) {
-        setExportThumbnailPreview(thumbnailBlobUrl, 'Using saved project thumbnail draft');
-      } else {
-        setExportThumbnailPreview('', '');
-      }
-    }
-  }
-
-  function setExportThumbnailMode(mode) {
-    _exportThumbnailMode = mode;
-    if (mode !== 'reuse_existing') {
-      _selectedReuseThumbnailDraftId = null;
-    }
-    renderExportThumbnailChoices();
-  }
-
   function openDoneEditingModal() {
     openExportFormDialog();
   }
 
-  function skipToExport() {
-    document.getElementById('modal-pre-export').close();
-    _exportThumbnailMode = 'video_only';
-    openExportFormDialog();
-  }
-
   function openThumbDialog() {
-    const preExport = document.getElementById('modal-pre-export');
-    if (preExport?.open) preExport.close();
-    const exportDialog = document.getElementById('dialog-export');
-    if (exportDialog?.open) exportDialog.close();
+    closeExportFlowDialogs();
     if (!_clipFile) {
       alert('Load a video first.');
       return;
@@ -5798,7 +6040,7 @@
     const b64 = _dlgFrames[_dlgSelectedFrame];
     if (!canvas || !b64) {
       closeThumbDialog();
-      if (_sharedThumbnailEntryPoint === 'clip') openExportFormDialog();
+      if (_sharedThumbnailEntryPoint === 'clip' && !_savedClipExport) openExportFormDialog();
       return;
     }
     syncDraftFromDialogState();
@@ -5819,30 +6061,34 @@
       }
       closeThumbDialog();
       if (_sharedThumbnailEntryPoint === 'clip') {
-        openExportFormDialog();
+        if (_savedClipExport) {
+          attachThumbnailBlobToSavedClip(blob, 'create_new', _sharedThumbnailDraft?.draft_id || '');
+        } else {
+          openExportFormDialog();
+        }
       }
     }, 'image/png');
   }
 
   // ── Export Form Dialog ──
   function openExportFormDialog() {
+    if (!_clipFile) {
+      alert('Load a video first.');
+      return;
+    }
     const baseName = _clipFile ? _clipFile.name.replace(/\.(mp4|mov)$/i, '') : 'clip';
     const startFmt = editorInTime.toFixed(1);
     const endFmt   = editorOutTime.toFixed(1);
-    document.getElementById('export-filename').value = baseName + ' - Clip (' + startFmt + '-' + endFmt + ').mp4';
-    document.getElementById('export-type').value = detectClipType(_clipFile ? _clipFile.name : '');
-    const hasClipDraft = !!(
-      _sharedThumbnailDraft?.available_frames?.length &&
-      _sharedThumbnailDraft?.source_filename === _clipFile?.name &&
-      _sharedThumbnailDraft?.clip_start === editorInTime &&
-      _sharedThumbnailDraft?.clip_end === editorOutTime
-    );
-    _exportThumbnailMode = hasClipDraft ? 'create_new' : 'video_only';
-    _selectedReuseThumbnailDraftId = null;
-    document.getElementById('export-dialog-status').style.display = 'none';
-    document.getElementById('btn-export-save').disabled = false;
-    renderExportThumbnailChoices();
-    document.getElementById('dialog-export').showModal();
+    document.getElementById('flow-export-filename').value = baseName + ' - Clip (' + startFmt + '-' + endFmt + ').mp4';
+    document.getElementById('flow-export-type').value = detectClipType(_clipFile ? _clipFile.name : '');
+    document.getElementById('export-flow-status').style.display = 'none';
+    document.getElementById('export-folder-result').innerHTML = '';
+    document.getElementById('export-folder-selected').style.display = 'none';
+    document.getElementById('btn-save-clip-folder').disabled = true;
+    _selectedExportFolder = '';
+    _lastFolderLookup = null;
+    document.getElementById('dialog-export-flow').showModal();
+    lookupExportFolder();
   }
 
   function detectClipType(filename) {
@@ -5856,44 +6102,13 @@
 
   async function doExport() {
     if (!_clipFile) { alert('No video loaded.'); return; }
-    const filename = document.getElementById('export-filename').value.trim() || 'clip.mp4';
-    const clipType = document.getElementById('export-type').value;
-    const statusEl = document.getElementById('export-dialog-status');
-    const btn      = document.getElementById('btn-export-save');
-    let exportThumbnailBlob = null;
-
-    if (_exportThumbnailMode === 'create_new') {
-      if (thumbnailBlob) {
-        exportThumbnailBlob = thumbnailBlob;
-      } else if (_sharedThumbnailDraft?.available_frames?.length) {
-        try {
-          exportThumbnailBlob = await renderThumbnailDraftToBlob(_sharedThumbnailDraft);
-        } catch (err) {
-          alert(err.message);
-          return;
-        }
-      } else {
-        alert('Open the shared composer and create a thumbnail before exporting with a thumbnail.');
-        return;
-      }
-    }
-
-    if (_exportThumbnailMode === 'reuse_existing') {
-      if (!_selectedReuseThumbnailDraftId) {
-        alert('Choose an existing project thumbnail before exporting.');
-        return;
-      }
-      const draft = getCurrentProjectThumbnailDrafts().find(item => item.draft_id === _selectedReuseThumbnailDraftId);
-      if (!draft) {
-        alert('That project thumbnail draft is no longer available.');
-        return;
-      }
-      try {
-        exportThumbnailBlob = await renderThumbnailDraftToBlob(draft);
-      } catch (err) {
-        alert(err.message);
-        return;
-      }
+    const filename = document.getElementById('flow-export-filename').value.trim() || 'clip.mp4';
+    const clipType = document.getElementById('flow-export-type').value;
+    const statusEl = document.getElementById('export-flow-status');
+    const btn      = document.getElementById('btn-save-clip-folder');
+    if (!_selectedExportFolder) {
+      alert('Choose or create a folder before saving the clip.');
+      return;
     }
 
     btn.disabled = true;
@@ -5916,6 +6131,7 @@
     form.append('endtime', editorOutTime);
     form.append('suggested_name', filename);
     form.append('clip_type', clipType);
+    form.append('target_folder', _selectedExportFolder);
     if (_editCandidate && _editCandidate.hook_line)
       form.append('hook_line', _editCandidate.hook_line);
     if (_wordsData) {
@@ -5923,9 +6139,6 @@
         .filter(w => (w.start ?? 0) < editorOutTime && (w.end ?? w.start ?? 0) >= editorInTime)
         .map(w => w.word).join(' ').trim();
       if (clipWords) form.append('clip_transcript', clipWords);
-    }
-    if (exportThumbnailBlob) {
-      form.append('thumbnail', exportThumbnailBlob, filename.replace(/\.mp4$/i, '') + ' - Thumbnail.png');
     }
 
     try {
@@ -5935,14 +6148,21 @@
       if (!res.ok || !data.success) {
         throw new Error(data.error || 'Export failed \u2014 check backend logs');
       }
-      // Close dialog, show success banner in the edit panel
-      document.getElementById('dialog-export').close();
+      document.getElementById('dialog-export-flow').close();
+      _savedClipExport = {
+        filename,
+        clip_type: clipType,
+        folder_name: data.folder_name || _selectedExportFolder,
+        clip_dropbox_url: data.clip_dropbox_url,
+        airtable_record_id: data.airtable_record_id,
+        airtable_url: data.airtable_url,
+      };
       const panelStatus = document.getElementById('export-status');
       panelStatus.style.display = 'block';
       panelStatus.innerHTML =
         '<div class="export-success">' +
           '<svg class="export-success-icon" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>' +
-          '<div class="export-success-text"><strong>Clip saved to Dropbox!</strong><span>' + escHtml(filename) + '</span></div>' +
+          '<div class="export-success-text"><strong>Clip saved to Dropbox!</strong><span>' + escHtml(filename) + ' in ' + escHtml(_savedClipExport.folder_name) + '</span></div>' +
           (data.airtable_url
             ? '<a href="' + escHtml(data.airtable_url) + '" target="_blank" rel="noopener" class="btn btn-sm">View in Airtable \u2192</a>'
             : '') +
@@ -5951,10 +6171,11 @@
         filename,
         clip_type: clipType,
         clip_dropbox_url: data.clip_dropbox_url,
-        thumbnail_dropbox_url: data.thumbnail_dropbox_url,
-        thumbnail_mode: _exportThumbnailMode,
-        thumbnail_draft_id: _exportThumbnailMode === 'reuse_existing' ? _selectedReuseThumbnailDraftId : (_sharedThumbnailDraft?.draft_id || ''),
+        thumbnail_dropbox_url: '',
+        thumbnail_mode: 'video_only',
+        thumbnail_draft_id: '',
       });
+      openPostSaveThumbnailDialog();
     } catch (err) {
       clearTimeout(t1); clearTimeout(t2);
       statusEl.innerHTML =
@@ -6098,8 +6319,8 @@
      DIALOGS
      ══════════════════════════════════════════ -->
 
-<!-- Confirm: Before you export -->
-<dialog id="modal-pre-export">
+<!-- Save Clip Dialog -->
+<dialog id="dialog-legacy-pre-export" hidden>
   <div class="dialog-body" style="padding:36px 32px;">
     <div class="modal-icon">🎬</div>
     <div class="modal-heading">Before you export&hellip;</div>
@@ -6372,6 +6593,74 @@
       </svg>
       Export &amp; Save
     </button>
+  </div>
+</dialog>
+
+<dialog id="dialog-export-flow">
+  <div class="dialog-header">
+    <h2>Save Clip</h2>
+  </div>
+  <div class="dialog-body">
+    <p class="export-flow-intro">We’ll first find the right project folder in <strong>Social Media Clips</strong>, then save the clip there. Thumbnail choices come after the clip is already saved.</p>
+    <div class="export-form-row">
+      <label class="export-form-label" for="flow-export-filename">Clip Name</label>
+      <input type="text" id="flow-export-filename" class="export-form-input" placeholder="clip-filename.mp4" />
+    </div>
+    <div class="export-form-row">
+      <label class="export-form-label" for="flow-export-type">Clip Type</label>
+      <select id="flow-export-type" class="export-form-select">
+        <option value="Podcast Clip">Podcast Clip</option>
+        <option value="3MB Clip">3MB Clip</option>
+        <option value="TheoEd Clip">TheoEd Clip</option>
+        <option value="Unstuck Refl. Clip">Unstuck Refl. Clip</option>
+        <option value="Unstuck Story Clip">Unstuck Story Clip</option>
+        <option value="Other">Other</option>
+      </select>
+    </div>
+    <div id="export-flow-status" style="display:none;margin-bottom:14px;"></div>
+    <div id="export-folder-result"></div>
+    <div id="export-folder-selected" class="export-folder-selected" style="display:none;"></div>
+  </div>
+  <div class="dialog-footer">
+    <button class="btn-ghost" onclick="document.getElementById('dialog-export-flow').close()">Cancel</button>
+    <button class="btn" id="btn-save-clip-folder" onclick="doExport()" disabled>
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+        <polyline points="7 10 12 15 17 10"/>
+        <line x1="12" y1="15" x2="12" y2="3"/>
+      </svg>
+      Save Clip
+    </button>
+  </div>
+</dialog>
+
+<dialog id="dialog-post-save-thumbnail">
+  <div class="dialog-header">
+    <h2>Thumbnail Next Step</h2>
+  </div>
+  <div class="dialog-body">
+    <div class="modal-heading" style="text-align:left;margin-bottom:10px;">Add a thumbnail?</div>
+    <p class="modal-body-text" id="post-save-thumbnail-summary" style="text-align:left;">Your clip is saved. Do you want to add a thumbnail now?</p>
+    <p class="post-save-note" id="post-save-thumbnail-note"></p>
+    <div id="post-save-thumbnail-status" style="display:none;margin-top:14px;"></div>
+    <div class="post-save-actions">
+      <button class="btn-ghost" type="button" onclick="skipThumbnailForNow()">Skip For Now</button>
+      <button class="btn-ghost" type="button" id="btn-post-save-existing" onclick="openExistingThumbnailDialog()">Use Existing Thumbnail</button>
+      <button class="btn" type="button" onclick="openThumbnailComposerForSavedClip()">Create New Thumbnail</button>
+    </div>
+  </div>
+</dialog>
+
+<dialog id="dialog-existing-thumbnails">
+  <div class="dialog-header">
+    <h2>Choose Existing Thumbnail</h2>
+  </div>
+  <div class="dialog-body">
+    <p class="export-flow-intro">These saved thumbnails belong to the current source-video project. Pick one to reuse, or open one to edit before attaching it.</p>
+    <div id="post-save-existing-thumbnails" style="display:flex;flex-direction:column;gap:10px;"></div>
+  </div>
+  <div class="dialog-footer">
+    <button class="btn-ghost" onclick="document.getElementById('dialog-existing-thumbnails').close(); document.getElementById('dialog-post-save-thumbnail').showModal();">Back</button>
   </div>
 </dialog>
 

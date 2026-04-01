@@ -628,6 +628,82 @@ def create_project_record(project_id, filename, source_path):
     }
 
 
+def sanitize_export_folder_name(name):
+    cleaned = re.sub(r'[<>:"/\\|?*]+', ' ', (name or '').strip())
+    cleaned = re.sub(r'\s+', ' ', cleaned).strip().strip('.')
+    return cleaned or 'Untitled Project'
+
+
+def get_social_media_clips_root():
+    clips_root = os.path.join(dropbox_root, 'Social Media Clips')
+    os.makedirs(clips_root, exist_ok=True)
+    return clips_root
+
+
+def list_social_media_clip_folders():
+    clips_root = get_social_media_clips_root()
+    try:
+        names = [
+            name for name in os.listdir(clips_root)
+            if os.path.isdir(os.path.join(clips_root, name))
+        ]
+    except FileNotFoundError:
+        return []
+    return sorted(names, key=lambda value: value.lower())
+
+
+def find_matching_social_media_folder(project_name='', source_filename=''):
+    available = list_social_media_clip_folders()
+    by_lower = {name.lower(): name for name in available}
+    candidates = []
+    for value in [
+        sanitize_export_folder_name(project_name),
+        sanitize_export_folder_name(derive_project_name(source_filename)),
+        sanitize_export_folder_name(bare_stem(os.path.basename(source_filename or ''))),
+    ]:
+        if value and value.lower() not in {item.lower() for item in candidates}:
+            candidates.append(value)
+
+    for candidate in candidates:
+        matched = by_lower.get(candidate.lower())
+        if matched:
+            return matched, available
+    return None, available
+
+
+def get_dropbox_client():
+    import dropbox as dbx_module
+
+    creds_path = os.path.join(dropbox_root, 'Scripts', 'dropbox_credentials.json')
+    with open(creds_path, 'r', encoding='utf-8') as handle:
+        creds = json.load(handle)
+    return dbx_module.Dropbox(
+        oauth2_refresh_token=creds['refresh_token'],
+        app_key=creds.get('app_key') or creds.get('appkey'),
+        app_secret=creds.get('app_secret') or creds.get('appsecret'),
+    )
+
+
+def get_or_create_shared_link(dbx, dbx_path):
+    import dropbox as dbx_module
+
+    try:
+        result = dbx.sharing_create_shared_link_with_settings(dbx_path)
+        return result.url
+    except dbx_module.exceptions.ApiError:
+        links = dbx.sharing_list_shared_links(path=dbx_path)
+        if links.links:
+            return links.links[0].url
+        return None
+
+
+def build_social_media_dropbox_path(folder_name, filename):
+    return '/Social Media Clips/' + '/'.join([
+        sanitize_export_folder_name(folder_name).replace('\\', '/'),
+        filename.replace('\\', '/'),
+    ])
+
+
 def resolve_project_for_source(filename='', source_path=None):
     clean_filename = (filename or '').strip()
     resolved_path = (source_path or '').strip() or video_path_cache.get(clean_filename)
@@ -793,6 +869,41 @@ def update_project():
         return jsonify({'project': project, 'summary': summarize_project(project)})
     except Exception as exc:
         logger.exception('[projects] Failed to update project')
+        return jsonify({'error': str(exc)}), 500
+
+
+@app.route('/project_export_folder/check', methods=['POST'])
+def check_project_export_folder():
+    try:
+        data = request.get_json(force=True) or {}
+        project_name = (data.get('project_name') or '').strip()
+        source_filename = (data.get('source_filename') or '').strip()
+        suggested_folder_name = sanitize_export_folder_name(
+            project_name or derive_project_name(source_filename)
+        )
+        matched_folder, available_folders = find_matching_social_media_folder(project_name, source_filename)
+        return jsonify({
+            'suggested_folder_name': suggested_folder_name,
+            'folder_exists': bool(matched_folder),
+            'matched_folder_name': matched_folder,
+            'available_folders': available_folders[:200],
+        })
+    except Exception as exc:
+        logger.exception('[export] Failed to check project folder')
+        return jsonify({'error': str(exc)}), 500
+
+
+@app.route('/project_export_folder/create', methods=['POST'])
+def create_project_export_folder():
+    try:
+        data = request.get_json(force=True) or {}
+        folder_name = sanitize_export_folder_name(data.get('folder_name'))
+        folder_path = os.path.join(get_social_media_clips_root(), folder_name)
+        os.makedirs(folder_path, exist_ok=True)
+        logger.info('[export] Ensured project folder exists: %s', folder_name)
+        return jsonify({'folder_name': folder_name})
+    except Exception as exc:
+        logger.exception('[export] Failed to create project folder')
         return jsonify({'error': str(exc)}), 500
 
 
@@ -1483,6 +1594,7 @@ def export_clip():
         hook_line       = request.form.get("hook_line",       "")
         clip_transcript = request.form.get("clip_transcript", "")
         item_code       = request.form.get("item_code",       "")
+        target_folder   = sanitize_export_folder_name(request.form.get("target_folder", ""))
     except (ValueError, TypeError) as e:
         return jsonify({"error": f"Invalid parameters: {e}"}), 400
 
@@ -1494,9 +1606,10 @@ def export_clip():
     # Normalise output filename to .mp4
     output_name = suggested_name if suggested_name.lower().endswith(".mp4") else suggested_name + ".mp4"
     base_name   = os.path.splitext(output_name)[0]
+    folder_name = target_folder or sanitize_export_folder_name(base_name)
 
-    # Destination: ~/Dropbox/Social Media Clips/
-    clips_folder = os.path.join(dropbox_root, "Social Media Clips")
+    # Destination: ~/Dropbox/Social Media Clips/<source-video project>/
+    clips_folder = os.path.join(get_social_media_clips_root(), folder_name)
     os.makedirs(clips_folder, exist_ok=True)
     output_path  = os.path.join(clips_folder, output_name)
 
@@ -1540,7 +1653,7 @@ def export_clip():
             thumb_name       = base_name + " - Thumbnail.png"
             thumb_local_path = os.path.join(clips_folder, thumb_name)
             thumbnail_file.save(thumb_local_path)
-            thumb_dbx_path   = "/Social Media Clips/" + thumb_name
+            thumb_dbx_path   = build_social_media_dropbox_path(folder_name, thumb_name)
 
     finally:
         shutil.rmtree(tmp_dir, ignore_errors=True)
@@ -1549,30 +1662,10 @@ def export_clip():
     clip_url  = None
     thumb_url = None
     try:
-        creds_path = os.path.join(dropbox_root, "Scripts", "dropbox_credentials.json")
-        with open(creds_path, "r") as f:
-            creds = json.load(f)
-
-        dbx = dbx_module.Dropbox(
-            oauth2_refresh_token=creds["refresh_token"],
-            app_key=creds.get("app_key") or creds.get("appkey"),
-            app_secret=creds.get("app_secret") or creds.get("appsecret"),
-        )
-
-        def get_shared_link(dbx_path):
-            try:
-                result = dbx.sharing_create_shared_link_with_settings(dbx_path)
-                return result.url
-            except dbx_module.exceptions.ApiError:
-                # Link already exists — retrieve it
-                links = dbx.sharing_list_shared_links(path=dbx_path)
-                if links.links:
-                    return links.links[0].url
-                return None
-
-        clip_url  = get_shared_link("/Social Media Clips/" + output_name)
+        dbx = get_dropbox_client()
+        clip_url  = get_or_create_shared_link(dbx, build_social_media_dropbox_path(folder_name, output_name))
         if thumb_dbx_path:
-            thumb_url = get_shared_link(thumb_dbx_path)
+            thumb_url = get_or_create_shared_link(dbx, thumb_dbx_path)
 
     except FileNotFoundError:
         logger.warning("dropbox_credentials.json not found; skipping Dropbox link generation")
@@ -1641,10 +1734,74 @@ def export_clip():
     return jsonify({
         "success":               True,
         "output_filename":       output_name,
+        "folder_name":           folder_name,
         "clip_dropbox_url":      clip_url,
         "thumbnail_dropbox_url": thumb_url,
         "airtable_record_id":    airtable_record_id,
         "airtable_url":          airtable_url,
+    })
+
+
+@app.route("/export_thumbnail", methods=["POST"])
+def export_thumbnail():
+    import urllib.request
+
+    thumbnail_file = request.files.get("thumbnail")
+    if not thumbnail_file or not thumbnail_file.filename:
+        return jsonify({"error": "No thumbnail provided"}), 400
+
+    suggested_name = request.form.get("suggested_name", "clip.mp4")
+    folder_name = sanitize_export_folder_name(request.form.get("target_folder", ""))
+    airtable_record_id = (request.form.get("airtable_record_id") or "").strip()
+    if not folder_name:
+        return jsonify({"error": "target_folder is required"}), 400
+
+    output_name = suggested_name if suggested_name.lower().endswith(".mp4") else suggested_name + ".mp4"
+    base_name = os.path.splitext(output_name)[0]
+    thumb_name = base_name + " - Thumbnail.png"
+    clips_folder = os.path.join(get_social_media_clips_root(), folder_name)
+    os.makedirs(clips_folder, exist_ok=True)
+    thumb_local_path = os.path.join(clips_folder, thumb_name)
+    thumbnail_file.save(thumb_local_path)
+    thumb_dbx_path = build_social_media_dropbox_path(folder_name, thumb_name)
+
+    thumb_url = None
+    try:
+        dbx = get_dropbox_client()
+        thumb_url = get_or_create_shared_link(dbx, thumb_dbx_path)
+    except FileNotFoundError:
+        logger.warning("dropbox_credentials.json not found; skipping Dropbox link generation")
+    except Exception as exc:
+        logger.warning("Dropbox error during thumbnail shared-link generation: %s", exc)
+
+    if airtable_record_id and thumb_url:
+        api_key = read_api_key()
+        if api_key:
+            payload = json.dumps({
+                "fields": {
+                    "Thumbnail - Dropbox URL": thumb_url,
+                }
+            }).encode("utf-8")
+            at_req = urllib.request.Request(
+                "https://api.airtable.com/v0/appiL0Z2RilcAT2Cw/tbll0KDqmrAlwQuAx/" + airtable_record_id,
+                data=payload,
+                headers={
+                    "Authorization": "Bearer " + api_key,
+                    "Content-Type": "application/json",
+                },
+                method="PATCH",
+            )
+            try:
+                with urllib.request.urlopen(at_req, timeout=15):
+                    pass
+            except Exception as exc:
+                logger.warning("Airtable thumbnail update failed: %s", exc)
+
+    return jsonify({
+        "success": True,
+        "thumbnail_filename": thumb_name,
+        "thumbnail_dropbox_url": thumb_url,
+        "folder_name": folder_name,
     })
 
 
