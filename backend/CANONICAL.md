@@ -1,7 +1,7 @@
 # CANONICAL.md - Foundry Video Editor Backend
 # Source of truth for critical backend and thumbnail behavior.
 # Every editing session must compare server.py to this file before changing fragile paths.
-# Last updated: March 31, 2026
+# Last updated: April 1, 2026
 #
 # HOW TO USE THIS FILE:
 # 1. Read it before editing server.py or launcher/launcher.py.
@@ -416,5 +416,66 @@ Canonical backend/project requirements:
 - `thumbnail_drafts` remain the source of reusable thumbnail state for export handoff.
 - `exports` may record `thumbnail_mode` and `thumbnail_draft_id` when a thumbnail is attached during clip export.
 - Clip export must still keep Dropbox writes intentional: no final thumbnail or clip file should be written until the user confirms export.
+
+Regression risk: High.
+
+---
+
+## 18. Live thumbnail editor behavior
+
+Canonical product rules:
+- The shared thumbnail composer now behaves like a live editor, not a pick-a-style wizard.
+- The editor keeps AI frame suggestions and AI title suggestions, but final composition is manual and reusable.
+- Preview and edit are effectively merged: users edit directly on top of the thumbnail image.
+- The Foundry logo is optional. If `TCF_Logo-Orange.png` exists in the repo/frontend root, it may be placed and resized as part of the editable draft.
+
+Canonical frontend requirements in `index.html`:
+- After `/thumbnail` finishes, the shared composer should open straight into the live editor state.
+- The editor canvas must show the selected source frame plus the active layout treatment immediately.
+- Text overlays must be visible on top of the image while editing and draggable in the live preview.
+- The editor must support multiple text boxes in the saved draft model and surface basic add/select/remove controls in the UI.
+- Supported editable text-box controls in this phase are:
+  - text content
+  - position
+  - font family
+  - font size
+  - text color
+  - background color
+  - background opacity
+  - shadow toggle
+- Supported layout starters in this phase are:
+  - `lower_third`
+  - `centered_headline`
+  - `top_banner`
+  - `bottom_banner`
+  - `minimal_text`
+- Layout starters are editable starting points, not locked templates.
+- The editor must keep format switching (`instagram`, `youtube_shorts`) compatible with the live draft and preserve positions proportionally where possible.
+
+Canonical editable thumbnail draft model updates:
+- `style` now represents the starter layout id above. Older values (`warm_bar`, `bold_corner`, `kinetic_slash`) should continue mapping safely to the newer layout ids.
+- Each `text_box` should now preserve:
+  - `id`
+  - `text`
+  - `x` / `y`
+  - `width`
+  - `align`
+  - `font_family`
+  - `font_size`
+  - `color`
+  - `background_color`
+  - `background_opacity`
+  - `shadow`
+- `logo` should now preserve:
+  - `enabled`
+  - `placement`
+  - `asset`
+  - `x` / `y`
+  - `width`
+
+Known limitations for this phase:
+- Text boxes are draggable but not free-resized by drag handles yet.
+- Logo placement is draggable and size-adjustable, but there is no full transform/rotation tool yet.
+- The live preview uses HTML overlay layers on top of the canvas for editing, then re-renders the final PNG from the saved draft data on export/save.
 
 Regression risk: High.

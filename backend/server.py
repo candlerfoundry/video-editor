@@ -496,6 +496,8 @@ def normalize_text_box(item, fallback_id='text-1'):
         'x': item.get('x'),
         'y': item.get('y'),
         'shadow': bool(item.get('shadow', True)),
+        'align': item.get('align') or 'center',
+        'width': item.get('width'),
     }
 
 
@@ -540,7 +542,7 @@ def normalize_thumbnail_draft(payload):
         'source_path': payload.get('source_path'),
         'clip_start': payload.get('clip_start'),
         'clip_end': payload.get('clip_end'),
-        'style': payload.get('style') or 'warm_bar',
+        'style': payload.get('style') or 'lower_third',
         'target_format': payload.get('target_format') or 'instagram',
         'selected_frame_index': int(payload.get('selected_frame_index') or 0),
         'selected_text_box_id': selected_text_box_id,
@@ -549,6 +551,9 @@ def normalize_thumbnail_draft(payload):
             'enabled': bool((payload.get('logo') or {}).get('enabled', False)),
             'placement': (payload.get('logo') or {}).get('placement') or 'top_right',
             'asset': (payload.get('logo') or {}).get('asset'),
+            'x': (payload.get('logo') or {}).get('x'),
+            'y': (payload.get('logo') or {}).get('y'),
+            'width': (payload.get('logo') or {}).get('width'),
         },
         'suggested_titles': suggested_titles[:12],
         'available_frames': available_frames[:12],
