@@ -1489,7 +1489,6 @@
     }
     #dialog-export-flow,
     #dialog-post-save-thumbnail,
-    #dialog-existing-thumbnails,
     #dialog-project-resume { max-width: min(720px, 95vw); }
     .modal-icon { font-size: 38px; text-align: center; margin-bottom: 12px; }
     .modal-heading {
@@ -1606,6 +1605,65 @@
       font-size: 13px;
       color: var(--text-2);
       line-height: 1.6;
+    }
+    .post-save-thumbnail-list {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      margin-top: 16px;
+    }
+    .post-save-thumb-card {
+      display: grid;
+      grid-template-columns: minmax(140px, 180px) 1fr;
+      gap: 14px;
+      padding: 14px;
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      background: var(--surface);
+    }
+    .post-save-thumb-preview-wrap {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .post-save-thumb-preview {
+      width: 100%;
+      min-height: 220px;
+      border-radius: 10px;
+      border: 1px solid var(--border);
+      background: #111;
+      color: #fff;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 12px;
+      text-align: center;
+      overflow: hidden;
+    }
+    .post-save-thumb-preview.loading {
+      background: #2A2A2A;
+      color: rgba(255,255,255,0.72);
+    }
+    .post-save-thumb-preview img {
+      display: block;
+      width: 100%;
+      height: auto;
+      object-fit: contain;
+    }
+    .post-save-thumb-meta {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      min-width: 0;
+    }
+    @media (max-width: 720px) {
+      .post-save-thumb-card {
+        grid-template-columns: 1fr;
+      }
+      .post-save-thumb-preview {
+        max-width: 220px;
+        margin: 0 auto;
+      }
     }
     /* Thumbnail preview strip in clip panel */
     #thumb-preview-panel {
@@ -5813,10 +5871,16 @@
     return String(base || 'Source Video').trim();
   }
 
+  function formatExportFolderLabel(relativeFolder) {
+    return String(relativeFolder || '')
+      .split(/[\\/]+/)
+      .filter(Boolean)
+      .join(' > ');
+  }
+
   function closeExportFlowDialogs() {
     document.getElementById('dialog-export-flow')?.close();
     document.getElementById('dialog-post-save-thumbnail')?.close();
-    document.getElementById('dialog-existing-thumbnails')?.close();
   }
 
   function setExportPanelStatus(message, isError = false) {
@@ -5843,20 +5907,30 @@
     selected.style.display = 'none';
 
     const suggested = data?.suggested_folder_name || getSuggestedExportFolderName();
+    const suggestedRelative = data?.suggested_relative_folder || suggested;
     const folderFound = !!data?.folder_exists;
+    const inferredParent = data?.suggested_parent_folder || '';
+    const confidence = data?.parent_confidence || 'low';
+    const alternates = Array.isArray(data?.alternate_matches) ? data.alternate_matches : [];
+    const alternateNote = alternates.length
+      ? '<div class="post-save-note" style="margin-top:10px;">We also found another matching folder elsewhere: ' + escHtml(alternates.map(formatExportFolderLabel).join(', ')) + '.</div>'
+      : '';
 
     result.innerHTML =
       '<div class="export-folder-card">' +
-        '<h3>' + (folderFound ? 'Project folder found' : 'Project folder needed') + '</h3>' +
-        '<div class="export-folder-name">' + escHtml(folderFound ? data.matched_folder_name : suggested) + '</div>' +
+        '<h3>' + (folderFound ? 'Project folder found' : 'Choose save folder') + '</h3>' +
+        '<div class="export-folder-name">' + escHtml(folderFound ? formatExportFolderLabel(data.matched_relative_folder || data.matched_folder_name || '') : formatExportFolderLabel(suggestedRelative)) + '</div>' +
         '<div class="export-folder-status">' +
           (folderFound
-            ? 'We found a matching folder for this source video inside Social Media Clips. Confirm it before saving the clip.'
-            : 'No matching folder was found for this source video yet. Create the suggested folder or choose another existing folder before saving.') +
+            ? 'We found an existing source-video folder in Social Media Clips. Confirm it before saving the clip.'
+            : confidence === 'low'
+              ? 'We could not confidently place this source video. Choose an existing folder or create the suggested one before saving.'
+              : 'We are ready to create the source-video folder under ' + escHtml(inferredParent) + ' if you want to save there.') +
         '</div>' +
+        (folderFound ? alternateNote : '') +
         '<div class="export-folder-actions">' +
           (folderFound
-            ? '<button type="button" class="btn" onclick="confirmExportFolderSelection(decodeURIComponent(\'' + encodeURIComponent(data.matched_folder_name || '') + '\'))">Use This Folder</button>'
+            ? '<button type="button" class="btn" onclick="confirmExportFolderSelection(decodeURIComponent(\'' + encodeURIComponent(data.matched_relative_folder || '') + '\'))">Use This Folder</button>'
             : '<button type="button" class="btn" onclick="createSuggestedExportFolder()">Create "' + escHtml(suggested) + '" Folder</button>') +
           '<button type="button" class="btn-ghost" onclick="lookupExportFolder()">Check Again</button>' +
         '</div>' +
@@ -5874,7 +5948,7 @@
     folders.forEach(name => {
       const option = document.createElement('option');
       option.value = name;
-      option.textContent = name;
+      option.textContent = formatExportFolderLabel(name);
       picker.appendChild(option);
     });
   }
@@ -5885,7 +5959,7 @@
     const saveBtn = document.getElementById('btn-save-clip-folder');
     if (!selected || !saveBtn || !_selectedExportFolder) return;
     selected.style.display = 'block';
-    selected.innerHTML = '<strong>Save folder selected:</strong> ' + escHtml(_selectedExportFolder);
+    selected.innerHTML = '<strong>Save folder selected:</strong> ' + escHtml(formatExportFolderLabel(_selectedExportFolder));
     saveBtn.disabled = false;
   }
 
@@ -5906,10 +5980,20 @@
         body: JSON.stringify({
           project_name: activeProject?.project_name || '',
           source_filename: activeProject?.source_filename || activeProject?.source_video?.filename || (_clipFile?.name || ''),
+          source_path: activeProject?.source_path || activeProject?.source_video?.path || _clipFile?.source_path || '',
+          clip_type: document.getElementById('flow-export-type')?.value || '',
         }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Could not check the Dropbox folder.');
+      if (!data.folder_exists && data.can_create_automatically && data.suggested_relative_folder) {
+        statusEl.innerHTML =
+          '<div style="padding:0 0 4px;">' +
+          '<div class="export-progress-bar"><div class="export-shimmer"></div></div>' +
+          '<p class="export-progress-label">Creating the project folder in Dropbox…</p></div>';
+        await createSuggestedExportFolder(data);
+        return;
+      }
       renderExportFolderLookup(data);
       statusEl.style.display = 'none';
     } catch (err) {
@@ -5917,8 +6001,10 @@
     }
   }
 
-  async function createSuggestedExportFolder() {
-    const suggested = _lastFolderLookup?.suggested_folder_name || getSuggestedExportFolderName();
+  async function createSuggestedExportFolder(lookupData = null) {
+    const lookup = lookupData || _lastFolderLookup || {};
+    const suggested = lookup?.suggested_folder_name || getSuggestedExportFolderName();
+    const relativeFolder = lookup?.suggested_relative_folder || suggested;
     const statusEl = document.getElementById('export-flow-status');
     if (!statusEl) return;
     statusEl.style.display = 'block';
@@ -5930,14 +6016,25 @@
       const res = await fetch(BACKEND + '/project_export_folder/create', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ folder_name: suggested }),
+        body: JSON.stringify({
+          relative_folder: relativeFolder,
+          folder_name: suggested,
+          parent_folder: lookup?.suggested_parent_folder || '',
+        }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Could not create the folder.');
       statusEl.style.display = 'none';
-      confirmExportFolderSelection(data.folder_name);
-      await lookupExportFolder();
-      confirmExportFolderSelection(data.folder_name);
+      confirmExportFolderSelection(data.relative_folder || relativeFolder);
+      const result = document.getElementById('export-folder-result');
+      if (result) {
+        result.innerHTML =
+          '<div class="export-folder-card">' +
+            '<h3>Project folder ready</h3>' +
+            '<div class="export-folder-name">' + escHtml(formatExportFolderLabel(data.relative_folder || relativeFolder)) + '</div>' +
+            '<div class="export-folder-status">We created the source-video folder and selected it for this save.</div>' +
+          '</div>';
+      }
     } catch (err) {
       statusEl.innerHTML = '<div class="export-error"><strong>Folder creation failed:</strong> ' + escHtml(err.message) + '</div>';
     }
@@ -5952,14 +6049,25 @@
     confirmExportFolderSelection(picker.value);
   }
 
-  function openExistingThumbnailDialog() {
-    document.getElementById('dialog-post-save-thumbnail')?.close();
-    renderExistingThumbnailChoices();
-    document.getElementById('dialog-existing-thumbnails')?.showModal();
+  async function renderThumbnailDraftPreviewDataUrl(draft) {
+    const cfg = getThumbTargetConfig(draft?.target_format || 'instagram');
+    const scale = Math.max(0.18, Math.min(0.28, 240 / Math.max(1, cfg.width)));
+    const canvas = document.createElement('canvas');
+    canvas.width = Math.max(216, Math.round(cfg.width * scale));
+    canvas.height = Math.max(270, Math.round(cfg.height * scale));
+    const normalizedDraft = {
+      ...draft,
+      style: normalizeThumbnailLayout(draft?.style || 'lower_third'),
+      text_boxes: ensureDraftTextBoxes(draft?.text_boxes, draft?.style || 'lower_third', draft?.target_format || 'instagram', draft?.title || ''),
+      logo: normalizeThumbnailLogo(draft?.logo, draft?.target_format || 'instagram'),
+    };
+    const rendered = await renderThumbnailDraftToCanvas(canvas, normalizedDraft);
+    if (!rendered) return '';
+    return canvas.toDataURL('image/png');
   }
 
-  function renderExistingThumbnailChoices() {
-    const list = document.getElementById('post-save-existing-thumbnails');
+  async function renderPostSaveThumbnailChoices() {
+    const list = document.getElementById('post-save-thumbnail-choices');
     if (!list) return;
     const drafts = getCurrentProjectThumbnailDrafts();
     if (!drafts.length) {
@@ -5967,42 +6075,63 @@
       return;
     }
 
-    list.innerHTML = drafts.map(draft => {
-      const box = (draft.text_boxes || [])[0] || {};
+    list.innerHTML = drafts.map((draft, index) => {
+      const box = (draft.text_boxes || []).find(item => item?.text) || (draft.text_boxes || [])[0] || {};
+      const previewId = 'post-save-thumb-preview-' + index;
       return (
-        '<div class="recent-project-item">' +
-          '<div class="recent-project-top">' +
+        '<div class="post-save-thumb-card">' +
+          '<div class="post-save-thumb-preview-wrap">' +
+            '<div class="post-save-thumb-preview loading" id="' + previewId + '">Loading preview…</div>' +
+          '</div>' +
+          '<div class="post-save-thumb-meta">' +
             '<div class="recent-project-name">' + escHtml(box.text || draft.source_filename || 'Thumbnail draft') + '</div>' +
             '<div class="recent-project-date">' + escHtml(formatProjectDate(draft.saved_at)) + '</div>' +
-          '</div>' +
-          '<div class="recent-project-source">' +
-            'Format: ' + escHtml(draft.target_format || 'instagram') +
-            (draft.clip_start !== null && draft.clip_start !== undefined ? '<br>Clip context: ' + escHtml(formatTime(draft.clip_start)) + ' - ' + escHtml(formatTime(draft.clip_end || draft.clip_start)) : '') +
-          '</div>' +
-          '<div class="recent-project-actions">' +
-            '<button type="button" class="btn" onclick="attachExistingThumbnailDraft(\'' + escHtml(draft.draft_id) + '\')">Use This Thumbnail</button>' +
-            '<button type="button" class="btn-ghost btn-sm" onclick="editExistingThumbnailDraft(\'' + escHtml(draft.draft_id) + '\')">Edit</button>' +
-            '<button type="button" class="btn-ghost btn-sm" onclick="duplicateAndEditThumbnailDraft(\'' + escHtml(draft.draft_id) + '\')">Duplicate &amp; Edit</button>' +
+            '<div class="recent-project-source">' +
+              escHtml((draft.target_format || 'instagram') === 'youtube_shorts' ? 'YouTube Shorts 9:16' : 'Instagram 4:5') +
+              (draft.clip_start !== null && draft.clip_start !== undefined ? '<br>Clip context: ' + escHtml(formatTime(draft.clip_start)) + ' - ' + escHtml(formatTime(draft.clip_end || draft.clip_start)) : '') +
+            '</div>' +
+            '<div class="recent-project-actions">' +
+              '<button type="button" class="btn" onclick="attachExistingThumbnailDraft(\'' + escHtml(draft.draft_id) + '\')">Use This Thumbnail</button>' +
+              '<button type="button" class="btn-ghost btn-sm" onclick="editExistingThumbnailDraft(\'' + escHtml(draft.draft_id) + '\')">Edit</button>' +
+              '<button type="button" class="btn-ghost btn-sm" onclick="duplicateAndEditThumbnailDraft(\'' + escHtml(draft.draft_id) + '\')">Duplicate &amp; Edit</button>' +
+            '</div>' +
           '</div>' +
         '</div>'
       );
     }).join('');
+
+    await Promise.all(drafts.map(async (draft, index) => {
+      const el = document.getElementById('post-save-thumb-preview-' + index);
+      if (!el) return;
+      try {
+        const dataUrl = await renderThumbnailDraftPreviewDataUrl(draft);
+        if (!dataUrl) {
+          el.textContent = 'Preview unavailable';
+          el.classList.remove('loading');
+          return;
+        }
+        el.innerHTML = '<img src="' + dataUrl + '" alt="Saved thumbnail preview" />';
+        el.classList.remove('loading');
+      } catch (_) {
+        el.textContent = 'Preview unavailable';
+        el.classList.remove('loading');
+      }
+    }));
   }
 
-  function openPostSaveThumbnailDialog() {
+  async function openPostSaveThumbnailDialog() {
     const projectDrafts = getCurrentProjectThumbnailDrafts();
     const summary = document.getElementById('post-save-thumbnail-summary');
     const note = document.getElementById('post-save-thumbnail-note');
-    const useExistingBtn = document.getElementById('btn-post-save-existing');
     if (summary) {
-      summary.textContent = 'Your clip is saved. Do you want to add a thumbnail now?';
+      summary.textContent = 'Your clip is saved. Choose a thumbnail next step whenever you are ready.';
     }
     if (note) {
       note.textContent = projectDrafts.length
-        ? 'We found ' + projectDrafts.length + ' saved thumbnail' + (projectDrafts.length === 1 ? '' : 's') + ' for this source-video project.'
-        : 'There are no saved thumbnails for this source-video project yet, so the next step would be creating one.';
+        ? 'Saved thumbnails for this source video are previewed below so you can reuse, edit, or duplicate one directly.'
+        : 'There are no saved thumbnails for this source video yet, so the next step would be creating one or skipping for now.';
     }
-    if (useExistingBtn) useExistingBtn.disabled = !projectDrafts.length;
+    await renderPostSaveThumbnailChoices();
     document.getElementById('dialog-post-save-thumbnail')?.showModal();
   }
 
@@ -6029,7 +6158,6 @@
       const data = await res.json();
       if (!res.ok || !data.success) throw new Error(data.error || 'Could not save the thumbnail.');
       document.getElementById('dialog-post-save-thumbnail')?.close();
-      document.getElementById('dialog-existing-thumbnails')?.close();
       setExportPanelStatus('Clip and thumbnail saved to Dropbox.');
       await updateProject('export_created', {
         filename: _savedClipExport.filename,
@@ -6064,7 +6192,6 @@
 
   function openThumbnailComposerForSavedClip() {
     document.getElementById('dialog-post-save-thumbnail')?.close();
-    document.getElementById('dialog-existing-thumbnails')?.close();
     openThumbDialog();
   }
 
@@ -6076,7 +6203,6 @@
   function editExistingThumbnailDraft(draftId) {
     const draft = getCurrentProjectThumbnailDrafts().find(item => item.draft_id === draftId);
     if (!draft) return;
-    document.getElementById('dialog-existing-thumbnails')?.close();
     document.getElementById('dialog-post-save-thumbnail')?.close();
     _thumbFile = _clipFile;
     _sharedThumbnailEntryPoint = 'clip';
@@ -6098,7 +6224,6 @@
   function duplicateAndEditThumbnailDraft(draftId) {
     const draft = getCurrentProjectThumbnailDrafts().find(item => item.draft_id === draftId);
     if (!draft) return;
-    document.getElementById('dialog-existing-thumbnails')?.close();
     document.getElementById('dialog-post-save-thumbnail')?.close();
     _thumbFile = _clipFile;
     _sharedThumbnailEntryPoint = 'clip';
@@ -6781,7 +6906,7 @@
     btn.disabled = true;
     statusEl.style.display = 'block';
 
-    const steps = ['Saving clip\u2026', 'Generating Dropbox link\u2026', 'Creating Airtable record\u2026', 'Done!'];
+    const steps = ['Saving clip to Dropbox…', 'Finalizing Dropbox link…', 'Clip saved.'];
     function showStep(i) {
       statusEl.innerHTML =
         '<div style="padding:0 0 4px;">' +
@@ -6830,10 +6955,7 @@
       panelStatus.innerHTML =
         '<div class="export-success">' +
           '<svg class="export-success-icon" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>' +
-          '<div class="export-success-text"><strong>Clip saved to Dropbox!</strong><span>' + escHtml(filename) + ' in ' + escHtml(_savedClipExport.folder_name) + '</span></div>' +
-          (data.airtable_url
-            ? '<a href="' + escHtml(data.airtable_url) + '" target="_blank" rel="noopener" class="btn btn-sm">View in Airtable \u2192</a>'
-            : '') +
+          '<div class="export-success-text"><strong>Clip saved to Dropbox!</strong><span>' + escHtml(filename) + ' in ' + escHtml(formatExportFolderLabel(_savedClipExport.folder_name)) + '</span></div>' +
         '</div>';
       await updateProject('export_created', {
         filename,
@@ -6843,7 +6965,7 @@
         thumbnail_mode: 'video_only',
         thumbnail_draft_id: '',
       });
-      openPostSaveThumbnailDialog();
+      await openPostSaveThumbnailDialog();
     } catch (err) {
       clearTimeout(t1); clearTimeout(t2);
       statusEl.innerHTML =
@@ -7331,25 +7453,12 @@
     <div class="modal-heading" style="text-align:left;margin-bottom:10px;">Add a thumbnail?</div>
     <p class="modal-body-text" id="post-save-thumbnail-summary" style="text-align:left;">Your clip is saved. Do you want to add a thumbnail now?</p>
     <p class="post-save-note" id="post-save-thumbnail-note"></p>
+    <div id="post-save-thumbnail-choices" class="post-save-thumbnail-list"></div>
     <div id="post-save-thumbnail-status" style="display:none;margin-top:14px;"></div>
     <div class="post-save-actions">
       <button class="btn-ghost" type="button" onclick="skipThumbnailForNow()">Skip For Now</button>
-      <button class="btn-ghost" type="button" id="btn-post-save-existing" onclick="openExistingThumbnailDialog()">Use Existing Thumbnail</button>
       <button class="btn" type="button" onclick="openThumbnailComposerForSavedClip()">Create New Thumbnail</button>
     </div>
-  </div>
-</dialog>
-
-<dialog id="dialog-existing-thumbnails">
-  <div class="dialog-header">
-    <h2>Choose Existing Thumbnail</h2>
-  </div>
-  <div class="dialog-body">
-    <p class="export-flow-intro">These saved thumbnails belong to the current source-video project. Pick one to reuse, or open one to edit before attaching it.</p>
-    <div id="post-save-existing-thumbnails" style="display:flex;flex-direction:column;gap:10px;"></div>
-  </div>
-  <div class="dialog-footer">
-    <button class="btn-ghost" onclick="document.getElementById('dialog-existing-thumbnails').close(); document.getElementById('dialog-post-save-thumbnail').showModal();">Back</button>
   </div>
 </dialog>
 

@@ -668,6 +668,60 @@ def get_social_media_clips_root():
     return clips_root
 
 
+SOCIAL_MEDIA_PARENT_RULES = [
+    {
+        'folder': 'Unstuck Clips',
+        'prefixes': ['UNST'],
+        'terms': ['unstuck', 'everyday stories'],
+        'path_terms': ['\\unstuck\\', '/unstuck/'],
+        'clip_types': ['unstuck'],
+    },
+    {
+        'folder': 'TheoEd Clips',
+        'prefixes': ['THEO', 'TED'],
+        'terms': ['theoed', 'theo ed', 'theo-ed'],
+        'path_terms': ['\\theoed\\', '/theoed/'],
+        'clip_types': ['theoed'],
+    },
+    {
+        'folder': 'On Demand Promo',
+        'prefixes': ['OD', 'ODP', 'OND'],
+        'terms': ['on demand', 'promo'],
+        'path_terms': ['\\on demand\\', '/on demand/'],
+        'clip_types': ['promo', 'on demand'],
+    },
+    {
+        'folder': 'Podcast Clips',
+        'prefixes': ['POD'],
+        'terms': ['podcast', 'scholar, unscripted', 'scholar unscripted', 'womanist series'],
+        'path_terms': ['\\podcast\\', '/podcast/'],
+        'clip_types': ['podcast'],
+    },
+]
+
+
+def sanitize_social_media_relative_path(value):
+    parts = re.split(r'[\\/]+', str(value or '').strip())
+    clean_parts = []
+    for part in parts:
+        safe = sanitize_export_folder_name(part)
+        if safe and safe not in {'.', '..'}:
+            clean_parts.append(safe)
+    return '/'.join(clean_parts)
+
+
+def split_social_media_relative_path(value):
+    relative = sanitize_social_media_relative_path(value)
+    return [part for part in relative.split('/') if part]
+
+
+def build_social_media_local_path(relative_folder):
+    path = get_social_media_clips_root()
+    for part in split_social_media_relative_path(relative_folder):
+        path = os.path.join(path, part)
+    return path
+
+
 def list_social_media_clip_folders():
     clips_root = get_social_media_clips_root()
     try:
@@ -680,23 +734,138 @@ def list_social_media_clip_folders():
     return sorted(names, key=lambda value: value.lower())
 
 
-def find_matching_social_media_folder(project_name='', source_filename=''):
-    available = list_social_media_clip_folders()
-    by_lower = {name.lower(): name for name in available}
+def list_social_media_existing_project_folders():
+    clips_root = get_social_media_clips_root()
+    top_level = list_social_media_clip_folders()
+    parent_names = [rule['folder'] for rule in SOCIAL_MEDIA_PARENT_RULES]
+    leaf_folders = []
+
+    for name in top_level:
+        full_path = os.path.join(clips_root, name)
+        if name in parent_names:
+            try:
+                child_names = [
+                    child for child in os.listdir(full_path)
+                    if os.path.isdir(os.path.join(full_path, child))
+                ]
+            except FileNotFoundError:
+                child_names = []
+            for child in child_names:
+                relative = sanitize_social_media_relative_path(os.path.join(name, child))
+                leaf_folders.append({
+                    'relative_path': relative,
+                    'parent_folder': name,
+                    'folder_name': child,
+                    'legacy_root': False,
+                })
+        else:
+            leaf_folders.append({
+                'relative_path': sanitize_social_media_relative_path(name),
+                'parent_folder': '',
+                'folder_name': name,
+                'legacy_root': True,
+            })
+
+    return sorted(
+        leaf_folders,
+        key=lambda item: (
+            item['legacy_root'],
+            item['parent_folder'].lower(),
+            item['folder_name'].lower(),
+        ),
+    )
+
+
+def infer_social_media_parent_folder(project_name='', source_filename='', source_path='', clip_type=''):
+    combined = ' '.join([
+        project_name or '',
+        source_filename or '',
+        clip_type or '',
+    ]).strip()
+    combined_lower = combined.lower()
+    source_path_lower = (source_path or '').lower()
+    stem = bare_stem(os.path.basename(source_filename or project_name or '')).upper()
+    prefix_match = re.match(r'^([A-Z]{2,5})[\s\-_]', stem)
+    prefix = prefix_match.group(1) if prefix_match else ''
+
+    best = None
+    for rule in SOCIAL_MEDIA_PARENT_RULES:
+        score = 0
+        reasons = []
+        if prefix and prefix in rule['prefixes']:
+            score += 10
+            reasons.append(f'code prefix {prefix}')
+        if any(term in combined_lower for term in rule['terms']):
+            score += 5
+            reasons.append('name/context match')
+        if any(term in source_path_lower for term in rule['path_terms']):
+            score += 6
+            reasons.append('source path match')
+        if any(term in (clip_type or '').lower() for term in rule['clip_types']):
+            score += 4
+            reasons.append('clip type match')
+        if score and (best is None or score > best['score']):
+            best = {
+                'folder': rule['folder'],
+                'score': score,
+                'reason': ', '.join(reasons),
+            }
+
+    if best:
+        confidence = 'high' if best['score'] >= 10 else 'medium'
+        return best['folder'], confidence, best['reason']
+
+    return 'Podcast Clips', 'low', 'fallback default'
+
+
+def find_matching_social_media_folder(project_name='', source_filename='', source_path='', clip_type=''):
+    parent_folder, confidence, reason = infer_social_media_parent_folder(
+        project_name=project_name,
+        source_filename=source_filename,
+        source_path=source_path,
+        clip_type=clip_type,
+    )
+    suggested_folder_name = sanitize_export_folder_name(
+        project_name or derive_project_name(source_filename)
+    )
     candidates = []
     for value in [
-        sanitize_export_folder_name(project_name),
+        suggested_folder_name,
         sanitize_export_folder_name(derive_project_name(source_filename)),
         sanitize_export_folder_name(bare_stem(os.path.basename(source_filename or ''))),
     ]:
         if value and value.lower() not in {item.lower() for item in candidates}:
             candidates.append(value)
 
-    for candidate in candidates:
-        matched = by_lower.get(candidate.lower())
-        if matched:
-            return matched, available
-    return None, available
+    existing_folders = list_social_media_existing_project_folders()
+    matched = None
+    alternates = []
+    for folder in existing_folders:
+        folder_name_lower = folder['folder_name'].lower()
+        candidate_match = any(folder_name_lower == candidate.lower() for candidate in candidates)
+        if not candidate_match:
+            continue
+        if (
+            not folder['legacy_root']
+            and folder['parent_folder'].lower() == parent_folder.lower()
+            and matched is None
+        ):
+            matched = folder
+        else:
+            alternates.append(folder)
+
+    return {
+        'suggested_folder_name': suggested_folder_name,
+        'suggested_parent_folder': parent_folder,
+        'suggested_relative_folder': sanitize_social_media_relative_path(
+            os.path.join(parent_folder, suggested_folder_name)
+        ),
+        'parent_confidence': confidence,
+        'parent_reason': reason,
+        'matched_folder': matched,
+        'alternate_matches': alternates,
+        'available_folders': existing_folders[:200],
+    }
 
 
 def get_dropbox_client():
@@ -726,8 +895,9 @@ def get_or_create_shared_link(dbx, dbx_path):
 
 
 def build_social_media_dropbox_path(folder_name, filename):
+    relative_parts = split_social_media_relative_path(folder_name)
     return '/Social Media Clips/' + '/'.join([
-        sanitize_export_folder_name(folder_name).replace('\\', '/'),
+        *(part.replace('\\', '/') for part in relative_parts),
         filename.replace('\\', '/'),
     ])
 
@@ -972,15 +1142,33 @@ def check_project_export_folder():
         data = request.get_json(force=True) or {}
         project_name = (data.get('project_name') or '').strip()
         source_filename = (data.get('source_filename') or '').strip()
-        suggested_folder_name = sanitize_export_folder_name(
-            project_name or derive_project_name(source_filename)
+        source_path = (data.get('source_path') or '').strip()
+        clip_type = (data.get('clip_type') or '').strip()
+        lookup = find_matching_social_media_folder(
+            project_name=project_name,
+            source_filename=source_filename,
+            source_path=source_path,
+            clip_type=clip_type,
         )
-        matched_folder, available_folders = find_matching_social_media_folder(project_name, source_filename)
+        matched = lookup['matched_folder']
+        alternates = lookup['alternate_matches']
         return jsonify({
-            'suggested_folder_name': suggested_folder_name,
-            'folder_exists': bool(matched_folder),
-            'matched_folder_name': matched_folder,
-            'available_folders': available_folders[:200],
+            'suggested_folder_name': lookup['suggested_folder_name'],
+            'suggested_parent_folder': lookup['suggested_parent_folder'],
+            'suggested_relative_folder': lookup['suggested_relative_folder'],
+            'parent_confidence': lookup['parent_confidence'],
+            'parent_reason': lookup['parent_reason'],
+            'folder_exists': bool(matched),
+            'matched_folder_name': matched['folder_name'] if matched else '',
+            'matched_parent_folder': matched['parent_folder'] if matched else '',
+            'matched_relative_folder': matched['relative_path'] if matched else '',
+            'available_folders': [
+                item['relative_path'] for item in lookup['available_folders']
+            ],
+            'alternate_matches': [
+                item['relative_path'] for item in alternates[:20]
+            ],
+            'can_create_automatically': not matched and lookup['parent_confidence'] != 'low',
         })
     except Exception as exc:
         logger.exception('[export] Failed to check project folder')
@@ -991,11 +1179,24 @@ def check_project_export_folder():
 def create_project_export_folder():
     try:
         data = request.get_json(force=True) or {}
-        folder_name = sanitize_export_folder_name(data.get('folder_name'))
-        folder_path = os.path.join(get_social_media_clips_root(), folder_name)
+        relative_folder = sanitize_social_media_relative_path(data.get('relative_folder'))
+        if not relative_folder:
+            folder_name = sanitize_export_folder_name(data.get('folder_name'))
+            parent_folder = sanitize_export_folder_name(data.get('parent_folder'))
+            relative_folder = sanitize_social_media_relative_path(
+                os.path.join(parent_folder, folder_name) if parent_folder else folder_name
+            )
+        parts = split_social_media_relative_path(relative_folder)
+        if not parts:
+            return jsonify({'error': 'relative folder is required'}), 400
+        folder_path = build_social_media_local_path(relative_folder)
         os.makedirs(folder_path, exist_ok=True)
-        logger.info('[export] Ensured project folder exists: %s', folder_name)
-        return jsonify({'folder_name': folder_name})
+        logger.info('[export] Ensured project folder exists: %s', relative_folder)
+        return jsonify({
+            'folder_name': parts[-1],
+            'parent_folder': parts[-2] if len(parts) > 1 else '',
+            'relative_folder': relative_folder,
+        })
     except Exception as exc:
         logger.exception('[export] Failed to create project folder')
         return jsonify({'error': str(exc)}), 500
@@ -1694,7 +1895,7 @@ def export_clip():
         hook_line       = request.form.get("hook_line",       "")
         clip_transcript = request.form.get("clip_transcript", "")
         item_code       = request.form.get("item_code",       "")
-        target_folder   = sanitize_export_folder_name(request.form.get("target_folder", ""))
+        target_folder   = sanitize_social_media_relative_path(request.form.get("target_folder", ""))
     except (ValueError, TypeError) as e:
         return jsonify({"error": f"Invalid parameters: {e}"}), 400
 
@@ -1706,10 +1907,10 @@ def export_clip():
     # Normalise output filename to .mp4
     output_name = suggested_name if suggested_name.lower().endswith(".mp4") else suggested_name + ".mp4"
     base_name   = os.path.splitext(output_name)[0]
-    folder_name = target_folder or sanitize_export_folder_name(base_name)
+    folder_name = target_folder or sanitize_social_media_relative_path(base_name)
 
     # Destination: ~/Dropbox/Social Media Clips/<source-video project>/
-    clips_folder = os.path.join(get_social_media_clips_root(), folder_name)
+    clips_folder = build_social_media_local_path(folder_name)
     os.makedirs(clips_folder, exist_ok=True)
     output_path  = os.path.join(clips_folder, output_name)
 
@@ -1855,7 +2056,7 @@ def export_thumbnail():
         return jsonify({"error": "No thumbnail provided"}), 400
 
     suggested_name = request.form.get("suggested_name", "clip.mp4")
-    folder_name = sanitize_export_folder_name(request.form.get("target_folder", ""))
+    folder_name = sanitize_social_media_relative_path(request.form.get("target_folder", ""))
     airtable_record_id = (request.form.get("airtable_record_id") or "").strip()
     if not folder_name:
         return jsonify({"error": "target_folder is required"}), 400
@@ -1863,7 +2064,7 @@ def export_thumbnail():
     output_name = suggested_name if suggested_name.lower().endswith(".mp4") else suggested_name + ".mp4"
     base_name = os.path.splitext(output_name)[0]
     thumb_name = base_name + " - Thumbnail.png"
-    clips_folder = os.path.join(get_social_media_clips_root(), folder_name)
+    clips_folder = build_social_media_local_path(folder_name)
     os.makedirs(clips_folder, exist_ok=True)
     thumb_local_path = os.path.join(clips_folder, thumb_name)
     thumbnail_file.save(thumb_local_path)

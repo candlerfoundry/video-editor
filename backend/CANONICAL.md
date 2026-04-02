@@ -413,35 +413,39 @@ Canonical product rules:
 - After clip editing, users stay in the clip workflow and move directly into export choices.
 - The `Done Editing - Next` handoff should start a guided save flow, not a single all-in-one export form.
 - The save sequence is now:
-  - check `Social Media Clips` for the source-video project folder
-  - confirm the found folder, or create/choose a folder if none exists
+  - infer the correct parent folder inside `Social Media Clips` from source-video context (`UNST` -> `Unstuck Clips`, `POD` -> `Podcast Clips`, etc.)
+  - check that parent for the source-video project folder
+  - confirm the found folder only when it already existed before the save flow started, or when parent inference is uncertain
+  - if no folder exists and inference is confident, create the suggested source-video folder automatically and keep it selected for the save flow
   - save the clip into that folder
-  - ask about thumbnail handling as a separate follow-up step
+  - ask about thumbnail handling as a separate follow-up step with direct visual draft previews when available
 - Existing thumbnail reuse must still come from project-aware local thumbnail drafts for the same source-video project, not from ad hoc Dropbox image picking.
 - Existing drafts may still be opened for edit or duplicate-and-edit from the post-save thumbnail step.
 
 Canonical frontend requirements in `index.html`:
 - The primary clip handoff button should read `Done Editing - Next`.
 - The initial save dialog should explain that the app is checking the source-video folder inside `Social Media Clips`.
-- If a matching folder exists, the UI should confirm it with the user before saving.
-- If no matching folder exists, the UI should prompt the user to create the suggested folder or choose another existing folder before saving.
+- If a matching folder already exists, the UI should confirm it with the user before saving.
+- If no matching folder exists and the inferred parent is confident, the UI should create/select the suggested source-video folder without bouncing the user through a redundant follow-up confirmation state.
+- If no matching folder exists and the inferred parent is uncertain, the UI should prompt the user to create the suggested folder or choose another existing folder before saving.
 - Thumbnail choices should only appear after the clip save succeeds.
 - `Create New Thumbnail` must launch the shared composer with current clip context preloaded:
   - source video
   - clip start/end
   - candidate frames when already available
   - suggested titles when already available
-- `Use Existing Thumbnail` must list saved project thumbnail drafts for the current source-video project context.
+- The first post-save thumbnail step must preview saved project thumbnail drafts directly in that same screen whenever possible.
+- `Use Existing Thumbnail` must come directly from that first post-save screen and list saved project thumbnail drafts for the current source-video project context without a second redundant chooser dialog.
 - Reusing a saved draft should render a fresh export PNG from the saved editable draft data, not depend on a previously flattened Dropbox image.
 - The post-save thumbnail step should always offer:
   - `Skip For Now`
-  - `Use Existing Thumbnail` when project drafts exist
+  - direct `Use This Thumbnail`, `Edit`, and `Duplicate & Edit` actions when project drafts exist
   - `Create New Thumbnail`
 
 Canonical backend/project requirements:
 - `thumbnail_drafts` remain the source of reusable thumbnail state for export handoff.
 - `server.py` must expose a lightweight folder-check/create flow for `Social Media Clips` project folders.
-- Clip export must save into `Social Media Clips/<project-folder>/` rather than dropping every clip into the root folder.
+- Clip export must save into `Social Media Clips/<parent-folder>/<project-folder>/` for supported parent-folder families rather than dropping every clip into the root folder.
 - Thumbnail attachment after clip save must support saving into the same project folder and, when available, patching the existing Airtable record with the thumbnail Dropbox URL.
 - `exports` may record `thumbnail_mode` and `thumbnail_draft_id` when a thumbnail is attached during clip export.
 - Clip export must still keep Dropbox writes intentional: no final thumbnail or clip file should be written until the user confirms export.
