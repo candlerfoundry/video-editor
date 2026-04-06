@@ -1231,18 +1231,16 @@ def find_json():
         logger.debug('[find_json] Searching folder: %s', video_folder)
         logger.debug('[find_json] Files in folder: %s', os.listdir(video_folder))
 
-        # Search same folder for Words JSON
-        matches = glob.glob(os.path.join(video_folder, '*Transcript (Words).json'))
-        logger.debug('[find_json] Glob matches in same folder: %s', matches)
+        # Search same folder for any .json file
+        matches = [
+            os.path.join(video_folder, f)
+            for f in os.listdir(video_folder)
+            if f.lower().endswith('.json')
+        ]
+        logger.debug('[find_json] .json files in same folder: %s', matches)
 
         if not matches:
-            # Try parent folder one level up
-            parent_folder = os.path.dirname(video_folder)
-            matches = glob.glob(os.path.join(parent_folder, '*Transcript (Words).json'))
-            logger.debug('[find_json] Glob matches in parent folder: %s', matches)
-
-        if not matches:
-            logger.warning('[find_json] No Words JSON found near %s', video_folder)
+            logger.warning('[find_json] No .json file found in %s', video_folder)
             return jsonify({'json_found': False, 'error': 'No transcript found near this video'})
 
         json_path = matches[0]
