@@ -1,7 +1,7 @@
 # CANONICAL.md - Foundry Video Editor Backend
 # Source of truth for critical backend and thumbnail behavior.
 # Every editing session must compare server.py to this file before changing fragile paths.
-# Last updated: April 6, 2026
+# Last updated: April 6, 2026 (session 2)
 #
 # HOW TO USE THIS FILE:
 # 1. Read it before editing server.py or launcher/launcher.py.
@@ -416,44 +416,53 @@ Regression risk: High.
 
 Canonical product rules:
 - After clip editing, users stay in the clip workflow and move directly into export choices.
-- The `Done Editing - Next` handoff should start a guided save flow, not a single all-in-one export form.
-- The save sequence is now:
-  - infer the correct parent folder inside `Social Media Clips` from source-video context (`UNST` -> `Unstuck Clips`, `POD` -> `Podcast Clips`, etc.)
-  - check that parent for the source-video project folder
-  - confirm the found folder only when it already existed before the save flow started, or when parent inference is uncertain
-  - if no folder exists and inference is confident, create the suggested source-video folder automatically and keep it selected for the save flow
-  - save the clip into that folder
-  - ask about thumbnail handling as a separate follow-up step with direct visual draft previews when available
-- Existing thumbnail reuse must still come from project-aware local thumbnail drafts for the same source-video project, not from ad hoc Dropbox image picking.
-- Existing drafts may still be opened for edit or duplicate-and-edit from the post-save thumbnail step.
+- The `Done Editing - Next` handoff opens a single unified save modal (`#dialog-export-flow`).
+- The save modal handles folder confirmation AND thumbnail selection in one place — there is no separate post-save thumbnail dialog in the primary flow.
+- The save sequence is:
+  - infer the correct parent folder inside `Social Media Clips` from source-video context
+  - auto-confirm folder when found (no user click required); show green ✓ notice with folder name
+  - a "Change destination" toggle reveals a dropdown override; dropdown includes "Other — browse all folders…" which calls `/project_export_folder/list_all`
+  - once folder is confirmed, immediately start background thumbnail frame generation and show existing drafts visually
+  - user chooses: "Save without Thumbnail" or selects a frame/draft and clicks "Save with Thumbnail"
+  - thumbnail is attached in the same `doExport()` call, not a second dialog
+- Existing thumbnail reuse must come from project-aware local thumbnail drafts, not ad hoc Dropbox image picking.
 
 Canonical frontend requirements in `index.html`:
-- The primary clip handoff button should read `Done Editing - Next`.
-- The initial save dialog should explain that the app is checking the source-video folder inside `Social Media Clips`.
-- If a matching folder already exists, the UI should confirm it with the user before saving.
-- If no matching folder exists and the inferred parent is confident, the UI should create/select the suggested source-video folder without bouncing the user through a redundant follow-up confirmation state.
-- If no matching folder exists and the inferred parent is uncertain, the UI should prompt the user to create the suggested folder or choose another existing folder before saving.
-- Thumbnail choices should only appear after the clip save succeeds.
-- `Create New Thumbnail` must launch the shared composer with current clip context preloaded:
-  - source video
-  - clip start/end
-  - candidate frames when already available
-  - suggested titles when already available
-- The first post-save thumbnail step must preview saved project thumbnail drafts directly in that same screen whenever possible.
-- `Use Existing Thumbnail` must come directly from that first post-save screen and list saved project thumbnail drafts for the current source-video project context without a second redundant chooser dialog.
-- Reusing a saved draft should render a fresh export PNG from the saved editable draft data, not depend on a previously flattened Dropbox image.
-- The post-save thumbnail step should always offer:
-  - `Skip For Now`
-  - direct `Use This Thumbnail`, `Edit`, and `Duplicate & Edit` actions when project drafts exist
-  - `Create New Thumbnail`
+- The primary clip handoff button reads `Done Editing - Next`.
+- `#dialog-export-flow` is draggable by its `.dialog-header` using CSS `transform: translate()`.
+  - Transform resets to `''` at the start of each `openExportFormDialog()` call so it reopens centered.
+  - Uses `dataset.dragTx` / `dataset.dragTy` to accumulate translation across moves.
+- Folder confirmed state: `renderExportFolderLookup()` auto-calls `confirmExportFolderSelection()` when `data.folder_exists` is true.
+  - No "Use This Folder" button in the primary flow.
+  - "Check Again" button is removed.
+  - Folder change is opt-in via toggle.
+- Thumbnail section (`#export-flow-thumb-section`) appears after folder confirmation:
+  - Shows existing project thumbnail drafts as rendered canvas images with "Use This" and "Edit" buttons.
+  - Simultaneously starts background thumbnail generation via `/thumbnail` → `pollThumbnailJob`.
+  - Generated frames appear in `#export-flow-thumb-frames` frame-grid; double-click any frame to enlarge in a full-screen overlay.
+  - "Pick frame from video" button opens inline scrub panel (`#ef-video-picker`) bounded to clip in/out range; "Use This Frame" captures and injects to front of frame list.
+  - "Edit in detail…" button opens the full `#dialog-thumb` composer with selected frame preloaded.
+  - "Regenerate" button restarts thumbnail job.
+- Footer buttons:
+  - `#btn-save-clip-folder` — "Save without Thumbnail" (ghost), always enabled once folder confirmed, calls `doExport(false)`.
+  - `#btn-save-with-thumb` — "Save with Thumbnail" (primary), hidden until a frame or draft is selected, calls `doExport(true)`.
+- `doExport(withThumbnail)` — if `withThumbnail=true`, attaches selected draft or builds a new lower-third draft from the selected frame and calls `attachThumbnailBlobToSavedClip()` in the same call, then no further thumbnail dialog is shown.
+- `openPostSaveThumbnailDialog()` still exists but is no longer called by the primary save flow.
 
 Canonical backend/project requirements:
 - `thumbnail_drafts` remain the source of reusable thumbnail state for export handoff.
-- `server.py` must expose a lightweight folder-check/create flow for `Social Media Clips` project folders.
-- Clip export must save into `Social Media Clips/<parent-folder>/<project-folder>/` for supported parent-folder families rather than dropping every clip into the root folder.
-- Thumbnail attachment after clip save must support saving into the same project folder and, when available, patching the existing Airtable record with the thumbnail Dropbox URL.
-- `exports` may record `thumbnail_mode` and `thumbnail_draft_id` when a thumbnail is attached during clip export.
-- Clip export must still keep Dropbox writes intentional: no final thumbnail or clip file should be written until the user confirms export.
+- `server.py` must expose `/project_export_folder/check`, `/project_export_folder/create`, and `/project_export_folder/list_all`.
+- `/project_export_folder/list_all` must return `{ "folders": [...] }` — a flat list of all available relative folder paths inside `Social Media Clips`.
+- Clip export must save into `Social Media Clips/<parent-folder>/<project-folder>/`.
+- Thumbnail attachment after clip save must support patching the Airtable record with the thumbnail Dropbox URL.
+- `exports` records `thumbnail_mode` and `thumbnail_draft_id` when a thumbnail is attached.
+- Dropbox writes remain intentional — no file is written until the user clicks a save button.
+
+Canonical state variables in `index.html`:
+- `_efSelectedThumbFrame` — index into `_efThumbFrames`; -1 = none selected.
+- `_efThumbFrames` — base64 frames generated for the export-flow thumbnail section.
+- `_efSelectedDraftId` — draft id if user chose an existing draft.
+- `_efThumbJobPending` — prevents duplicate concurrent thumbnail jobs from the save modal.
 
 Regression risk: High.
 
@@ -462,58 +471,53 @@ Regression risk: High.
 ## 18. Live thumbnail editor behavior
 
 Canonical product rules:
-- The shared thumbnail composer now behaves like a live editor, not a pick-a-style wizard.
+- The shared thumbnail composer behaves as a live editor, not a pick-a-style wizard.
 - The editor keeps AI frame suggestions and AI title suggestions, but final composition is manual and reusable.
-- Preview and edit are effectively merged: users edit directly on top of the thumbnail image.
-- The Foundry logo is optional. If `TCF_Logo-Orange.png` exists in the repo/frontend root, it may be placed and resized as part of the editable draft.
+- Preview and edit are merged: users edit directly on top of the thumbnail image.
+- The Foundry logo, graphic shapes, and emoji elements may all be placed on the canvas as part of the editable draft.
+- Starter layout cards (Lower Third, Centered Headline, etc.) have been removed. Layout style is still stored in the draft for backward-compat but is not surfaced as a chooser UI.
 
 Canonical frontend requirements in `index.html`:
-- After `/thumbnail` finishes, the shared composer should open straight into the live editor state.
-- The editor canvas must show the selected source frame plus the active layout treatment immediately.
-- Text overlays must be visible on top of the image while editing and draggable in the live preview.
-- The editor must support multiple text boxes in the saved draft model and surface basic add/select/remove controls in the UI.
-- Supported editable text-box controls in this phase are:
-  - text content
-  - position
-  - font family
-  - font size
-  - text color
-  - background color
-  - background opacity
-  - shadow toggle
-- Supported layout starters in this phase are:
-  - `lower_third`
-  - `centered_headline`
-  - `top_banner`
-  - `bottom_banner`
-  - `minimal_text`
-- Layout starters are editable starting points, not locked templates.
-- The editor must keep format switching (`instagram`, `youtube_shorts`) compatible with the live draft and preserve positions proportionally where possible.
+- After `/thumbnail` finishes, the shared composer opens straight into the live editor state.
+- The editor canvas shows the selected source frame plus active treatment immediately.
+- A brightness slider (30–200%) adjusts the source frame before drawing; value stored as `draft.brightness`.
+- Text overlays are visible and draggable on top of the image while editing.
+- The editor supports multiple text boxes in the saved draft model with add/select/remove controls.
+- Supported editable text-box controls:
+  - text content, position (x/y), font family, font size, text color, background color, background opacity, shadow toggle
+- A "Design Elements" sidebar panel replaces the Starter Layouts section. It contains:
+  - **Logo** button — toggles the Foundry logo (`TCF_Logo-Orange.png`) onto the canvas; draggable.
+  - **Shapes** — 6 hand-drawn SVG elements: circle, arrow, wavy underline, star, brackets, checkmark.
+  - **Emojis** — 12 preset emoji buttons.
+  - All added elements appear in an "Added elements" list with per-element Remove buttons.
+- All graphic elements (shapes and emoji) are stored in `draft.graphic_elements` array and are:
+  - draggable on the canvas overlay layer (`.dlg-design-elem-overlay`)
+  - rendered to the final exported PNG via canvas drawing in `renderThumbnailDraftToCanvas`
+- The editor keeps format switching (`instagram`, `youtube_shorts`) compatible with the live draft.
 
-Canonical editable thumbnail draft model updates:
-- `style` now represents the starter layout id above. Older values (`warm_bar`, `bold_corner`, `kinetic_slash`) should continue mapping safely to the newer layout ids.
-- Each `text_box` should now preserve:
-  - `id`
-  - `text`
-  - `x` / `y`
-  - `width`
-  - `align`
-  - `font_family`
-  - `font_size`
-  - `color`
-  - `background_color`
-  - `background_opacity`
-  - `shadow`
-- `logo` should now preserve:
-  - `enabled`
-  - `placement`
-  - `asset`
-  - `x` / `y`
-  - `width`
+Canonical editable thumbnail draft model:
+- `style` — stored for backward-compat but no longer surfaced as a UI chooser.
+- `brightness` — integer 30–200, default 100. Applied as `ctx.filter = brightness(N%)` before drawing frame.
+- `text_boxes` — array; each entry preserves: `id`, `text`, `x`, `y`, `width`, `align`, `font_family`, `font_size`, `color`, `background_color`, `background_opacity`, `shadow`.
+- `logo` — preserves: `enabled`, `placement`, `asset`, `x`, `y`, `width`.
+- `graphic_elements` — array of draggable design elements. Each entry preserves:
+  - `id` (unique string)
+  - `type` — `'shape'` or `'emoji'`
+  - For shapes: `shape_type` (`circle`|`arrow`|`underline`|`star`|`brackets`|`check`), `color`, `x`, `y`, `width`, `height`
+  - For emoji: `emoji` (unicode string), `x`, `y`, `size`
+- `available_frames` — base64 JPEG array from backend.
+- `selected_frame_index` — integer index into `available_frames`.
+- `suggested_titles`, `video_info`, `target_format`, `entry_point`, `source_filename`, `clip_start`, `clip_end`, `draft_id`.
 
-Known limitations for this phase:
-- Text boxes are draggable but not free-resized by drag handles yet.
-- Logo placement is draggable and size-adjustable, but there is no full transform/rotation tool yet.
-- The live preview uses HTML overlay layers on top of the canvas for editing, then re-renders the final PNG from the saved draft data on export/save.
+Clip preview behavior:
+- `togglePreview()` in Stage 2 uses a `timeupdate` listener to stop playback at `c.end_time`.
+  - Do NOT revert this to `setTimeout` — it was unreliable for slow-loading videos.
+  - This matches the existing `toggleSplitPreview()` pattern.
+- Previewing a candidate does NOT commit `editorInTime` / `editorOutTime`. Only `selectAndEdit()` commits those values.
+
+Known limitations:
+- Text boxes and graphic elements are draggable but not free-resized by drag handles yet.
+- Logo placement is draggable and size-adjustable but no rotation tool exists yet.
+- The live preview uses HTML overlay layers for editing; the final PNG is re-rendered from draft data on export.
 
 Regression risk: High.
