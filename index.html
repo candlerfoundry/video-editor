@@ -6326,7 +6326,7 @@
     const vid = document.getElementById('ef-pick-video');
     if (!vid) return;
     const src = getPlayableVideoUrl('clips') || getPlayableVideoUrl('thumbnails');
-    if (src && vid.src !== src) { vid.src = src; vid.load(); }
+    if (src && vid.src !== src) { vid.crossOrigin = 'anonymous'; vid.src = src; vid.load(); }
     vid.addEventListener('loadedmetadata', function onMeta() {
       vid.removeEventListener('loadedmetadata', onMeta);
       const scrub = document.getElementById('ef-pick-scrub');
@@ -7112,6 +7112,7 @@
     // Use same source as the editor video
     const src = getPlayableVideoUrl('clips') || getPlayableVideoUrl('thumbnails');
     if (src && vidEl.src !== src) {
+      vidEl.crossOrigin = 'anonymous';
       vidEl.src = src;
       vidEl.load();
     }
