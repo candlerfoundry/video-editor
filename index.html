@@ -1803,6 +1803,50 @@
       color: var(--muted);
       margin-bottom: 8px;
     }
+    .design-elem-btn {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      width: 36px;
+      height: 36px;
+      border: 1.5px solid var(--border);
+      border-radius: 8px;
+      background: var(--surface);
+      cursor: pointer;
+      transition: border-color 150ms, background 150ms;
+      padding: 4px;
+      font-family: inherit;
+    }
+    .design-elem-btn:hover {
+      border-color: var(--orange);
+      background: var(--orange-tint, rgba(200,72,38,0.07));
+    }
+    .design-elem-emoji {
+      font-size: 18px;
+    }
+    .dlg-design-elem-overlay {
+      position: absolute;
+      cursor: move;
+      user-select: none;
+      touch-action: none;
+    }
+    .dlg-design-elem-overlay.selected {
+      outline: 2px dashed var(--orange);
+      outline-offset: 3px;
+    }
+    .design-elem-list-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 4px 6px;
+      border-radius: 6px;
+      font-size: 11px;
+      cursor: pointer;
+      transition: background 120ms;
+    }
+    .design-elem-list-row:hover, .design-elem-list-row.selected {
+      background: var(--orange-tint, rgba(200,72,38,0.07));
+    }
     .thumb-editor-input,
     .thumb-editor-textarea,
     .thumb-editor-select {
@@ -1833,6 +1877,11 @@
       gap: 6px;
       width: 320px;
       margin-bottom: 12px;
+    }
+    #export-flow-thumb-frames.frame-grid {
+      grid-template-columns: repeat(auto-fill, minmax(80px, 1fr));
+      gap: 6px;
+      width: auto;
     }
     .frame-cell {
       position: relative;
@@ -4116,8 +4165,14 @@
         currentlyPlaying = vid;
         vid.currentTime = c.start_time ?? 0;
         vid.play().catch(() => {});
-        const dur = (c.end_time ?? 0) - (c.start_time ?? 0);
-        setTimeout(() => vid.pause(), dur * 1000);
+          const stopAt = c.end_time;
+          function _previewStop() {
+            if (vid.currentTime >= stopAt) {
+              vid.pause();
+              vid.removeEventListener('timeupdate', _previewStop);
+            }
+          }
+          vid.addEventListener('timeupdate', _previewStop);
       }, { once: true });
     }
   }
@@ -5491,6 +5546,64 @@
     drawImageCover(ctx, frameImg, W, H);
     ctx.filter = 'none';
     applyThumbStyleOverlay(ctx, W, H, draft.style);
+    // Draw graphic elements onto exported canvas
+    for (var _gi = 0; _gi < (draft.graphic_elements || []).length; _gi++) {
+      var _ge = draft.graphic_elements[_gi];
+      if (_ge.type === 'emoji') {
+        var _gsz = _ge.size || 80;
+        ctx.save();
+        ctx.font = _gsz + 'px serif';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(_ge.emoji || '', _ge.x || 0, _ge.y || 0);
+        ctx.restore();
+      } else if (_ge.type === 'shape') {
+        var _ex = _ge.x || 0, _ey = _ge.y || 0;
+        var _ew = _ge.width || 100, _eh = _ge.height || 100;
+        ctx.save();
+        ctx.strokeStyle = _ge.color || '#c84826';
+        ctx.lineWidth   = Math.max(4, _ew * 0.05);
+        ctx.lineCap     = 'round';
+        ctx.lineJoin    = 'round';
+        ctx.beginPath();
+        if (_ge.shape_type === 'circle') {
+          ctx.ellipse(_ex + _ew/2, _ey + _eh/2, _ew * 0.46, _eh * 0.46, 0, 0, Math.PI * 2);
+          ctx.stroke();
+        } else if (_ge.shape_type === 'arrow') {
+          ctx.moveTo(_ex + _ew*0.05, _ey + _eh*0.5);
+          ctx.lineTo(_ex + _ew*0.8,  _ey + _eh*0.5);
+          ctx.moveTo(_ex + _ew*0.62, _ey + _eh*0.2);
+          ctx.lineTo(_ex + _ew*0.85, _ey + _eh*0.5);
+          ctx.lineTo(_ex + _ew*0.62, _ey + _eh*0.8);
+          ctx.stroke();
+        } else if (_ge.shape_type === 'underline') {
+          ctx.moveTo(_ex + _ew*0.05, _ey + _eh*0.75);
+          ctx.quadraticCurveTo(_ex + _ew*0.5, _ey + _eh*0.58, _ex + _ew*0.95, _ey + _eh*0.8);
+          ctx.stroke();
+        } else if (_ge.shape_type === 'star') {
+          var _scx = _ex + _ew/2, _scy = _ey + _eh/2;
+          var _sR  = Math.min(_ew,_eh)*0.46, _sr = _sR*0.42;
+          for (var _si = 0; _si < 5; _si++) {
+            var _a1 = (_si * 2 * Math.PI / 5) - Math.PI/2;
+            var _a2 = _a1 + Math.PI/5;
+            if (_si === 0) ctx.moveTo(_scx + _sR*Math.cos(_a1), _scy + _sR*Math.sin(_a1));
+            else           ctx.lineTo(_scx + _sR*Math.cos(_a1), _scy + _sR*Math.sin(_a1));
+            ctx.lineTo(_scx + _sr*Math.cos(_a2), _scy + _sr*Math.sin(_a2));
+          }
+          ctx.closePath(); ctx.stroke();
+        } else if (_ge.shape_type === 'brackets') {
+          ctx.moveTo(_ex+_ew*0.28,_ey+_eh*0.08); ctx.lineTo(_ex+_ew*0.10,_ey+_eh*0.08); ctx.lineTo(_ex+_ew*0.10,_ey+_eh*0.92); ctx.lineTo(_ex+_ew*0.28,_ey+_eh*0.92);
+          ctx.moveTo(_ex+_ew*0.72,_ey+_eh*0.08); ctx.lineTo(_ex+_ew*0.90,_ey+_eh*0.08); ctx.lineTo(_ex+_ew*0.90,_ey+_eh*0.92); ctx.lineTo(_ex+_ew*0.72,_ey+_eh*0.92);
+          ctx.stroke();
+        } else if (_ge.shape_type === 'check') {
+          ctx.moveTo(_ex+_ew*0.08,_ey+_eh*0.5); ctx.lineTo(_ex+_ew*0.38,_ey+_eh*0.82); ctx.lineTo(_ex+_ew*0.92,_ey+_eh*0.18);
+          ctx.stroke();
+        } else {
+          ctx.strokeRect(_ex+5,_ey+5,_ew-10,_eh-10);
+        }
+        ctx.restore();
+      }
+    }
     if (!options.omitText) {
       (draft.text_boxes || []).forEach((box, index) => {
         const resolved = makeThumbnailTextBox(box?.text || '', {
@@ -5790,6 +5903,10 @@
   let _selectedReuseThumbnailDraftId = null;
   let _selectedExportFolder = '';
   let _lastFolderLookup = null;
+  let _efSelectedThumbFrame   = -1;   // index into _efThumbFrames; -1 = none selected
+  let _efThumbFrames          = [];   // base64 frames generated for export-flow thumbnail
+  let _efSelectedDraftId      = null; // draft id if user chose an existing draft
+  let _efThumbJobPending      = false;
   let _savedClipExport = null;
   let _dlgStyle          = 'lower_third';
   let _dlgTitle          = '';
@@ -5909,71 +6026,354 @@
   }
 
   function renderExportFolderLookup(data) {
-    _lastFolderLookup = data || null;
-    const result = document.getElementById('export-folder-result');
-    const selected = document.getElementById('export-folder-selected');
-    const saveBtn = document.getElementById('btn-save-clip-folder');
-    if (!result || !selected || !saveBtn) return;
+    const resultEl = document.getElementById('export-folder-result');
+    if (!resultEl) return;
 
-    _selectedExportFolder = '';
-    saveBtn.disabled = true;
-    selected.style.display = 'none';
+    if (data.folder_exists) {
+      // Auto-confirm: no user action needed for the happy path
+      confirmExportFolderSelection(data.matched_relative_folder);
+      const displayName = data.matched_relative_folder || data.folder_name || 'Project folder';
+      const availFolders = data.available_folders || [];
+      resultEl.innerHTML = `
+        <div class="export-folder-card" style="background:var(--green-tint,#f0faf5);border-color:rgba(45,106,79,0.22);">
+          <div style="display:flex;align-items:center;gap:8px;margin-bottom:2px;">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#2d6a4f" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+            <div style="font-size:12px;font-weight:700;color:#2d6a4f;">Folder confirmed</div>
+          </div>
+          <div style="font-size:13px;font-weight:600;color:var(--text);margin-top:4px;">${escHtml(formatExportFolderLabel(displayName))}</div>
+          <button class="btn-ghost btn-sm" style="margin-top:8px;font-size:11px;color:var(--muted);" type="button"
+            onclick="document.getElementById('export-folder-change-row').style.display=document.getElementById('export-folder-change-row').style.display==='none'?'block':'none'">
+            Change destination
+          </button>
+          <div id="export-folder-change-row" style="display:none;margin-top:10px;">
+            <div style="font-size:11px;font-weight:600;letter-spacing:0.06em;text-transform:uppercase;color:var(--muted);margin-bottom:6px;">Choose another folder</div>
+            <select id="export-existing-folder-select" class="export-form-select" style="width:100%;margin-bottom:8px;" onchange="if(this.value==='__browse_all__')loadAllExportFolders(this)">
+              ${availFolders.map(f => `<option value="${escHtml(f)}"${f === data.matched_relative_folder ? ' selected' : ''}>${escHtml(formatExportFolderLabel(f))}</option>`).join('')}
+              <option value="__browse_all__">Other — browse all folders\u2026</option>
+            </select>
+            <button class="btn-ghost btn-sm" type="button" onclick="useSelectedExistingFolder()">Use Selected Folder</button>
+          </div>
+        </div>`;
+      return;
+    }
 
-    const suggested = data?.suggested_folder_name || getSuggestedExportFolderName();
-    const suggestedRelative = data?.suggested_relative_folder || suggested;
-    const folderFound = !!data?.folder_exists;
-    const inferredParent = data?.suggested_parent_folder || '';
-    const confidence = data?.parent_confidence || 'low';
-    const alternates = Array.isArray(data?.alternate_matches) ? data.alternate_matches : [];
-    const alternateNote = alternates.length
-      ? '<div class="post-save-note" style="margin-top:10px;">We also found another matching folder elsewhere: ' + escHtml(alternates.map(formatExportFolderLabel).join(', ')) + '.</div>'
-      : '';
+    // Folder not found
+    const suggested = data.suggested_relative_folder || '';
+    const parent    = data.inferred_parent_folder   || 'Social Media Clips';
+    const avail     = data.available_folders        || [];
+    const lowConf   = data.confidence === 'low';
+    const statusMsg = lowConf
+      ? 'Could not confidently place this video. Choose an existing folder or create one below.'
+      : `Ready to create a folder under <strong>${escHtml(parent)}</strong>.`;
 
-    result.innerHTML =
-      '<div class="export-folder-card">' +
-        '<h3>' + (folderFound ? 'Project folder found' : 'Choose save folder') + '</h3>' +
-        '<div class="export-folder-name">' + escHtml(folderFound ? formatExportFolderLabel(data.matched_relative_folder || data.matched_folder_name || '') : formatExportFolderLabel(suggestedRelative)) + '</div>' +
-        '<div class="export-folder-status">' +
-          (folderFound
-            ? 'We found an existing source-video folder in Social Media Clips. Confirm it before saving the clip.'
-            : confidence === 'low'
-              ? 'We could not confidently place this source video. Choose an existing folder or create the suggested one before saving.'
-              : 'We are ready to create the source-video folder under ' + escHtml(inferredParent) + ' if you want to save there.') +
-        '</div>' +
-        (folderFound ? alternateNote : '') +
-        '<div class="export-folder-actions">' +
-          (folderFound
-            ? '<button type="button" class="btn" onclick="confirmExportFolderSelection(decodeURIComponent(\'' + encodeURIComponent(data.matched_relative_folder || '') + '\'))">Use This Folder</button>'
-            : '<button type="button" class="btn" onclick="createSuggestedExportFolder()">Create "' + escHtml(suggested) + '" Folder</button>') +
-          '<button type="button" class="btn-ghost" onclick="lookupExportFolder()">Check Again</button>' +
-        '</div>' +
-        '<div class="export-folder-choice">' +
-          '<label class="export-form-label" for="export-existing-folder-select">Choose Another Folder</label>' +
-          '<select id="export-existing-folder-select" class="export-form-select"></select>' +
-          '<button type="button" class="btn-ghost" onclick="useSelectedExistingFolder()">Use Selected Folder</button>' +
-        '</div>' +
-      '</div>';
+    resultEl.innerHTML = `
+      <div class="export-folder-card">
+        <div class="export-folder-heading" style="font-size:12px;font-weight:700;color:var(--text);margin-bottom:6px;">Choose save folder</div>
+        <p style="font-size:12px;color:var(--muted);margin:0 0 12px;">${statusMsg}</p>
+        ${suggested ? `<button class="btn btn-sm" type="button" style="margin-bottom:10px;" onclick="createSuggestedExportFolder()">
+          Create &ldquo;${escHtml(formatExportFolderLabel(suggested))}&rdquo;</button>` : ''}
+        ${avail.length ? `
+        <div style="font-size:11px;font-weight:600;letter-spacing:0.06em;text-transform:uppercase;color:var(--muted);margin-bottom:6px;">Or choose existing</div>
+        <select id="export-existing-folder-select" class="export-form-select" style="width:100%;margin-bottom:8px;" onchange="if(this.value==='__browse_all__')loadAllExportFolders(this)">
+          ${avail.map(f => `<option value="${escHtml(f)}">${escHtml(formatExportFolderLabel(f))}</option>`).join('')}
+          <option value="__browse_all__">Other — browse all folders\u2026</option>
+        </select>
+        <button class="btn-ghost btn-sm" type="button" onclick="useSelectedExistingFolder()">Use Selected Folder</button>
+        ` : ''}
+      </div>`;
+  }
 
-    const picker = document.getElementById('export-existing-folder-select');
-    if (!picker) return;
-    picker.innerHTML = '<option value="">Choose an existing folder</option>';
-    const folders = Array.isArray(data?.available_folders) ? data.available_folders : [];
-    folders.forEach(name => {
-      const option = document.createElement('option');
-      option.value = name;
-      option.textContent = formatExportFolderLabel(name);
-      picker.appendChild(option);
+  async function loadAllExportFolders(selectEl) {
+    if (!selectEl) return;
+    const origOpt = selectEl.querySelector('option[value="__browse_all__"]');
+    if (origOpt) origOpt.textContent = 'Loading all folders\u2026';
+    try {
+      const res  = await fetch(BACKEND + '/project_export_folder/list_all');
+      const data = await res.json();
+      const folders = data.folders || [];
+      // Rebuild select with all folders
+      const currentVal = selectEl.value === '__browse_all__' ? '' : selectEl.value;
+      selectEl.innerHTML = folders.map(f =>
+        `<option value="${escHtml(f)}"${f === currentVal ? ' selected' : ''}>${escHtml(formatExportFolderLabel(f))}</option>`
+      ).join('');
+    } catch (e) {
+      if (origOpt) origOpt.textContent = 'Browse all — could not load';
+    }
+  }
+
+  function confirmExportFolderSelection(folder) {
+    _selectedExportFolder = folder;
+    // Keep the small "selected" notice hidden since the folder card already shows confirmation
+    const sel = document.getElementById('export-folder-selected');
+    if (sel) sel.style.display = 'none';
+    document.getElementById('btn-save-clip-folder').disabled = false;
+    // Kick off thumbnail prep now that we know where we're saving
+    startExportFlowThumb(false);
+  }
+
+  // ── Export-flow thumbnail prep ──
+
+  async function startExportFlowThumb(forceRegenerate) {
+    const section  = document.getElementById('export-flow-thumb-section');
+    const statusEl = document.getElementById('export-flow-thumb-status');
+    const framesEl = document.getElementById('export-flow-thumb-frames');
+    const regenBtn = document.getElementById('btn-export-regen-thumb');
+    const editorBtn= document.getElementById('btn-export-open-editor');
+    if (!section) return;
+
+    _efSelectedThumbFrame = -1;
+    _efSelectedDraftId    = null;
+    section.style.display = 'block';
+
+    // Show existing drafts first
+    const draftSection = document.getElementById('export-flow-existing-drafts');
+    const drafts = getCurrentProjectThumbnailDrafts().filter(d =>
+      (!d.source_filename || d.source_filename === (_clipFile?.name || '')) &&
+      (d.clip_start == null || Math.abs((d.clip_start || 0) - editorInTime) < 1) &&
+      (d.clip_end   == null || Math.abs((d.clip_end   || 0) - editorOutTime) < 1)
+    );
+    if (draftSection) {
+      if (drafts.length) {
+        draftSection.innerHTML = '<div style="font-size:11px;font-weight:600;letter-spacing:0.06em;text-transform:uppercase;color:var(--muted);margin-bottom:8px;">Saved thumbnails</div>';
+        for (const draft of drafts) {
+          const card = document.createElement('div');
+          card.style.cssText = 'display:flex;align-items:flex-start;gap:10px;padding:8px 0;border-top:1px solid var(--border);';
+          const previewWrap = document.createElement('div');
+          previewWrap.style.cssText = 'flex-shrink:0;width:80px;height:45px;border-radius:6px;overflow:hidden;background:var(--border);';
+          const previewCanvas = document.createElement('canvas');
+          previewCanvas.width = 160; previewCanvas.height = 90;
+          previewCanvas.style.cssText = 'width:80px;height:45px;display:block;';
+          previewWrap.appendChild(previewCanvas);
+          card.appendChild(previewWrap);
+          const info = document.createElement('div');
+          info.style.cssText = 'flex:1;min-width:0;';
+          const label = (draft.text_boxes?.[0]?.text || draft.source_filename || 'Thumbnail draft').slice(0, 50);
+          info.innerHTML = `<div style="font-size:12px;font-weight:600;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${escHtml(label)}</div>
+            <div style="font-size:10px;color:var(--muted);margin-top:2px;">${escHtml(draft.target_format === 'youtube_shorts' ? 'YouTube Shorts 9:16' : 'Instagram 4:5')}</div>
+            <div style="display:flex;gap:6px;margin-top:6px;">
+              <button class="btn btn-sm" type="button" onclick="efUseDraft('${escHtml(draft.draft_id)}')">Use This</button>
+              <button class="btn-ghost btn-sm" type="button" onclick="efEditDraft('${escHtml(draft.draft_id)}')">Edit</button>
+            </div>`;
+          card.appendChild(info);
+          draftSection.appendChild(card);
+          // Render preview async
+          renderThumbnailDraftToCanvas(previewCanvas, draft).catch(() => {});
+        }
+      } else {
+        draftSection.innerHTML = '';
+      }
+    }
+
+    // Reuse already-generated frames if available and not forcing regen
+    if (!forceRegenerate && _dlgFrames && _dlgFrames.length) {
+      _efThumbFrames = _dlgFrames;
+      renderExportFlowThumbGrid();
+      if (statusEl) statusEl.textContent = '';
+      if (regenBtn) regenBtn.style.display = '';
+      if (editorBtn) editorBtn.style.display = '';
+      return;
+    }
+
+    // Generate thumbnails
+    if (!_clipFile || !backendOnline || _efThumbJobPending) return;
+    _efThumbJobPending = true;
+    if (statusEl) statusEl.innerHTML = '<div class="export-progress-bar"><div class="export-shimmer"></div></div><p style="font-size:11px;color:var(--muted);margin:4px 0 0;">Finding best frames\u2026</p>';
+    if (framesEl) framesEl.innerHTML = '';
+
+    try {
+      const clipTranscript = (() => {
+        if (!_wordsData) return '';
+        return _wordsData.filter(w => (w.start ?? 0) < editorOutTime && (w.end ?? w.start ?? 0) >= editorInTime)
+          .map(w => w.word).join(' ').trim().slice(0, 3000);
+      })();
+      const form = new FormData();
+      form.append('filename',        _clipFile.name);
+      form.append('clipstart',       String(editorInTime));
+      form.append('clipend',         String(editorOutTime));
+      form.append('clip_transcript', clipTranscript);
+      const startRes  = await fetch(BACKEND + '/thumbnail', { method: 'POST', body: form });
+      const startData = await startRes.json();
+      if (startData.jobid) {
+        pollThumbnailJob(
+          startData.jobid,
+          data => {
+            _efThumbJobPending = false;
+            if (data.frames && data.frames.length) {
+              _efThumbFrames = data.frames;
+              // Also cache into _dlgFrames so the full editor can reuse them
+              _dlgFrames = data.frames;
+              if (data.titles && data.titles.length) _thumbTitles = data.titles;
+              renderExportFlowThumbGrid();
+              if (statusEl) statusEl.textContent = 'Select a frame to use as thumbnail:';
+              if (regenBtn) regenBtn.style.display = '';
+              if (editorBtn) editorBtn.style.display = '';
+            } else {
+              if (statusEl) statusEl.textContent = 'No frames generated. You can skip the thumbnail.';
+            }
+          },
+          err => {
+            _efThumbJobPending = false;
+            if (statusEl) statusEl.textContent = 'Could not generate thumbnails. You can still save without one.';
+          }
+        );
+      } else {
+        _efThumbJobPending = false;
+        if (statusEl) statusEl.textContent = 'Could not start thumbnail generation.';
+      }
+    } catch (e) {
+      _efThumbJobPending = false;
+      if (statusEl) statusEl.textContent = 'Thumbnail generation unavailable.';
+    }
+  }
+
+  function renderExportFlowThumbGrid() {
+    const framesEl = document.getElementById('export-flow-thumb-frames');
+    if (!framesEl || !_efThumbFrames.length) return;
+    framesEl.innerHTML = '';
+    _efThumbFrames.forEach((b64, i) => {
+      const cell = document.createElement('div');
+      cell.className = 'frame-cell' + (i === _efSelectedThumbFrame ? ' selected' : '');
+      cell.style.cursor = 'pointer';
+      const img = document.createElement('img');
+      img.src = 'data:image/jpeg;base64,' + b64;
+      img.style.cssText = 'width:100%;height:100%;object-fit:cover;display:block;';
+      const zoomHint = document.createElement('div');
+      zoomHint.style.cssText = 'position:absolute;bottom:4px;right:4px;background:rgba(0,0,0,0.55);color:#fff;border-radius:4px;font-size:9px;padding:2px 4px;pointer-events:none;opacity:0;transition:opacity 0.15s;';
+      zoomHint.textContent = 'double-click to zoom';
+      cell.style.position = 'relative';
+      cell.appendChild(img);
+      cell.appendChild(zoomHint);
+      cell.addEventListener('mouseenter', () => zoomHint.style.opacity = '1');
+      cell.addEventListener('mouseleave', () => zoomHint.style.opacity = '0');
+      cell.addEventListener('click', () => { efSelectFrame(i); });
+      cell.addEventListener('dblclick', (e) => { e.stopPropagation(); efPreviewLarge(i); });
+      framesEl.appendChild(cell);
     });
   }
 
-  function confirmExportFolderSelection(folderName) {
-    _selectedExportFolder = String(folderName || '').trim();
-    const selected = document.getElementById('export-folder-selected');
-    const saveBtn = document.getElementById('btn-save-clip-folder');
-    if (!selected || !saveBtn || !_selectedExportFolder) return;
-    selected.style.display = 'block';
-    selected.innerHTML = '<strong>Save folder selected:</strong> ' + escHtml(formatExportFolderLabel(_selectedExportFolder));
-    saveBtn.disabled = false;
+  function efPreviewLarge(idx) {
+    const b64 = _efThumbFrames[idx];
+    if (!b64) return;
+    // Remove any existing preview
+    const existing = document.getElementById('ef-large-preview-overlay');
+    if (existing) existing.remove();
+    const overlay = document.createElement('div');
+    overlay.id = 'ef-large-preview-overlay';
+    overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.82);z-index:99999;display:flex;align-items:center;justify-content:center;cursor:zoom-out;';
+    const img = document.createElement('img');
+    img.src = 'data:image/jpeg;base64,' + b64;
+    img.style.cssText = 'max-width:90vw;max-height:88vh;border-radius:10px;box-shadow:0 8px 40px rgba(0,0,0,0.6);object-fit:contain;';
+    const closeBtn = document.createElement('button');
+    closeBtn.style.cssText = 'position:fixed;top:16px;right:20px;background:rgba(255,255,255,0.15);border:1px solid rgba(255,255,255,0.25);color:#fff;border-radius:8px;padding:6px 14px;font-size:13px;cursor:pointer;font-family:inherit;';
+    closeBtn.textContent = '✕ Close';
+    closeBtn.addEventListener('click', (e) => { e.stopPropagation(); overlay.remove(); });
+    overlay.addEventListener('click', () => overlay.remove());
+    img.addEventListener('click', (e) => e.stopPropagation());
+    overlay.appendChild(img);
+    overlay.appendChild(closeBtn);
+    document.body.appendChild(overlay);
+  }
+
+  function efSelectFrame(idx) {
+    _efSelectedThumbFrame = idx;
+    _efSelectedDraftId    = null;
+    document.querySelectorAll('#export-flow-thumb-frames .frame-cell').forEach((c, i) => {
+      c.classList.toggle('selected', i === idx);
+    });
+    const saveWithBtn = document.getElementById('btn-save-with-thumb');
+    if (saveWithBtn) {
+      saveWithBtn.disabled = false;
+      saveWithBtn.style.display = '';
+    }
+  }
+
+  function efUseDraft(draftId) {
+    _efSelectedDraftId    = draftId;
+    _efSelectedThumbFrame = -1;
+    // Deselect any frame
+    document.querySelectorAll('#export-flow-thumb-frames .frame-cell').forEach(c => c.classList.remove('selected'));
+    const saveWithBtn = document.getElementById('btn-save-with-thumb');
+    if (saveWithBtn) {
+      saveWithBtn.disabled = false;
+      saveWithBtn.style.display = '';
+    }
+    // Highlight the chosen draft card (optional: add a .selected border)
+    document.querySelectorAll('#export-flow-existing-drafts .btn').forEach(b => {
+      b.classList.remove('selected');
+    });
+  }
+
+  function efEditDraft(draftId) {
+    // Close export flow, open thumb editor with that draft
+    document.getElementById('dialog-export-flow')?.close();
+    editExistingThumbnailDraft(draftId);
+  }
+
+  function exportFlowOpenFullEditor() {
+    // Pre-load selected frame into shared composer, open the full thumb editor
+    if (_efSelectedThumbFrame >= 0 && _efThumbFrames.length) {
+      _dlgFrames = _efThumbFrames;
+      _dlgSelectedFrame = _efSelectedThumbFrame;
+    }
+    document.getElementById('dialog-export-flow')?.close();
+    openThumbDialog();
+  }
+
+  function efOpenVideoPicker() {
+    const panel = document.getElementById('ef-video-picker');
+    if (!panel) return;
+    panel.style.display = 'block';
+    const vid = document.getElementById('ef-pick-video');
+    if (!vid) return;
+    const src = getPlayableVideoUrl('clips') || getPlayableVideoUrl('thumbnails');
+    if (src && vid.src !== src) { vid.src = src; vid.load(); }
+    vid.addEventListener('loadedmetadata', function onMeta() {
+      vid.removeEventListener('loadedmetadata', onMeta);
+      const scrub = document.getElementById('ef-pick-scrub');
+      const start = editorInTime || 0;
+      const end   = editorOutTime || vid.duration;
+      if (scrub) { scrub.min = start; scrub.max = end; scrub.value = start; }
+      vid.currentTime = start;
+      efUpdatePickTimecode();
+    }, { once: true });
+  }
+  function efCloseVideoPicker() {
+    const panel = document.getElementById('ef-video-picker');
+    if (panel) panel.style.display = 'none';
+    const vid = document.getElementById('ef-pick-video');
+    if (vid) { vid.pause(); vid.src = ''; }
+  }
+  function efPickScrub(val) {
+    const vid = document.getElementById('ef-pick-video');
+    if (vid) { vid.currentTime = parseFloat(val); efUpdatePickTimecode(); }
+  }
+  function efUpdatePickTimecode() {
+    const vid  = document.getElementById('ef-pick-video');
+    const span = document.getElementById('ef-pick-timecode');
+    if (!vid || !span) return;
+    const t = vid.currentTime || 0;
+    span.textContent = Math.floor(t/60) + ':' + Math.floor(t%60).toString().padStart(2,'0');
+  }
+  async function efCaptureVideoFrame() {
+    const vid = document.getElementById('ef-pick-video');
+    if (!vid) return;
+    try {
+      const cv = document.createElement('canvas');
+      cv.width = vid.videoWidth || 1280; cv.height = vid.videoHeight || 720;
+      cv.getContext('2d').drawImage(vid, 0, 0, cv.width, cv.height);
+      const scale = Math.min(1, 1600 / Math.max(cv.width, cv.height));
+      const out = document.createElement('canvas');
+      out.width = Math.round(cv.width * scale); out.height = Math.round(cv.height * scale);
+      out.getContext('2d').drawImage(cv, 0, 0, out.width, out.height);
+      const b64 = out.toDataURL('image/jpeg', 0.92).split(',')[1];
+      _efThumbFrames = [b64, ..._efThumbFrames].slice(0, 12);
+      _efSelectedThumbFrame = 0;
+      renderExportFlowThumbGrid();
+      efSelectFrame(0);
+      efCloseVideoPicker();
+    } catch (err) {
+      alert('Could not capture frame: ' + err.message);
+    }
   }
 
   async function lookupExportFolder() {
@@ -6054,6 +6454,11 @@
   }
 
   function useSelectedExistingFolder() {
+    const selEl = document.getElementById('export-existing-folder-select');
+    if (selEl && selEl.value === '__browse_all__') {
+      loadAllExportFolders(selEl);
+      return;
+    }
     const picker = document.getElementById('export-existing-folder-select');
     if (!picker || !picker.value) {
       alert('Choose a folder before continuing.');
@@ -6457,6 +6862,7 @@
     if (logoSize) logoSize.value = Math.round(_sharedThumbnailDraft?.logo?.width || getDefaultThumbLogoPosition(_dlgTargetFormat).width);
     const logoPlacement = document.getElementById('dlg-logo-placement');
     if (logoPlacement) logoPlacement.value = _sharedThumbnailDraft?.logo?.placement || 'top_right';
+    renderDesignElementList();
   }
 
   function dlgSelectFrame(idx) {
@@ -6623,6 +7029,7 @@
     dlgShowState('editor');
     dlgDrawCanvas();
     requestAnimationFrame(() => dlgUpdateText());
+    renderDesignElementList();
   }
 
   function dlgBackToTitles() { dlgShowState('editor'); }
@@ -6780,6 +7187,97 @@
     }
   }
 
+  // ── Design Elements ──
+  let _dlgSelectedElemId = null;
+
+  function dlgAddDesignElement(opts) {
+    if (!_sharedThumbnailDraft) return;
+    if (!_sharedThumbnailDraft.graphic_elements) _sharedThumbnailDraft.graphic_elements = [];
+    const canvas = document.getElementById('dlg-canvas');
+    const W = canvas ? canvas.width  : 1080;
+    const H = canvas ? canvas.height : 1350;
+    const id = 'elem-' + Date.now();
+
+    if (opts.type === 'logo') {
+      if (!_sharedThumbnailDraft.logo) _sharedThumbnailDraft.logo = {};
+      _sharedThumbnailDraft.logo.enabled = true;
+      _sharedThumbnailDraft.logo.asset = FOUNDRY_LOGO_ASSET;
+      const pos = getDefaultThumbLogoPosition(_dlgTargetFormat);
+      if (_sharedThumbnailDraft.logo.x == null) _sharedThumbnailDraft.logo.x = pos.x;
+      if (_sharedThumbnailDraft.logo.y == null) _sharedThumbnailDraft.logo.y = pos.y;
+      if (_sharedThumbnailDraft.logo.width == null) _sharedThumbnailDraft.logo.width = pos.width;
+      if (!_sharedThumbnailDraft.logo.placement) _sharedThumbnailDraft.logo.placement = 'top_right';
+      syncDraftFromDialogState();
+      dlgDrawCanvas();
+      renderDialogOverlayLayer();
+      renderDesignElementList();
+      return;
+    }
+
+    let elem;
+    if (opts.type === 'shape') {
+      elem = { id, type: 'shape', shape_type: opts.shape_type || 'circle', color: opts.color || '#c84826',
+               x: Math.round(W * 0.1), y: Math.round(H * 0.45), width: Math.round(W * 0.25), height: Math.round(H * 0.12) };
+    } else if (opts.type === 'emoji') {
+      elem = { id, type: 'emoji', emoji: opts.emoji || '🔥',
+               x: Math.round(W * 0.5), y: Math.round(H * 0.5), size: Math.round(Math.min(W, H) * 0.09) };
+    } else { return; }
+
+    _sharedThumbnailDraft.graphic_elements.push(elem);
+    _dlgSelectedElemId = id;
+    syncDraftFromDialogState();
+    dlgDrawCanvas();
+    renderDialogOverlayLayer();
+    renderDesignElementList();
+  }
+
+  function dlgRemoveDesignElement(id) {
+    if (!_sharedThumbnailDraft || !_sharedThumbnailDraft.graphic_elements) return;
+    _sharedThumbnailDraft.graphic_elements = _sharedThumbnailDraft.graphic_elements.filter(function(e) { return e.id !== id; });
+    if (_dlgSelectedElemId === id) _dlgSelectedElemId = null;
+    syncDraftFromDialogState();
+    dlgDrawCanvas();
+    renderDialogOverlayLayer();
+    renderDesignElementList();
+  }
+
+  function dlgRemoveLogo() {
+    if (_sharedThumbnailDraft && _sharedThumbnailDraft.logo) _sharedThumbnailDraft.logo.enabled = false;
+    syncDraftFromDialogState();
+    dlgDrawCanvas();
+    renderDialogOverlayLayer();
+    renderDesignElementList();
+  }
+
+  function dlgSelectDesignElement(id) {
+    _dlgSelectedElemId = id;
+    document.querySelectorAll('#dlg-overlay-layer .dlg-design-elem-overlay').forEach(function(el) {
+      el.classList.toggle('selected', el.dataset.elemId === id);
+    });
+    renderDesignElementList();
+  }
+
+  function renderDesignElementList() {
+    var listEl = document.getElementById('dlg-elem-list');
+    if (!listEl) return;
+    var elems  = (_sharedThumbnailDraft && _sharedThumbnailDraft.graphic_elements) ? _sharedThumbnailDraft.graphic_elements : [];
+    var logoOn = !!((_sharedThumbnailDraft && _sharedThumbnailDraft.logo) ? _sharedThumbnailDraft.logo.enabled : false);
+    if (!elems.length && !logoOn) { listEl.innerHTML = ''; return; }
+    var rows = '';
+    if (logoOn) {
+      rows += '<div class="design-elem-list-row"><span>Foundry Logo</span><button class="btn-ghost btn-sm" type="button" onclick="dlgRemoveLogo()" style="padding:1px 8px;font-size:10px;">Remove</button></div>';
+    }
+    elems.forEach(function(e) {
+      var label = e.type === 'emoji' ? (e.emoji + ' Emoji') : (e.shape_type || 'Shape');
+      var isSelected = _dlgSelectedElemId === e.id;
+      rows += '<div class="design-elem-list-row' + (isSelected ? ' selected' : '') + '" onclick="dlgSelectDesignElement(\'' + escHtml(e.id) + '\')">' +
+        '<span style="text-transform:capitalize;">' + escHtml(label) + '</span>' +
+        '<button class="btn-ghost btn-sm" type="button" onclick="event.stopPropagation();dlgRemoveDesignElement(\'' + escHtml(e.id) + '\')" style="padding:1px 8px;font-size:10px;">Remove</button>' +
+        '</div>';
+    });
+    listEl.innerHTML = '<div style="font-size:10px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:var(--muted);margin:8px 0 5px;">Added elements</div>' + rows;
+  }
+
   function dlgSelectTextBox(id) {
     if (!_sharedThumbnailDraft) return;
     _sharedThumbnailDraft.selected_text_box_id = id;
@@ -6898,6 +7396,48 @@
       wrap.appendChild(img);
       layer.appendChild(wrap);
     }
+    // Render graphic_elements overlays
+    var _elems = (_sharedThumbnailDraft && _sharedThumbnailDraft.graphic_elements) ? _sharedThumbnailDraft.graphic_elements : [];
+    var _sx = getThumbCanvasScale('dlg-canvas', 'dlg-canvas-wrap').scaleX;
+    var _sy = getThumbCanvasScale('dlg-canvas', 'dlg-canvas-wrap').scaleY;
+    _elems.forEach(function(elem) {
+      var wrap = document.createElement('div');
+      wrap.className = 'dlg-design-elem-overlay' + (elem.id === _dlgSelectedElemId ? ' selected' : '');
+      wrap.dataset.elemId = elem.id;
+      wrap.style.position = 'absolute';
+      if (elem.type === 'emoji') {
+        var dispSize = Math.round((elem.size || 80) / Math.max(_sx, _sy));
+        wrap.style.left       = Math.round(elem.x / _sx - dispSize * 0.5) + 'px';
+        wrap.style.top        = Math.round(elem.y / _sy - dispSize * 0.5) + 'px';
+        wrap.style.width      = dispSize + 'px';
+        wrap.style.height     = dispSize + 'px';
+        wrap.style.fontSize   = dispSize + 'px';
+        wrap.style.lineHeight = '1';
+        wrap.style.textAlign  = 'center';
+        wrap.textContent = elem.emoji || '';
+      } else if (elem.type === 'shape') {
+        var dw = Math.round((elem.width  || 100) / _sx);
+        var dh = Math.round((elem.height || 100) / _sy);
+        wrap.style.left   = Math.round(elem.x / _sx) + 'px';
+        wrap.style.top    = Math.round(elem.y / _sy) + 'px';
+        wrap.style.width  = dw + 'px';
+        wrap.style.height = dh + 'px';
+        var c = escHtml(elem.color || '#c84826');
+        var svgInner = '';
+        switch (elem.shape_type) {
+          case 'circle':    svgInner = '<ellipse cx="50%" cy="50%" rx="46%" ry="46%" fill="none" stroke="' + c + '" stroke-width="4" stroke-linecap="round"/>'; break;
+          case 'arrow':     svgInner = '<line x1="5%" y1="50%" x2="80%" y2="50%" stroke="' + c + '" stroke-width="4" stroke-linecap="round"/><polyline points="62%,20% 85%,50% 62%,80%" fill="none" stroke="' + c + '" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>'; break;
+          case 'underline': svgInner = '<path d="M5%,75% Q50%,58% 95%,80%" fill="none" stroke="' + c + '" stroke-width="4.5" stroke-linecap="round"/>'; break;
+          case 'star':      svgInner = '<polygon points="50%,5% 61%,38% 95%,38% 68%,58% 79%,92% 50%,72% 21%,92% 32%,58% 5%,38% 39%,38%" fill="none" stroke="' + c + '" stroke-width="3" stroke-linejoin="round"/>'; break;
+          case 'brackets':  svgInner = '<polyline points="28%,8% 10%,8% 10%,92% 28%,92%" fill="none" stroke="' + c + '" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/><polyline points="72%,8% 90%,8% 90%,92% 72%,92%" fill="none" stroke="' + c + '" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>'; break;
+          case 'check':     svgInner = '<polyline points="8%,50% 38%,82% 92%,18%" fill="none" stroke="' + c + '" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/>'; break;
+          default:          svgInner = '<rect x="5%" y="5%" width="90%" height="90%" fill="none" stroke="' + c + '" stroke-width="3"/>'; break;
+        }
+        wrap.innerHTML = '<svg width="100%" height="100%" viewBox="0 0 100 100" preserveAspectRatio="none" xmlns="http://www.w3.org/2000/svg">' + svgInner + '</svg>';
+      }
+      wrap.addEventListener('mousedown', function() { dlgSelectDesignElement(elem.id); renderDesignElementList(); });
+      layer.appendChild(wrap);
+    });
   }
 
   // Drag for dialog overlay elements
@@ -6906,15 +7446,22 @@
     document.addEventListener('mousedown', function (e) {
       const textEl = e.target.closest('.dlg-overlay-text');
       const logoEl = e.target.closest('.dlg-logo-overlay');
-      if (!textEl && !logoEl) return;
+      const elemEl = e.target.closest('.dlg-design-elem-overlay');
+      if (!textEl && !logoEl && !elemEl) return;
       if (textEl) {
         dlgSelectTextBox(textEl.dataset.boxId);
         const box = getActiveThumbnailTextBox();
         dragging = { type: 'text', startX: e.clientX, startY: e.clientY, origX: box?.x ?? _dlgCanvasTX, origY: box?.y ?? _dlgCanvasTY };
-      } else {
+      } else if (logoEl) {
         const logo = _sharedThumbnailDraft?.logo;
         if (!logo) return;
         dragging = { type: 'logo', startX: e.clientX, startY: e.clientY, origX: logo.x, origY: logo.y };
+      } else if (elemEl) {
+        const eid   = elemEl.dataset.elemId;
+        const found = (_sharedThumbnailDraft?.graphic_elements || []).find(function(el) { return el.id === eid; });
+        if (!found) return;
+        dragging = { type: 'elem', elemId: eid, startX: e.clientX, startY: e.clientY, origX: found.x, origY: found.y };
+        dlgSelectDesignElement(eid);
       }
       e.preventDefault();
     });
@@ -6931,9 +7478,19 @@
         _dlgCanvasTY = Math.max(40, Math.min((canvas?.height || 720) - 40, dragging.origY + dy));
         box.x = _dlgCanvasTX;
         box.y = _dlgCanvasTY;
-      } else if (_sharedThumbnailDraft?.logo) {
+      } else if (dragging.type === 'logo' && _sharedThumbnailDraft?.logo) {
         _sharedThumbnailDraft.logo.x = Math.max(50, Math.min((canvas?.width || 1280) - 50, dragging.origX + dx));
         _sharedThumbnailDraft.logo.y = Math.max(50, Math.min((canvas?.height || 720) - 50, dragging.origY + dy));
+      } else if (dragging.type === 'elem') {
+        const found2 = (_sharedThumbnailDraft?.graphic_elements || []).find(function(el) { return el.id === dragging.elemId; });
+        if (!found2) return;
+        const dx3 = (e.clientX - dragging.startX) * scaleX;
+        const dy3 = (e.clientY - dragging.startY) * scaleY;
+        found2.x = Math.round(dragging.origX + dx3);
+        found2.y = Math.round(dragging.origY + dy3);
+        syncDraftFromDialogState();
+        renderDialogOverlayLayer();
+        return;
       }
       syncDraftFromDialogState();
       renderDialogOverlayLayer();
@@ -6997,6 +7554,9 @@
     document.getElementById('btn-save-clip-folder').disabled = true;
     _selectedExportFolder = '';
     _lastFolderLookup = null;
+    // Reset drag position so dialog reopens centered
+    const _dlgEF = document.getElementById('dialog-export-flow');
+    if (_dlgEF) { _dlgEF.style.transform = ''; delete _dlgEF.dataset.dragTx; delete _dlgEF.dataset.dragTy; }
     document.getElementById('dialog-export-flow').showModal();
     lookupExportFolder();
   }
@@ -7010,7 +7570,7 @@
     return 'Podcast Clip';
   }
 
-  async function doExport() {
+  async function doExport(withThumbnail = false) {
     if (!_clipFile) { alert('No video loaded.'); return; }
     const filename = document.getElementById('flow-export-filename').value.trim() || 'clip.mp4';
     const clipType = document.getElementById('flow-export-type').value;
@@ -7076,7 +7636,31 @@
         thumbnail_mode: 'video_only',
         thumbnail_draft_id: '',
       });
-      await openPostSaveThumbnailDialog();
+      if (withThumbnail) {
+        // Attach the selected thumbnail (draft or new frame)
+        if (_efSelectedDraftId) {
+          await attachExistingThumbnailDraft(_efSelectedDraftId).catch(() => {});
+        } else if (_efSelectedThumbFrame >= 0 && _efThumbFrames.length) {
+          // Build a quick draft from selected frame using default lower-third layout
+          _thumbFile = _clipFile;
+          _sharedThumbnailEntryPoint = 'clip';
+          const firstTitle = (_thumbTitles && _thumbTitles[0]) || '';
+          _sharedThumbnailDraft = buildDefaultThumbnailDraft({
+            entryPoint: 'clip',
+            file: _clipFile,
+            targetFormat: _dlgTargetFormat || 'instagram',
+            style: 'lower_third',
+            frames: _efThumbFrames,
+            suggestedTitles: _thumbTitles || [],
+            textBoxes: firstTitle ? [makeThumbnailTextBox(firstTitle, { id: 'text-1', x: null, y: null, width: null })] : null,
+            selectedFrameIndex: _efSelectedThumbFrame,
+            videoInfo: null,
+          });
+          syncDraftFromDialogState();
+          const blob = await renderThumbnailDraftToBlob(_sharedThumbnailDraft).catch(() => null);
+          if (blob) await attachThumbnailBlobToSavedClip(blob, 'new_thumbnail', null).catch(() => {});
+        }
+      }
     } catch (err) {
       statusEl.innerHTML =
         '<div style="padding:0;">' +
@@ -7215,34 +7799,41 @@
     }
   }
 
-  // ── Draggable dialog: dialog-export-flow ──
+  // ── Draggable dialog: dialog-export-flow (transform-based) ──
   (function () {
-    const dlg = document.getElementById('dialog-export-flow');
+    var dlg = document.getElementById('dialog-export-flow');
     if (!dlg) return;
-    const hdr = dlg.querySelector('.dialog-header');
+    var hdr = dlg.querySelector('.dialog-header');
     if (!hdr) return;
     hdr.style.cursor = 'grab';
-    let dragging = false, ox = 0, oy = 0;
+    hdr.style.userSelect = 'none';
+    var dragging = false;
+    var startX = 0, startY = 0, baseTX = 0, baseTY = 0;
     hdr.addEventListener('mousedown', function (e) {
       if (e.button !== 0) return;
-      const r = dlg.getBoundingClientRect();
-      ox = e.clientX - r.left;
-      oy = e.clientY - r.top;
+      e.preventDefault();
+      startX = e.clientX;
+      startY = e.clientY;
+      // Read current accumulated translate from dataset
+      baseTX = parseFloat(dlg.dataset.dragTx || '0');
+      baseTY = parseFloat(dlg.dataset.dragTy || '0');
       dragging = true;
       hdr.style.cursor = 'grabbing';
-      e.preventDefault();
+      document.body.style.userSelect = 'none';
     });
     document.addEventListener('mousemove', function (e) {
       if (!dragging) return;
-      dlg.style.margin = '0';
-      dlg.style.position = 'fixed';
-      dlg.style.left = (e.clientX - ox) + 'px';
-      dlg.style.top  = (e.clientY - oy) + 'px';
+      var tx = baseTX + (e.clientX - startX);
+      var ty = baseTY + (e.clientY - startY);
+      dlg.style.transform = 'translate(' + tx + 'px,' + ty + 'px)';
+      dlg.dataset.dragTx = tx;
+      dlg.dataset.dragTy = ty;
     });
     document.addEventListener('mouseup', function () {
       if (!dragging) return;
       dragging = false;
       hdr.style.cursor = 'grab';
+      document.body.style.userSelect = '';
     });
   })();
 </script>
@@ -7357,25 +7948,56 @@
             </div>
           </div>
 
-          <div class="card">
-            <div class="thumb-editor-label">Starter Layouts</div>
-            <div class="thumb-editor-grid">
-              <div class="style-card" id="dlg-style-lower_third" onclick="dlgSelectStyle('lower_third')">
-                <canvas class="style-preview-canvas" id="dlg-style-canvas-lower_third" width="160" height="90"></canvas><div class="style-name">Lower Third</div>
-              </div>
-              <div class="style-card" id="dlg-style-centered_headline" onclick="dlgSelectStyle('centered_headline')">
-                <canvas class="style-preview-canvas" id="dlg-style-canvas-centered_headline" width="160" height="90"></canvas><div class="style-name">Centered Headline</div>
-              </div>
-              <div class="style-card" id="dlg-style-top_banner" onclick="dlgSelectStyle('top_banner')">
-                <canvas class="style-preview-canvas" id="dlg-style-canvas-top_banner" width="160" height="90"></canvas><div class="style-name">Top Banner</div>
-              </div>
-              <div class="style-card" id="dlg-style-bottom_banner" onclick="dlgSelectStyle('bottom_banner')">
-                <canvas class="style-preview-canvas" id="dlg-style-canvas-bottom_banner" width="160" height="90"></canvas><div class="style-name">Bottom Banner</div>
-              </div>
-              <div class="style-card" id="dlg-style-minimal_text" onclick="dlgSelectStyle('minimal_text')">
-                <canvas class="style-preview-canvas" id="dlg-style-canvas-minimal_text" width="160" height="90"></canvas><div class="style-name">Minimal Text</div>
-              </div>
+          <!-- Design Elements Bar -->
+          <div class="card" id="dlg-design-elements-card">
+            <div class="thumb-editor-label" style="margin-bottom:10px;">Design Elements</div>
+
+            <div style="font-size:10px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:var(--muted);margin-bottom:6px;">Logo</div>
+            <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px;">
+              <button class="design-elem-btn" type="button" onclick="dlgAddDesignElement({type:'logo'})" title="Add Foundry Logo">
+                <img src="TCF_Logo-Orange.png" alt="Logo" style="height:22px;width:auto;object-fit:contain;display:block;" onerror="this.parentElement.textContent='Logo'">
+              </button>
             </div>
+
+            <div style="font-size:10px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:var(--muted);margin-bottom:6px;">Shapes</div>
+            <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px;">
+              <button class="design-elem-btn" type="button" title="Circle" onclick="dlgAddDesignElement({type:'shape',shape_type:'circle',color:'#c84826'})">
+                <svg width="22" height="22" viewBox="0 0 40 40"><ellipse cx="20" cy="20" rx="15" ry="15" fill="none" stroke="#c84826" stroke-width="4" stroke-linecap="round"/></svg>
+              </button>
+              <button class="design-elem-btn" type="button" title="Arrow" onclick="dlgAddDesignElement({type:'shape',shape_type:'arrow',color:'#1e2530'})">
+                <svg width="22" height="22" viewBox="0 0 40 40"><line x1="5" y1="20" x2="30" y2="20" stroke="#1e2530" stroke-width="4" stroke-linecap="round"/><polyline points="22,13 32,20 22,27" fill="none" stroke="#1e2530" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              </button>
+              <button class="design-elem-btn" type="button" title="Wavy underline" onclick="dlgAddDesignElement({type:'shape',shape_type:'underline',color:'#c84826'})">
+                <svg width="22" height="22" viewBox="0 0 40 40"><path d="M4,28 Q12,20 20,28 Q28,36 36,28" fill="none" stroke="#c84826" stroke-width="4" stroke-linecap="round"/></svg>
+              </button>
+              <button class="design-elem-btn" type="button" title="Star" onclick="dlgAddDesignElement({type:'shape',shape_type:'star',color:'#1e2530'})">
+                <svg width="22" height="22" viewBox="0 0 40 40"><polygon points="20,4 24,15 36,15 26,22 30,34 20,27 10,34 14,22 4,15 16,15" fill="none" stroke="#1e2530" stroke-width="2.5" stroke-linejoin="round"/></svg>
+              </button>
+              <button class="design-elem-btn" type="button" title="Brackets" onclick="dlgAddDesignElement({type:'shape',shape_type:'brackets',color:'#1e2530'})">
+                <svg width="22" height="22" viewBox="0 0 40 40"><polyline points="14,7 7,7 7,33 14,33" fill="none" stroke="#1e2530" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"/><polyline points="26,7 33,7 33,33 26,33" fill="none" stroke="#1e2530" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              </button>
+              <button class="design-elem-btn" type="button" title="Checkmark" onclick="dlgAddDesignElement({type:'shape',shape_type:'check',color:'#c84826'})">
+                <svg width="22" height="22" viewBox="0 0 40 40"><polyline points="6,22 16,32 34,10" fill="none" stroke="#c84826" stroke-width="4.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              </button>
+            </div>
+
+            <div style="font-size:10px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:var(--muted);margin-bottom:6px;">Emojis</div>
+            <div style="display:flex;gap:4px;flex-wrap:wrap;margin-bottom:10px;">
+              <button class="design-elem-btn design-elem-emoji" type="button" title="Fire" onclick="dlgAddDesignElement({type:'emoji',emoji:'🔥'})">🔥</button>
+              <button class="design-elem-btn design-elem-emoji" type="button" title="Idea" onclick="dlgAddDesignElement({type:'emoji',emoji:'💡'})">💡</button>
+              <button class="design-elem-btn design-elem-emoji" type="button" title="Question" onclick="dlgAddDesignElement({type:'emoji',emoji:'❓'})">❓</button>
+              <button class="design-elem-btn design-elem-emoji" type="button" title="Sparkles" onclick="dlgAddDesignElement({type:'emoji',emoji:'✨'})">✨</button>
+              <button class="design-elem-btn design-elem-emoji" type="button" title="Target" onclick="dlgAddDesignElement({type:'emoji',emoji:'🎯'})">🎯</button>
+              <button class="design-elem-btn design-elem-emoji" type="button" title="Speech bubble" onclick="dlgAddDesignElement({type:'emoji',emoji:'💬'})">💬</button>
+              <button class="design-elem-btn design-elem-emoji" type="button" title="Star" onclick="dlgAddDesignElement({type:'emoji',emoji:'⭐'})">⭐</button>
+              <button class="design-elem-btn design-elem-emoji" type="button" title="Cross" onclick="dlgAddDesignElement({type:'emoji',emoji:'✝️'})">✝️</button>
+              <button class="design-elem-btn design-elem-emoji" type="button" title="Praying hands" onclick="dlgAddDesignElement({type:'emoji',emoji:'🙏'})">🙏</button>
+              <button class="design-elem-btn design-elem-emoji" type="button" title="Heart" onclick="dlgAddDesignElement({type:'emoji',emoji:'❤️'})">❤️</button>
+              <button class="design-elem-btn design-elem-emoji" type="button" title="Arrow right" onclick="dlgAddDesignElement({type:'emoji',emoji:'➡️'})">➡️</button>
+              <button class="design-elem-btn design-elem-emoji" type="button" title="Point up" onclick="dlgAddDesignElement({type:'emoji',emoji:'👆'})">👆</button>
+            </div>
+
+            <div id="dlg-elem-list"></div>
           </div>
 
           <div class="card">
@@ -7578,7 +8200,6 @@
     <h2>Save Clip</h2>
   </div>
   <div class="dialog-body">
-    <p class="export-flow-intro">We’ll first find the right project folder in <strong>Social Media Clips</strong>, then save the clip there. Thumbnail choices come after the clip is already saved.</p>
     <div class="export-form-row">
       <label class="export-form-label" for="flow-export-filename">Clip Name</label>
       <input type="text" id="flow-export-filename" class="export-form-input" placeholder="clip-filename.mp4" />
@@ -7597,16 +8218,46 @@
     <div id="export-flow-status" style="display:none;margin-bottom:14px;"></div>
     <div id="export-folder-result"></div>
     <div id="export-folder-selected" class="export-folder-selected" style="display:none;"></div>
+    <!-- Unified thumbnail section — appears after folder is confirmed -->
+    <div id="export-flow-thumb-section" style="display:none; border-top:1px solid var(--border); margin-top:16px; padding-top:14px;">
+      <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:8px;">
+        <div style="font-size:11px; font-weight:700; letter-spacing:0.08em; text-transform:uppercase; color:var(--muted);">Thumbnail <span style="font-weight:400; text-transform:none; letter-spacing:0;">(optional)</span></div>
+        <button class="btn-ghost btn-sm" id="btn-export-regen-thumb" onclick="startExportFlowThumb(true)" style="display:none;">Regenerate</button>
+      </div>
+      <div id="export-flow-thumb-status" style="font-size:12px; color:var(--muted); margin-bottom:10px;"></div>
+      <div id="export-flow-thumb-frames" class="frame-grid" style="margin-bottom:0;"></div>
+      <div id="export-flow-existing-drafts" style="margin-top:10px;"></div>
+      <div style="margin-top:10px; display:flex; gap:8px; align-items:center;">
+        <button class="btn-ghost btn-sm" id="btn-export-pick-frame" onclick="efOpenVideoPicker()" style="">
+          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2" ry="2"/></svg>
+          Pick frame from video
+        </button>
+        <button class="btn-ghost btn-sm" id="btn-export-open-editor" onclick="exportFlowOpenFullEditor()" style="display:none;">Edit in detail&hellip;</button>
+      </div>
+      <!-- Inline video scrub for save-modal frame picker -->
+      <div id="ef-video-picker" style="display:none;margin-top:12px;border-top:1px solid var(--border);padding-top:12px;">
+        <video id="ef-pick-video" style="width:100%;border-radius:8px;background:#000;max-height:180px;" muted playsinline preload="metadata"></video>
+        <input type="range" id="ef-pick-scrub" min="0" max="100" value="0" step="0.1" style="width:100%;accent-color:var(--orange);margin-top:6px;" oninput="efPickScrub(this.value)">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-top:6px;">
+          <span id="ef-pick-timecode" style="font-size:11px;color:var(--muted);">0:00</span>
+          <div style="display:flex;gap:6px;">
+            <button class="btn-ghost btn-sm" onclick="efCloseVideoPicker()">Cancel</button>
+            <button class="btn btn-sm" onclick="efCaptureVideoFrame()">Use This Frame</button>
+          </div>
+        </div>
+      </div>
+    </div>
   </div>
   <div class="dialog-footer">
-    <button class="btn-ghost" onclick="document.getElementById('dialog-export-flow').close()">Cancel</button>
-    <button class="btn" id="btn-save-clip-folder" onclick="doExport()" disabled>
+    <button class="btn-ghost" onclick="closeExportFlowDialogs()">Cancel</button>
+    <button class="btn-ghost" id="btn-save-clip-folder" onclick="doExport(false)" disabled>Save without Thumbnail</button>
+    <button class="btn" id="btn-save-with-thumb" onclick="doExport(true)" disabled style="display:none;">
       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
         <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
         <polyline points="7 10 12 15 17 10"/>
         <line x1="12" y1="15" x2="12" y2="3"/>
       </svg>
-      Save Clip
+      Save with Thumbnail
     </button>
   </div>
 </dialog>
