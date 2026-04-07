@@ -1,7 +1,7 @@
 # CANONICAL.md - Foundry Video Editor Backend
 # Source of truth for critical backend and thumbnail behavior.
 # Every editing session must compare server.py to this file before changing fragile paths.
-# Last updated: April 1, 2026
+# Last updated: April 6, 2026
 #
 # HOW TO USE THIS FILE:
 # 1. Read it before editing server.py or launcher/launcher.py.
@@ -177,7 +177,7 @@ end_t = max(start_t, total_duration - 0.25)
 if end_t <= start_t + 0.01:
     timestamps = [round(start_t, 3)]
 else:
-    timestamps = [start_t + i * (end_t - start_t) / 19 for i in range(20)]
+    timestamps = [start_t + i * (end_t - start_t) / 29 for i in range(30)]
 thumb_logger.info(
     'Job %s sampling %s timestamps from %.1fs to %.1fs',
     job_id, len(timestamps), start_t, end_t,
@@ -200,6 +200,11 @@ Canonical requirements:
 - Preserve aspect ratio during extraction; never force frames into a fixed 16:9 canvas before the frontend renders them.
 - Downscale only if needed, using high-quality resampling.
 - Include `video_info` in the completed thumbnail job result.
+- Composite frame scoring: multiply sharpness score by brightness_weight to penalize dark/silhouette frames.
+  - Hard-reject frames with mean_brightness < 15 (black cut frames).
+  - brightness_weight = clamp((mean_brightness - 20) / 60, 0.15, 1.0).
+  - composite = sharpness * brightness_weight.
+- Claude Vision ranking prompt must note stage/auditorium context and instruct the model to strongly avoid dark silhouette, motion-blurred, and off-center frames.
 
 Canonical logging rules:
 - `INFO`: cache miss, job start, timestamp summary, usable-frame summary, encode summary, transcript fallback, job completion.

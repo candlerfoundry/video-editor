@@ -1410,7 +1410,7 @@ def _thumbnail_worker(job_id, filename, clipstart, clipend, clip_transcript):
             if end_t <= start_t + 0.01:
                 timestamps = [round(start_t, 3)]
             else:
-                timestamps = [start_t + i * (end_t - start_t) / 19 for i in range(20)]
+                timestamps = [start_t + i * (end_t - start_t) / 29 for i in range(30)]
             thumb_logger.info(
                 'Job %s sampling %s timestamps from %.1fs to %.1fs',
                 job_id, len(timestamps), start_t, end_t,
@@ -1432,11 +1432,23 @@ def _thumbnail_worker(job_id, filename, clipstart, clipend, clip_transcript):
                     img = PILImage.open(fp)
                     arr = np.array(img.convert('L'), dtype=float)
                     sharpness = float(np.var(np.gradient(arr)))
+                    mean_brightness = float(np.mean(arr))
+                    # Hard-reject completely black frames (cuts/fades)
+                    if mean_brightness < 15:
+                        thumb_logger.debug(
+                            'Job %s frame %s ts=%.1fs SKIPPED black frame brightness=%.1f',
+                            job_id, i, ts, mean_brightness,
+                        )
+                        continue
+                    # Composite score: penalize dark frames strongly
+                    # brightness_weight: 0.15 (very dark) → 1.0 (well-lit, brightness >= 80)
+                    brightness_weight = min(1.0, max(0.15, (mean_brightness - 20) / 60.0))
+                    composite = sharpness * brightness_weight
                     thumb_logger.debug(
-                        'Job %s frame %s ts=%.1fs sharpness=%.1f',
-                        job_id, i, ts, sharpness,
+                        'Job %s frame %s ts=%.1fs sharpness=%.1f brightness=%.1f weight=%.2f score=%.1f',
+                        job_id, i, ts, sharpness, mean_brightness, brightness_weight, composite,
                     )
-                    scored.append((sharpness, fp))
+                    scored.append((composite, fp))
                 except Exception as fe:
                     frame_errors += 1
                     thumb_logger.debug('Job %s frame %s failed to score: %s', job_id, i, fe)
@@ -1497,9 +1509,13 @@ def _thumbnail_worker(job_id, filename, clipstart, clipend, clip_transcript):
                 content.append({
                     "type": "text",
                     "text": (
-                        "Rank these frames best to worst for a YouTube thumbnail. "
-                        "Prefer: eyes open and engaged, mouth not wide open mid-word, "
-                        "warm/confident expression, good posture, sharp focus. "
+                        "Rank these frames best to worst for a YouTube/social media thumbnail. "
+                        "These are from a stage or auditorium setting where speakers are the primary subject. "
+                        "Prefer: speaker face clearly visible and well-lit, eyes open and engaged, "
+                        "natural confident expression (not mid-word or grimacing), sharp focus, good posture. "
+                        "Strongly avoid: dark silhouette frames, motion-blurred frames, "
+                        "frames showing a cut/transition, frames where the speaker is mostly in shadow, "
+                        "partially cropped off-frame, or far from center. "
                         f"There are {len(frame_b64s)} frames (0-indexed). "
                         "Return ONLY a JSON array of ALL indices, best first. Example: [2,0,3,1]"
                     )

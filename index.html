@@ -363,6 +363,12 @@
       font-weight: 600;
       color: var(--text);
       line-height: 1.35;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      max-width: 0;
+      flex: 1 1 0;
+      min-width: 0;
     }
     .recent-project-date {
       font-size: 10px;
@@ -526,9 +532,10 @@
     }
     .sidebar-project-item-head {
       display: flex;
-      align-items: flex-start;
+      align-items: center;
       justify-content: space-between;
       gap: 8px;
+      min-width: 0;
     }
     .sidebar-project-item .recent-project-date {
       font-size: 10px;
@@ -2772,7 +2779,7 @@
       return (
         '<button class="sidebar-project-item' + (isActive ? ' active' : '') + '" type="button" onclick="selectRecentProject(\'' + escHtml(project.id) + '\', \'' + lastView + '\')">' +
           '<div class="sidebar-project-item-head">' +
-            '<div class="recent-project-name">' + escHtml(getProjectLabel(project)) + '</div>' +
+            '<div class="recent-project-name" title="' + escHtml(getProjectLabel(project)) + '">' + escHtml(getProjectLabel(project)) + '</div>' +
             '<div class="recent-project-date">' + escHtml(formatProjectDate(project.last_modified)) + '</div>' +
           '</div>' +
           '<div class="sidebar-project-summary">' + escHtml(summary) + '</div>' +
@@ -3233,7 +3240,7 @@
             return (
               '<button class="sidebar-project-item' + (isActive ? ' active' : '') + '" type="button" onclick="selectRecentProject(\'' + escHtml(project.id) + '\', \'' + lastView + '\')">' +
                 '<div class="sidebar-project-item-head">' +
-                  '<div class="recent-project-name">' + escHtml(getProjectLabel(project)) + '</div>' +
+                  '<div class="recent-project-name" title="' + escHtml(getProjectLabel(project)) + '">' + escHtml(getProjectLabel(project)) + '</div>' +
                   '<div class="recent-project-date">' + escHtml(formatProjectDate(project.last_modified || project.updated_at)) + '</div>' +
                 '</div>' +
                 '<div class="sidebar-project-summary">' + escHtml(summary) + '</div>' +
@@ -4684,6 +4691,7 @@
     _sharedThumbnailDraft.target_format = _dlgTargetFormat;
     _sharedThumbnailDraft.selected_frame_index = _dlgSelectedFrame;
     _sharedThumbnailDraft.available_frames = _dlgFrames || [];
+    _sharedThumbnailDraft.brightness = _dlgBrightness;
     _sharedThumbnailDraft.suggested_titles = _thumbTitles || [];
     _sharedThumbnailDraft.video_info = _dlgVideoInfo || null;
     _sharedThumbnailDraft.logo = normalizeThumbnailLogo(_sharedThumbnailDraft.logo, _dlgTargetFormat);
@@ -4719,6 +4727,7 @@
     _dlgFrames = _sharedThumbnailDraft.available_frames || [];
     _thumbTitles = _sharedThumbnailDraft.suggested_titles || [];
     _dlgSelectedFrame = _sharedThumbnailDraft.selected_frame_index || 0;
+    _dlgBrightness = _sharedThumbnailDraft.brightness != null ? _sharedThumbnailDraft.brightness : 100;
     _dlgStyle = normalizeThumbnailLayout(_sharedThumbnailDraft.style || 'lower_third');
     _dlgTargetFormat = _sharedThumbnailDraft.target_format || 'instagram';
     _dlgVideoInfo = _sharedThumbnailDraft.video_info || null;
@@ -5475,9 +5484,12 @@
     const ctx = canvas.getContext('2d');
     const W = canvas.width;
     const H = canvas.height;
+    const brightnessVal = draft.brightness != null ? draft.brightness : 100;
     const frameImg = await loadImageElement(getThumbImageSrc(frame));
     ctx.clearRect(0, 0, W, H);
+    if (brightnessVal !== 100) ctx.filter = `brightness(${brightnessVal}%)`;
     drawImageCover(ctx, frameImg, W, H);
+    ctx.filter = 'none';
     applyThumbStyleOverlay(ctx, W, H, draft.style);
     if (!options.omitText) {
       (draft.text_boxes || []).forEach((box, index) => {
@@ -5786,6 +5798,7 @@
   let _dlgCanvasTX       = 640;
   let _dlgCanvasTY       = 590;
   let _dlgFrames         = [];
+  let _dlgBrightness     = 100;  // percentage: 100 = normal, 50 = dark, 150 = bright
   let _dlgSelectedFrame  = 0;
   let _dlgTextColor      = '#ffffff';
   let _dlgBackgroundColor = '#111111';
@@ -6601,6 +6614,10 @@
     const dlgPos = getDefaultThumbTextPosition(_dlgStyle, _dlgTargetFormat, 0);
     _dlgCanvasTX = box?.x ?? dlgPos.x;
     _dlgCanvasTY = box?.y ?? dlgPos.y;
+    const brightnessSlider = document.getElementById('dlg-brightness-slider');
+    if (brightnessSlider) brightnessSlider.value = _dlgBrightness;
+    const brightnessVal2 = document.getElementById('dlg-brightness-val');
+    if (brightnessVal2) brightnessVal2.textContent = _dlgBrightness;
     syncDlgTargetFormat(_dlgTargetFormat);
     dlgBuildHeroState();
     dlgShowState('editor');
@@ -6663,6 +6680,104 @@
   function setDlgBackgroundColor(hex) {
     _dlgBackgroundColor = hex;
     dlgUpdateText();
+  }
+
+  function setDlgBrightness(val) {
+    _dlgBrightness = Math.max(30, Math.min(200, parseInt(val)));
+    const slider = document.getElementById('dlg-brightness-slider');
+    if (slider) slider.value = _dlgBrightness;
+    const span = document.getElementById('dlg-brightness-val');
+    if (span) span.textContent = _dlgBrightness;
+    syncDraftFromDialogState();
+    if (document.getElementById('dlg-state-editor').style.display !== 'none') dlgDrawCanvas();
+  }
+
+  // ── Manual frame picker ──
+  let _dlgPickVideoEl = null;
+
+  function dlgOpenFramePicker() {
+    const panel = document.getElementById('dlg-frame-picker');
+    if (!panel) return;
+    panel.style.display = 'block';
+    const vidEl = document.getElementById('dlg-pick-video');
+    if (!vidEl) return;
+    _dlgPickVideoEl = vidEl;
+    // Use same source as the editor video
+    const src = getPlayableVideoUrl('clips') || getPlayableVideoUrl('thumbnails');
+    if (src && vidEl.src !== src) {
+      vidEl.src = src;
+      vidEl.load();
+    }
+    vidEl.addEventListener('loadedmetadata', function onMeta() {
+      vidEl.removeEventListener('loadedmetadata', onMeta);
+      const scrub = document.getElementById('dlg-pick-scrub');
+      if (scrub) {
+        const clipStart = _sharedThumbnailDraft?.clip_start;
+        const clipEnd   = _sharedThumbnailDraft?.clip_end;
+        const start = (clipStart != null && clipStart > 0) ? clipStart : 0;
+        const end   = (clipEnd   != null && clipEnd   > 0) ? clipEnd   : vidEl.duration;
+        scrub.min = start;
+        scrub.max = end;
+        scrub.value = start;
+        vidEl.currentTime = start;
+      }
+      dlgUpdatePickTimecode();
+    }, { once: true });
+    document.getElementById('dlg-btn-pick-frame').disabled = true;
+  }
+
+  function dlgCloseFramePicker() {
+    const panel = document.getElementById('dlg-frame-picker');
+    if (panel) panel.style.display = 'none';
+    const vidEl = document.getElementById('dlg-pick-video');
+    if (vidEl) { vidEl.pause(); vidEl.src = ''; }
+    const btn = document.getElementById('dlg-btn-pick-frame');
+    if (btn) btn.disabled = false;
+    _dlgPickVideoEl = null;
+  }
+
+  function dlgPickVideoScrub(val) {
+    const vidEl = document.getElementById('dlg-pick-video');
+    if (!vidEl) return;
+    vidEl.currentTime = parseFloat(val);
+    dlgUpdatePickTimecode();
+  }
+
+  function dlgUpdatePickTimecode() {
+    const vidEl = document.getElementById('dlg-pick-video');
+    const span  = document.getElementById('dlg-pick-timecode');
+    if (!vidEl || !span) return;
+    const t = vidEl.currentTime || 0;
+    const m = Math.floor(t / 60);
+    const s = Math.floor(t % 60).toString().padStart(2, '0');
+    span.textContent = m + ':' + s;
+  }
+
+  async function dlgCapturePickedFrame() {
+    const vidEl = document.getElementById('dlg-pick-video');
+    if (!vidEl) return;
+    try {
+      const cv = document.createElement('canvas');
+      cv.width  = vidEl.videoWidth  || 1280;
+      cv.height = vidEl.videoHeight || 720;
+      const ctx2 = cv.getContext('2d');
+      ctx2.drawImage(vidEl, 0, 0, cv.width, cv.height);
+      // Downscale for consistency with backend-extracted frames
+      const out = document.createElement('canvas');
+      const scale = Math.min(1, 1600 / Math.max(cv.width, cv.height));
+      out.width  = Math.round(cv.width  * scale);
+      out.height = Math.round(cv.height * scale);
+      out.getContext('2d').drawImage(cv, 0, 0, out.width, out.height);
+      const b64 = out.toDataURL('image/jpeg', 0.92).split(',')[1];
+      // Inject at front of frames array
+      _dlgFrames = [b64, ..._dlgFrames].slice(0, 12);
+      _dlgSelectedFrame = 0;
+      dlgBuildHeroState();
+      dlgDrawCanvas();
+      dlgCloseFramePicker();
+    } catch (err) {
+      alert('Could not capture frame: ' + err.message);
+    }
   }
 
   function dlgSelectTextBox(id) {
@@ -6876,6 +6991,9 @@
     document.getElementById('export-flow-status').style.display = 'none';
     document.getElementById('export-folder-result').innerHTML = '';
     document.getElementById('export-folder-selected').style.display = 'none';
+    // Pause the video while the save dialog is open
+    const edVid = document.getElementById('edit-video');
+    if (edVid && !edVid.paused) edVid.pause();
     document.getElementById('btn-save-clip-folder').disabled = true;
     _selectedExportFolder = '';
     _lastFolderLookup = null;
@@ -6906,16 +7024,10 @@
     btn.disabled = true;
     statusEl.style.display = 'block';
 
-    const steps = ['Saving clip to Dropbox…', 'Finalizing Dropbox link…', 'Clip saved.'];
-    function showStep(i) {
-      statusEl.innerHTML =
-        '<div style="padding:0 0 4px;">' +
-        '<div class="export-progress-bar"><div class="export-shimmer"></div></div>' +
-        '<p class="export-progress-label">' + steps[i] + '</p></div>';
-    }
-    showStep(0);
-    const t1 = setTimeout(() => showStep(1), 1400);
-    const t2 = setTimeout(() => showStep(2), 3200);
+    statusEl.innerHTML =
+      '<div style="padding:0 0 4px;">' +
+      '<div class="export-progress-bar"><div class="export-shimmer"></div></div>' +
+      '<p class="export-progress-label">Saving clip to Dropbox\u2026</p></div>';
 
     const form = new FormData();
     if (_clipFile instanceof Blob) form.append('file', _clipFile);
@@ -6936,7 +7048,6 @@
 
     try {
       const res  = await fetch(BACKEND + '/export_clip', { method: 'POST', body: form });
-      clearTimeout(t1); clearTimeout(t2);
       const data = await res.json();
       if (!res.ok || !data.success) {
         throw new Error(data.error || 'Export failed \u2014 check backend logs');
@@ -6967,7 +7078,6 @@
       });
       await openPostSaveThumbnailDialog();
     } catch (err) {
-      clearTimeout(t1); clearTimeout(t2);
       statusEl.innerHTML =
         '<div style="padding:0;">' +
         '<div class="export-error"><strong>Export failed:</strong> ' + escHtml(err.message) + '</div></div>';
@@ -7104,6 +7214,37 @@
       btnSave.disabled = false;
     }
   }
+
+  // ── Draggable dialog: dialog-export-flow ──
+  (function () {
+    const dlg = document.getElementById('dialog-export-flow');
+    if (!dlg) return;
+    const hdr = dlg.querySelector('.dialog-header');
+    if (!hdr) return;
+    hdr.style.cursor = 'grab';
+    let dragging = false, ox = 0, oy = 0;
+    hdr.addEventListener('mousedown', function (e) {
+      if (e.button !== 0) return;
+      const r = dlg.getBoundingClientRect();
+      ox = e.clientX - r.left;
+      oy = e.clientY - r.top;
+      dragging = true;
+      hdr.style.cursor = 'grabbing';
+      e.preventDefault();
+    });
+    document.addEventListener('mousemove', function (e) {
+      if (!dragging) return;
+      dlg.style.margin = '0';
+      dlg.style.position = 'fixed';
+      dlg.style.left = (e.clientX - ox) + 'px';
+      dlg.style.top  = (e.clientY - oy) + 'px';
+    });
+    document.addEventListener('mouseup', function () {
+      if (!dragging) return;
+      dragging = false;
+      hdr.style.cursor = 'grab';
+    });
+  })();
 </script>
 
 <!-- ══════════════════════════════════════════
@@ -7159,6 +7300,13 @@
           </div>
           <p style="font-size:12px;color:var(--muted);margin-top:-4px;">Drag text or the logo directly on the thumbnail to reposition them.</p>
 
+          <div class="card" style="padding:12px 16px;">
+            <div class="thumb-inline-row" style="justify-content:space-between;align-items:center;margin-bottom:4px;">
+              <div class="thumb-editor-label" style="margin-bottom:0;">Brightness <span id="dlg-brightness-val">100</span>%</div>
+            </div>
+            <input type="range" id="dlg-brightness-slider" min="30" max="200" value="100" style="width:100%;accent-color:var(--orange);margin-top:2px;" oninput="setDlgBrightness(this.value)">
+          </div>
+
           <div class="card">
             <div class="thumb-editor-label">Source Frames</div>
             <div id="dlg-frame-grid" class="frame-grid"></div>
@@ -7167,6 +7315,24 @@
                 <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 .49-3.2"/></svg>
                 Redo Frames
               </button>
+              <button class="btn-ghost btn-sm" id="dlg-btn-pick-frame" onclick="dlgOpenFramePicker()">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="16"/><line x1="8" y1="12" x2="16" y2="12"/></svg>
+                Pick Frame
+              </button>
+            </div>
+            <!-- Frame picker scrub panel -->
+            <div id="dlg-frame-picker" style="display:none;margin-top:12px;border-top:1px solid var(--border);padding-top:12px;">
+              <video id="dlg-pick-video" style="width:100%;border-radius:8px;background:#000;max-height:200px;" muted playsinline preload="metadata"></video>
+              <div style="margin-top:8px;">
+                <input type="range" id="dlg-pick-scrub" min="0" max="100" value="0" step="0.1" style="width:100%;accent-color:var(--orange);" oninput="dlgPickVideoScrub(this.value)">
+              </div>
+              <div class="thumb-inline-row" style="margin-top:8px;justify-content:space-between;align-items:center;">
+                <span id="dlg-pick-timecode" style="font-size:11px;color:var(--muted);">0:00</span>
+                <div class="thumb-inline-row">
+                  <button class="btn-ghost btn-sm" onclick="dlgCloseFramePicker()">Cancel</button>
+                  <button class="btn btn-sm" onclick="dlgCapturePickedFrame()">Use This Frame</button>
+                </div>
+              </div>
             </div>
           </div>
 
