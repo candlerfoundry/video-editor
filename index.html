@@ -1317,11 +1317,14 @@
 
     .thumb-canvas-wrap {
       position: relative; width: var(--thumb-editor-width, 640px); height: var(--thumb-editor-height, 360px);
-      border-radius: var(--r); overflow: hidden;
+      border-radius: var(--r); overflow: visible;
       border: 1px solid var(--border);
       box-shadow: var(--shadow-md);
       flex-shrink: 0;
       background: #111;
+    }
+    #dlg-canvas, #thumb-canvas {
+      border-radius: var(--r);
     }
     #thumb-canvas { display: block; width: 100%; height: 100%; }
     #thumb-text-drag {
@@ -1732,22 +1735,23 @@
     }
     .dlg-overlay-text {
       user-select: none;
-      border: 2px dashed rgba(255,255,255,0.45);
-      border-radius: 12px;
+      border: 1.5px dashed rgba(255,255,255,0.35);
+      border-radius: 8px;
       font-weight: 700;
       line-height: 1.15;
       letter-spacing: -0.02em;
       white-space: pre-wrap;
-      text-wrap: balance;
+      word-break: break-word;
+      overflow: visible;
+      box-sizing: border-box;
     }
     .dlg-overlay-text.selected,
-    .dlg-logo-overlay {
-      box-shadow: 0 0 0 3px rgba(232,84,26,0.35);
+    .dlg-logo-overlay.selected {
+      box-shadow: 0 0 0 2px rgba(232,84,26,0.9), 0 0 0 5px rgba(232,84,26,0.2);
     }
     .dlg-logo-overlay {
-      border-radius: 12px;
-      background: rgba(12,12,12,0.26);
-      padding: 8px;
+      border-radius: 4px;
+      overflow: visible;
     }
     .dlg-logo-overlay img {
       display: block;
@@ -1831,8 +1835,36 @@
       touch-action: none;
     }
     .dlg-design-elem-overlay.selected {
-      outline: 2px dashed var(--orange);
-      outline-offset: 3px;
+      box-shadow: 0 0 0 2px rgba(232,84,26,0.9), 0 0 0 5px rgba(232,84,26,0.2);
+    }
+    .dlg-resize-handle {
+      position: absolute;
+      width: 9px;
+      height: 9px;
+      background: #fff;
+      border: 2px solid #E8541A;
+      border-radius: 2px;
+      transform: translate(-50%, -50%);
+      pointer-events: auto;
+      z-index: 100;
+      box-shadow: 0 1px 4px rgba(0,0,0,0.35);
+    }
+    .dlg-resize-handle[data-handle="nw"] { left:0;    top:0;    cursor:nw-resize; }
+    .dlg-resize-handle[data-handle="n"]  { left:50%;  top:0;    cursor:n-resize; }
+    .dlg-resize-handle[data-handle="ne"] { left:100%; top:0;    cursor:ne-resize; }
+    .dlg-resize-handle[data-handle="e"]  { left:100%; top:50%;  cursor:e-resize; }
+    .dlg-resize-handle[data-handle="se"] { left:100%; top:100%; cursor:se-resize; }
+    .dlg-resize-handle[data-handle="s"]  { left:50%;  top:100%; cursor:s-resize; }
+    .dlg-resize-handle[data-handle="sw"] { left:0;    top:100%; cursor:sw-resize; }
+    .dlg-resize-handle[data-handle="w"]  { left:0;    top:50%;  cursor:w-resize; }
+    .dlg-overlay-text {
+      overflow: visible;
+    }
+    .dlg-overlay-text.editing {
+      cursor: text !important;
+      user-select: text !important;
+      caret-color: white;
+      outline: none;
     }
     .design-elem-list-row {
       display: flex;
@@ -5546,63 +5578,76 @@
     drawImageCover(ctx, frameImg, W, H);
     ctx.filter = 'none';
     applyThumbStyleOverlay(ctx, W, H, draft.style);
-    // Draw graphic elements onto exported canvas
+    // Draw graphic elements onto exported canvas (shapes only — organic hand-drawn style)
     for (var _gi = 0; _gi < (draft.graphic_elements || []).length; _gi++) {
       var _ge = draft.graphic_elements[_gi];
-      if (_ge.type === 'emoji') {
-        var _gsz = _ge.size || 80;
-        ctx.save();
-        ctx.font = _gsz + 'px serif';
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'middle';
-        ctx.fillText(_ge.emoji || '', _ge.x || 0, _ge.y || 0);
-        ctx.restore();
-      } else if (_ge.type === 'shape') {
-        var _ex = _ge.x || 0, _ey = _ge.y || 0;
-        var _ew = _ge.width || 100, _eh = _ge.height || 100;
-        ctx.save();
-        ctx.strokeStyle = _ge.color || '#c84826';
-        ctx.lineWidth   = Math.max(4, _ew * 0.05);
-        ctx.lineCap     = 'round';
-        ctx.lineJoin    = 'round';
-        ctx.beginPath();
-        if (_ge.shape_type === 'circle') {
-          ctx.ellipse(_ex + _ew/2, _ey + _eh/2, _ew * 0.46, _eh * 0.46, 0, 0, Math.PI * 2);
-          ctx.stroke();
-        } else if (_ge.shape_type === 'arrow') {
-          ctx.moveTo(_ex + _ew*0.05, _ey + _eh*0.5);
-          ctx.lineTo(_ex + _ew*0.8,  _ey + _eh*0.5);
-          ctx.moveTo(_ex + _ew*0.62, _ey + _eh*0.2);
-          ctx.lineTo(_ex + _ew*0.85, _ey + _eh*0.5);
-          ctx.lineTo(_ex + _ew*0.62, _ey + _eh*0.8);
-          ctx.stroke();
-        } else if (_ge.shape_type === 'underline') {
-          ctx.moveTo(_ex + _ew*0.05, _ey + _eh*0.75);
-          ctx.quadraticCurveTo(_ex + _ew*0.5, _ey + _eh*0.58, _ex + _ew*0.95, _ey + _eh*0.8);
-          ctx.stroke();
-        } else if (_ge.shape_type === 'star') {
-          var _scx = _ex + _ew/2, _scy = _ey + _eh/2;
-          var _sR  = Math.min(_ew,_eh)*0.46, _sr = _sR*0.42;
-          for (var _si = 0; _si < 5; _si++) {
-            var _a1 = (_si * 2 * Math.PI / 5) - Math.PI/2;
-            var _a2 = _a1 + Math.PI/5;
-            if (_si === 0) ctx.moveTo(_scx + _sR*Math.cos(_a1), _scy + _sR*Math.sin(_a1));
-            else           ctx.lineTo(_scx + _sR*Math.cos(_a1), _scy + _sR*Math.sin(_a1));
-            ctx.lineTo(_scx + _sr*Math.cos(_a2), _scy + _sr*Math.sin(_a2));
-          }
-          ctx.closePath(); ctx.stroke();
-        } else if (_ge.shape_type === 'brackets') {
-          ctx.moveTo(_ex+_ew*0.28,_ey+_eh*0.08); ctx.lineTo(_ex+_ew*0.10,_ey+_eh*0.08); ctx.lineTo(_ex+_ew*0.10,_ey+_eh*0.92); ctx.lineTo(_ex+_ew*0.28,_ey+_eh*0.92);
-          ctx.moveTo(_ex+_ew*0.72,_ey+_eh*0.08); ctx.lineTo(_ex+_ew*0.90,_ey+_eh*0.08); ctx.lineTo(_ex+_ew*0.90,_ey+_eh*0.92); ctx.lineTo(_ex+_ew*0.72,_ey+_eh*0.92);
-          ctx.stroke();
-        } else if (_ge.shape_type === 'check') {
-          ctx.moveTo(_ex+_ew*0.08,_ey+_eh*0.5); ctx.lineTo(_ex+_ew*0.38,_ey+_eh*0.82); ctx.lineTo(_ex+_ew*0.92,_ey+_eh*0.18);
-          ctx.stroke();
-        } else {
-          ctx.strokeRect(_ex+5,_ey+5,_ew-10,_eh-10);
+      if (_ge.type !== 'shape') continue;
+      var _ex = _ge.x || 0, _ey = _ge.y || 0;
+      var _ew = _ge.width || 100, _eh = _ge.height || 100;
+      var _lw = Math.max(5, Math.min(_ew, _eh) * 0.06);
+      ctx.save();
+      ctx.strokeStyle = _ge.color || '#c84826';
+      ctx.lineWidth   = _lw;
+      ctx.lineCap     = 'round';
+      ctx.lineJoin    = 'round';
+      ctx.beginPath();
+      if (_ge.shape_type === 'circle') {
+        // Organic oval using bezier curves
+        var _cx = _ex + _ew*0.5, _cy = _ey + _eh*0.5;
+        var _rx = _ew*0.42, _ry = _eh*0.43;
+        ctx.moveTo(_cx, _cy - _ry);
+        ctx.bezierCurveTo(_cx + _rx*1.12, _cy - _ry*1.05, _cx + _rx*1.12, _cy + _ry*1.05, _cx, _cy + _ry);
+        ctx.bezierCurveTo(_cx - _rx*1.12, _cy + _ry*1.05, _cx - _rx*1.12, _cy - _ry*1.05, _cx, _cy - _ry);
+        ctx.stroke();
+      } else if (_ge.shape_type === 'arrow') {
+        // Curved swooping arrow
+        ctx.moveTo(_ex + _ew*0.10, _ey + _eh*0.62);
+        ctx.bezierCurveTo(_ex + _ew*0.22, _ey + _eh*0.48, _ex + _ew*0.42, _ey + _eh*0.30, _ex + _ew*0.78, _ey + _eh*0.36);
+        ctx.moveTo(_ex + _ew*0.58, _ey + _eh*0.18);
+        ctx.lineTo(_ex + _ew*0.80, _ey + _eh*0.36);
+        ctx.lineTo(_ex + _ew*0.64, _ey + _eh*0.54);
+        ctx.stroke();
+      } else if (_ge.shape_type === 'underline') {
+        // Thick wavy brush underline
+        ctx.lineWidth = Math.max(8, _eh * 0.25);
+        ctx.moveTo(_ex + _ew*0.05, _ey + _eh*0.70);
+        ctx.bezierCurveTo(_ex + _ew*0.26, _ey + _eh*0.54, _ex + _ew*0.46, _ey + _eh*0.80, _ex + _ew*0.60, _ey + _eh*0.66);
+        ctx.bezierCurveTo(_ex + _ew*0.74, _ey + _eh*0.52, _ex + _ew*0.86, _ey + _eh*0.72, _ex + _ew*0.95, _ey + _eh*0.62);
+        ctx.stroke();
+      } else if (_ge.shape_type === 'star') {
+        // Starburst with organic varying points
+        var _pts = [
+          [0.50,0.06],[0.55,0.36],[0.78,0.20],[0.60,0.42],[0.90,0.42],
+          [0.64,0.56],[0.82,0.78],[0.54,0.66],[0.56,0.94],[0.44,0.68],
+          [0.18,0.82],[0.34,0.60],[0.08,0.48],[0.38,0.44],[0.22,0.20],[0.45,0.36]
+        ];
+        ctx.moveTo(_ex + _ew*_pts[0][0], _ey + _eh*_pts[0][1]);
+        for (var _pi = 1; _pi < _pts.length; _pi++) {
+          ctx.lineTo(_ex + _ew*_pts[_pi][0], _ey + _eh*_pts[_pi][1]);
         }
-        ctx.restore();
+        ctx.closePath();
+        ctx.lineWidth = Math.max(4, Math.min(_ew, _eh) * 0.04);
+        ctx.stroke();
+      } else if (_ge.shape_type === 'brackets') {
+        // Curved hand-drawn brackets
+        ctx.moveTo(_ex + _ew*0.34, _ey + _eh*0.12);
+        ctx.bezierCurveTo(_ex + _ew*0.22, _ey + _eh*0.18, _ex + _ew*0.16, _ey + _eh*0.30, _ex + _ew*0.16, _ey + _eh*0.50);
+        ctx.bezierCurveTo(_ex + _ew*0.16, _ey + _eh*0.70, _ex + _ew*0.22, _ey + _eh*0.82, _ex + _ew*0.34, _ey + _eh*0.88);
+        ctx.moveTo(_ex + _ew*0.66, _ey + _eh*0.12);
+        ctx.bezierCurveTo(_ex + _ew*0.78, _ey + _eh*0.18, _ex + _ew*0.84, _ey + _eh*0.30, _ex + _ew*0.84, _ey + _eh*0.50);
+        ctx.bezierCurveTo(_ex + _ew*0.84, _ey + _eh*0.70, _ex + _ew*0.78, _ey + _eh*0.82, _ex + _ew*0.66, _ey + _eh*0.88);
+        ctx.stroke();
+      } else if (_ge.shape_type === 'check') {
+        // Swoopy bold checkmark
+        ctx.lineWidth = Math.max(7, Math.min(_ew, _eh) * 0.08);
+        ctx.moveTo(_ex + _ew*0.07, _ey + _eh*0.52);
+        ctx.bezierCurveTo(_ex + _ew*0.14, _ey + _eh*0.52, _ex + _ew*0.20, _ey + _eh*0.62, _ex + _ew*0.30, _ey + _eh*0.76);
+        ctx.bezierCurveTo(_ex + _ew*0.42, _ey + _eh*0.64, _ex + _ew*0.62, _ey + _eh*0.36, _ex + _ew*0.93, _ey + _eh*0.14);
+        ctx.stroke();
+      } else {
+        ctx.strokeRect(_ex+5, _ey+5, _ew-10, _eh-10);
       }
+      ctx.restore();
     }
     if (!options.omitText) {
       (draft.text_boxes || []).forEach((box, index) => {
@@ -7190,6 +7235,17 @@
 
   // ── Design Elements ──
   let _dlgSelectedElemId = null;
+  let _dlgLogoSelected = false;
+  let _dlgEditingTextId = null;
+
+  function _addResizeHandles(el, handles) {
+    handles.forEach(function(h) {
+      var d = document.createElement('div');
+      d.className = 'dlg-resize-handle';
+      d.dataset.handle = h;
+      el.appendChild(d);
+    });
+  }
 
   function dlgAddDesignElement(opts) {
     if (!_sharedThumbnailDraft) return;
@@ -7219,9 +7275,6 @@
     if (opts.type === 'shape') {
       elem = { id, type: 'shape', shape_type: opts.shape_type || 'circle', color: opts.color || '#c84826',
                x: Math.round(W * 0.1), y: Math.round(H * 0.45), width: Math.round(W * 0.25), height: Math.round(H * 0.12) };
-    } else if (opts.type === 'emoji') {
-      elem = { id, type: 'emoji', emoji: opts.emoji || '🔥',
-               x: Math.round(W * 0.5), y: Math.round(H * 0.5), size: Math.round(Math.min(W, H) * 0.09) };
     } else { return; }
 
     _sharedThumbnailDraft.graphic_elements.push(elem);
@@ -7269,7 +7322,7 @@
       rows += '<div class="design-elem-list-row"><span>Foundry Logo</span><button class="btn-ghost btn-sm" type="button" onclick="dlgRemoveLogo()" style="padding:1px 8px;font-size:10px;">Remove</button></div>';
     }
     elems.forEach(function(e) {
-      var label = e.type === 'emoji' ? (e.emoji + ' Emoji') : (e.shape_type || 'Shape');
+      var label = e.shape_type || 'Shape';
       var isSelected = _dlgSelectedElemId === e.id;
       rows += '<div class="design-elem-list-row' + (isSelected ? ' selected' : '') + '" onclick="dlgSelectDesignElement(\'' + escHtml(e.id) + '\')">' +
         '<span style="text-transform:capitalize;">' + escHtml(label) + '</span>' +
@@ -7360,102 +7413,204 @@
   }
 
   function renderDialogOverlayLayer() {
+    // Don't re-render while inline-editing (would destroy the editing div)
+    if (_dlgEditingTextId) return;
     const layer = document.getElementById('dlg-overlay-layer');
     if (!layer || !_sharedThumbnailDraft) return;
     layer.innerHTML = '';
     const { scaleX, scaleY } = getThumbCanvasScale('dlg-canvas', 'dlg-canvas-wrap');
+    const CORNER_HANDLES = ['nw','ne','sw','se'];
+    const ALL_HANDLES    = ['nw','n','ne','e','se','s','sw','w'];
+
+    // ── Text Boxes ──
     (_sharedThumbnailDraft.text_boxes || []).forEach((box, index) => {
+      const isSelected = _sharedThumbnailDraft.selected_text_box_id === box.id;
       const div = document.createElement('div');
-      div.className = 'dlg-overlay-text' + (_sharedThumbnailDraft.selected_text_box_id === box.id ? ' selected' : '');
+      div.className = 'dlg-overlay-text' + (isSelected ? ' selected' : '');
       div.dataset.boxId = box.id;
       div.textContent = box.text || `Text Box ${index + 1}`;
-      div.style.left = ((box.x ?? getDefaultThumbTextPosition(_dlgStyle, _dlgTargetFormat, index).x) / scaleX) + 'px';
-      div.style.top = ((box.y ?? getDefaultThumbTextPosition(_dlgStyle, _dlgTargetFormat, index).y) / scaleY) + 'px';
+      const bx = box.x ?? getDefaultThumbTextPosition(_dlgStyle, _dlgTargetFormat, index).x;
+      const by = box.y ?? getDefaultThumbTextPosition(_dlgStyle, _dlgTargetFormat, index).y;
+      const bw = box.width || getDefaultThumbTextPosition(_dlgStyle, _dlgTargetFormat, index).width || 400;
+      div.style.left       = (bx / scaleX) + 'px';
+      div.style.top        = (by / scaleY) + 'px';
+      div.style.transform  = 'translate(-50%, -50%)';
+      div.style.width      = (bw / scaleX) + 'px';
       div.style.fontFamily = (box.font_family || 'Montserrat') + ', sans-serif';
-      div.style.fontSize = Math.round((box.font_size || 64) / Math.max(scaleX, scaleY)) + 'px';
-      div.style.maxWidth = ((box.width || getDefaultThumbTextPosition(_dlgStyle, _dlgTargetFormat, index).width || 400) / scaleX) + 'px';
-      div.style.color = box.color || '#ffffff';
-      div.style.textAlign = box.align || 'center';
+      div.style.fontSize   = Math.round((box.font_size || 64) / Math.max(scaleX, scaleY)) + 'px';
+      div.style.color      = box.color || '#ffffff';
+      div.style.textAlign  = box.align || 'center';
       div.style.textShadow = (box.shadow ?? true) ? '2px 2px 8px rgba(0,0,0,0.8)' : 'none';
       const alpha = (box.background_opacity ?? 0) / 100;
       const bg = hexToRgb(box.background_color || '#111111');
       div.style.background = alpha > 0 ? `rgba(${bg.r},${bg.g},${bg.b},${alpha})` : 'transparent';
-      div.style.padding = alpha > 0 ? '10px 16px' : '4px 8px';
+      div.style.padding    = alpha > 0 ? '10px 16px' : '4px 8px';
+      if (isSelected) _addResizeHandles(div, CORNER_HANDLES);
       layer.appendChild(div);
     });
+
+    // ── Logo ──
     if (_sharedThumbnailDraft.logo?.enabled) {
       const logo = _sharedThumbnailDraft.logo;
-      const img = document.createElement('img');
+      const img  = document.createElement('img');
       img.src = logo.asset || FOUNDRY_LOGO_ASSET;
       img.alt = 'Foundry logo';
+      img.style.display  = 'block';
+      img.style.width    = '100%';
+      img.style.height   = 'auto';
       const wrap = document.createElement('div');
-      wrap.className = 'dlg-logo-overlay';
-      wrap.dataset.logo = 'true';
-      wrap.style.left = (logo.x / scaleX) + 'px';
-      wrap.style.top = (logo.y / scaleY) + 'px';
-      wrap.style.width = (logo.width / scaleX) + 'px';
+      wrap.className = 'dlg-logo-overlay' + (_dlgLogoSelected ? ' selected' : '');
+      wrap.dataset.logo  = 'true';
+      wrap.style.left    = (logo.x / scaleX) + 'px';
+      wrap.style.top     = (logo.y / scaleY) + 'px';
+      wrap.style.width   = (logo.width / scaleX) + 'px';
+      wrap.style.transform = 'translate(-50%, -50%)';
       wrap.appendChild(img);
+      if (_dlgLogoSelected) _addResizeHandles(wrap, CORNER_HANDLES);
       layer.appendChild(wrap);
     }
-    // Render graphic_elements overlays
-    var _elems = (_sharedThumbnailDraft && _sharedThumbnailDraft.graphic_elements) ? _sharedThumbnailDraft.graphic_elements : [];
-    var _sx = getThumbCanvasScale('dlg-canvas', 'dlg-canvas-wrap').scaleX;
-    var _sy = getThumbCanvasScale('dlg-canvas', 'dlg-canvas-wrap').scaleY;
+
+    // ── Graphic Elements (shapes) ──
+    var _elems = (_sharedThumbnailDraft.graphic_elements || []).filter(function(e) { return e.type === 'shape'; });
+    var _sx = scaleX, _sy = scaleY;
     _elems.forEach(function(elem) {
+      var isElemSel = elem.id === _dlgSelectedElemId;
       var wrap = document.createElement('div');
-      wrap.className = 'dlg-design-elem-overlay' + (elem.id === _dlgSelectedElemId ? ' selected' : '');
+      wrap.className = 'dlg-design-elem-overlay' + (isElemSel ? ' selected' : '');
       wrap.dataset.elemId = elem.id;
       wrap.style.position = 'absolute';
-      if (elem.type === 'emoji') {
-        var dispSize = Math.round((elem.size || 80) / Math.max(_sx, _sy));
-        wrap.style.left       = Math.round(elem.x / _sx - dispSize * 0.5) + 'px';
-        wrap.style.top        = Math.round(elem.y / _sy - dispSize * 0.5) + 'px';
-        wrap.style.width      = dispSize + 'px';
-        wrap.style.height     = dispSize + 'px';
-        wrap.style.fontSize   = dispSize + 'px';
-        wrap.style.lineHeight = '1';
-        wrap.style.textAlign  = 'center';
-        wrap.textContent = elem.emoji || '';
-      } else if (elem.type === 'shape') {
-        var dw = Math.round((elem.width  || 100) / _sx);
-        var dh = Math.round((elem.height || 100) / _sy);
-        wrap.style.left   = Math.round(elem.x / _sx) + 'px';
-        wrap.style.top    = Math.round(elem.y / _sy) + 'px';
-        wrap.style.width  = dw + 'px';
-        wrap.style.height = dh + 'px';
-        var c = escHtml(elem.color || '#c84826');
-        var svgInner = '';
-        switch (elem.shape_type) {
-          case 'circle':    svgInner = '<ellipse cx="50%" cy="50%" rx="46%" ry="46%" fill="none" stroke="' + c + '" stroke-width="4" stroke-linecap="round"/>'; break;
-          case 'arrow':     svgInner = '<line x1="5%" y1="50%" x2="80%" y2="50%" stroke="' + c + '" stroke-width="4" stroke-linecap="round"/><polyline points="62%,20% 85%,50% 62%,80%" fill="none" stroke="' + c + '" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>'; break;
-          case 'underline': svgInner = '<path d="M5%,75% Q50%,58% 95%,80%" fill="none" stroke="' + c + '" stroke-width="4.5" stroke-linecap="round"/>'; break;
-          case 'star':      svgInner = '<polygon points="50%,5% 61%,38% 95%,38% 68%,58% 79%,92% 50%,72% 21%,92% 32%,58% 5%,38% 39%,38%" fill="none" stroke="' + c + '" stroke-width="3" stroke-linejoin="round"/>'; break;
-          case 'brackets':  svgInner = '<polyline points="28%,8% 10%,8% 10%,92% 28%,92%" fill="none" stroke="' + c + '" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/><polyline points="72%,8% 90%,8% 90%,92% 72%,92%" fill="none" stroke="' + c + '" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>'; break;
-          case 'check':     svgInner = '<polyline points="8%,50% 38%,82% 92%,18%" fill="none" stroke="' + c + '" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/>'; break;
-          default:          svgInner = '<rect x="5%" y="5%" width="90%" height="90%" fill="none" stroke="' + c + '" stroke-width="3"/>'; break;
-        }
-        wrap.innerHTML = '<svg width="100%" height="100%" viewBox="0 0 100 100" preserveAspectRatio="none" xmlns="http://www.w3.org/2000/svg">' + svgInner + '</svg>';
+      wrap.style.overflow = 'visible';
+      var dw = Math.round((elem.width  || 100) / _sx);
+      var dh = Math.round((elem.height || 100) / _sy);
+      wrap.style.left   = Math.round(elem.x / _sx) + 'px';
+      wrap.style.top    = Math.round(elem.y / _sy) + 'px';
+      wrap.style.width  = dw + 'px';
+      wrap.style.height = dh + 'px';
+      var c = escHtml(elem.color || '#c84826');
+      var svgInner = '';
+      switch (elem.shape_type) {
+        case 'circle':
+          svgInner = '<path d="M 50 8 C 72 7, 92 26, 92 50 C 92 74, 73 93, 50 93 C 27 93, 8 74, 8 50 C 8 26, 28 7, 50 8 Z" fill="none" stroke="' + c + '" stroke-width="4.5" stroke-linecap="round" stroke-linejoin="round"/>'; break;
+        case 'arrow':
+          svgInner = '<path d="M 10 62 C 18 50, 34 32, 72 38 M 72 38 L 58 24 M 72 38 L 62 54" fill="none" stroke="' + c + '" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/>'; break;
+        case 'underline':
+          svgInner = '<path d="M 5 70 C 20 58, 36 76, 50 66 C 64 56, 80 74, 95 64" fill="none" stroke="' + c + '" stroke-width="8" stroke-linecap="round"/>'; break;
+        case 'star':
+          svgInner = '<path d="M50,6 L55,36 L78,20 L60,42 L90,42 L64,56 L82,78 L54,66 L56,94 L44,68 L18,82 L34,60 L8,48 L38,44 L22,20 L45,36 Z" fill="none" stroke="' + c + '" stroke-width="3.5" stroke-linejoin="round" stroke-linecap="round"/>'; break;
+        case 'brackets':
+          svgInner = '<path d="M 34 12 C 24 16, 16 26, 16 50 C 16 74, 24 84, 34 88" fill="none" stroke="' + c + '" stroke-width="5" stroke-linecap="round"/><path d="M 66 12 C 76 16, 84 26, 84 50 C 84 74, 76 84, 66 88" fill="none" stroke="' + c + '" stroke-width="5" stroke-linecap="round"/>'; break;
+        case 'check':
+          svgInner = '<path d="M 7 52 C 14 52, 20 62, 30 76 C 40 66, 60 38, 93 14" fill="none" stroke="' + c + '" stroke-width="7" stroke-linecap="round" stroke-linejoin="round"/>'; break;
+        default:
+          svgInner = '<rect x="5" y="5" width="90" height="90" fill="none" stroke="' + c + '" stroke-width="3" rx="4"/>'; break;
       }
-      wrap.addEventListener('mousedown', function() { dlgSelectDesignElement(elem.id); renderDesignElementList(); });
+      wrap.innerHTML = '<svg width="100%" height="100%" viewBox="0 0 100 100" preserveAspectRatio="none" xmlns="http://www.w3.org/2000/svg">' + svgInner + '</svg>';
+      if (isElemSel) _addResizeHandles(wrap, ALL_HANDLES);
+      wrap.addEventListener('mousedown', function(ev) {
+        if (ev.target.classList.contains('dlg-resize-handle')) return;
+        dlgSelectDesignElement(elem.id);
+        renderDesignElementList();
+      });
       layer.appendChild(wrap);
     });
   }
 
-  // Drag for dialog overlay elements
+  // Drag / Resize / Inline-edit for dialog overlay elements
   (function () {
     let dragging = null;
-    document.addEventListener('mousedown', function (e) {
+
+    // ── Inline text editing ──
+    document.addEventListener('dblclick', function(e) {
       const textEl = e.target.closest('.dlg-overlay-text');
-      const logoEl = e.target.closest('.dlg-logo-overlay');
-      const elemEl = e.target.closest('.dlg-design-elem-overlay');
-      if (!textEl && !logoEl && !elemEl) return;
-      if (textEl) {
+      if (!textEl || !textEl.dataset.boxId) return;
+      const bid = textEl.dataset.boxId;
+      const box = (_sharedThumbnailDraft?.text_boxes || []).find(function(b) { return b.id === bid; });
+      if (!box) return;
+      _dlgEditingTextId = bid;
+      textEl.contentEditable = 'plaintext-only';
+      textEl.classList.add('editing');
+      textEl.style.userSelect = 'text';
+      textEl.focus();
+      // Select all text
+      const range = document.createRange();
+      range.selectNodeContents(textEl);
+      const sel = window.getSelection();
+      sel.removeAllRanges();
+      sel.addRange(range);
+      textEl.addEventListener('input', function onInput() {
+        box.text = textEl.textContent;
+        _dlgTitle = box.text;
+        const ta = document.getElementById('dlg-title-input');
+        if (ta) ta.value = box.text;
+        dlgDrawCanvas();
+      });
+      textEl.addEventListener('blur', function onBlur() {
+        textEl.removeEventListener('input', onInput);
+        textEl.removeEventListener('blur', onBlur);
+        box.text = textEl.textContent;
+        _dlgTitle = box.text;
+        textEl.contentEditable = 'false';
+        textEl.classList.remove('editing');
+        textEl.style.userSelect = '';
+        _dlgEditingTextId = null;
+        syncDraftFromDialogState();
+        dlgDrawCanvas();
+        renderDialogOverlayLayer();
+      });
+      e.preventDefault();
+    });
+
+    // ── Mousedown: drag or resize ──
+    document.addEventListener('mousedown', function (e) {
+      // Don't interfere with inline text editing
+      if (_dlgEditingTextId && e.target.closest('.dlg-overlay-text[data-box-id="' + _dlgEditingTextId + '"]')) return;
+
+      const handleEl = e.target.closest('.dlg-resize-handle');
+      const textEl   = e.target.closest('.dlg-overlay-text');
+      const logoEl   = e.target.closest('.dlg-logo-overlay');
+      const elemEl   = e.target.closest('.dlg-design-elem-overlay');
+
+      if (!handleEl && !textEl && !logoEl && !elemEl) return;
+
+      const { scaleX, scaleY } = getThumbCanvasScale('dlg-canvas', 'dlg-canvas-wrap');
+
+      if (handleEl) {
+        // ── Resize ──
+        const handle = handleEl.dataset.handle;
+        if (textEl) {
+          // Text box resize (width only via corners)
+          const bid = textEl.dataset.boxId;
+          const box = (_sharedThumbnailDraft?.text_boxes || []).find(function(b) { return b.id === bid; });
+          if (!box) return;
+          dragging = { type: 'resize-text', handle, startX: e.clientX, startY: e.clientY,
+                       origX: box.x, origY: box.y, origW: box.width || 400, boxId: bid };
+        } else if (logoEl && _sharedThumbnailDraft?.logo) {
+          const logo = _sharedThumbnailDraft.logo;
+          dragging = { type: 'resize-logo', handle, startX: e.clientX, startY: e.clientY,
+                       origX: logo.x, origY: logo.y, origW: logo.width || 180 };
+        } else if (elemEl) {
+          const eid   = elemEl.dataset.elemId;
+          const found = (_sharedThumbnailDraft?.graphic_elements || []).find(function(el) { return el.id === eid; });
+          if (!found) return;
+          dragging = { type: 'resize-elem', handle, elemId: eid, startX: e.clientX, startY: e.clientY,
+                       origX: found.x, origY: found.y, origW: found.width || 100, origH: found.height || 100 };
+        }
+        e.preventDefault();
+        e.stopPropagation();
+        return;
+      }
+
+      // ── Move ──
+      if (textEl && textEl.dataset.boxId) {
+        if (textEl.classList.contains('editing')) return;
         dlgSelectTextBox(textEl.dataset.boxId);
         const box = getActiveThumbnailTextBox();
         dragging = { type: 'text', startX: e.clientX, startY: e.clientY, origX: box?.x ?? _dlgCanvasTX, origY: box?.y ?? _dlgCanvasTY };
       } else if (logoEl) {
         const logo = _sharedThumbnailDraft?.logo;
         if (!logo) return;
+        _dlgLogoSelected = true;
+        renderDialogOverlayLayer();
         dragging = { type: 'logo', startX: e.clientX, startY: e.clientY, origX: logo.x, origY: logo.y };
       } else if (elemEl) {
         const eid   = elemEl.dataset.elemId;
@@ -7466,29 +7621,85 @@
       }
       e.preventDefault();
     });
+
+    // Click on canvas background deselects logo
+    document.addEventListener('mousedown', function(e) {
+      if (!e.target.closest('.dlg-logo-overlay') && !e.target.closest('.dlg-resize-handle')) {
+        if (_dlgLogoSelected) {
+          _dlgLogoSelected = false;
+          renderDialogOverlayLayer();
+        }
+      }
+    });
+
     document.addEventListener('mousemove', function (e) {
       if (!dragging) return;
       const { scaleX, scaleY } = getThumbCanvasScale('dlg-canvas', 'dlg-canvas-wrap');
       const canvas = document.getElementById('dlg-canvas');
-      const dx = (e.clientX - dragging.startX) * scaleX;
-      const dy = (e.clientY - dragging.startY) * scaleY;
+      const dx = e.clientX - dragging.startX;
+      const dy = e.clientY - dragging.startY;
+      const hdxMap = { 'nw': -1, 'n': 0, 'ne': 1, 'e': 1, 'se': 1, 's': 0, 'sw': -1, 'w': -1 };
+      const hdyMap = { 'nw': -1, 'n': -1, 'ne': -1, 'e': 0, 'se': 1, 's': 1, 'sw': 1, 'w': 0 };
+
+      if (dragging.type === 'resize-text') {
+        const bid = dragging.boxId;
+        const box = (_sharedThumbnailDraft?.text_boxes || []).find(function(b) { return b.id === bid; });
+        if (!box) return;
+        const hdx = hdxMap[dragging.handle] || 0;
+        const newW = Math.max(80, dragging.origW + hdx * dx * scaleX);
+        box.width = Math.round(newW);
+        // Shift center x so the edge the user is dragging moves with cursor
+        box.x = Math.round(dragging.origX + dx * scaleX / 2);
+        _dlgCanvasTX = box.x;
+        syncDraftFromDialogState();
+        renderDialogOverlayLayer();
+        return;
+      }
+
+      if (dragging.type === 'resize-logo') {
+        const logo = _sharedThumbnailDraft?.logo;
+        if (!logo) return;
+        const hdx = hdxMap[dragging.handle] || 0;
+        const newW = Math.max(60, dragging.origW + hdx * dx * scaleX);
+        logo.width = Math.round(newW);
+        logo.x = Math.round(dragging.origX + dx * scaleX / 2);
+        syncDraftFromDialogState();
+        dlgDrawCanvas();
+        renderDialogOverlayLayer();
+        return;
+      }
+
+      if (dragging.type === 'resize-elem') {
+        const found = (_sharedThumbnailDraft?.graphic_elements || []).find(function(el) { return el.id === dragging.elemId; });
+        if (!found) return;
+        const hdx = hdxMap[dragging.handle] || 0;
+        const hdy = hdyMap[dragging.handle] || 0;
+        const newW = Math.max(40, dragging.origW + hdx * dx * scaleX);
+        const newH = Math.max(30, dragging.origH + hdy * dy * scaleY);
+        found.width  = Math.round(newW);
+        found.height = Math.round(newH);
+        found.x = Math.round(hdx < 0 ? dragging.origX + (dragging.origW - newW) : dragging.origX);
+        found.y = Math.round(hdy < 0 ? dragging.origY + (dragging.origH - newH) : dragging.origY);
+        syncDraftFromDialogState();
+        renderDialogOverlayLayer();
+        return;
+      }
+
       if (dragging.type === 'text') {
         const box = getActiveThumbnailTextBox();
         if (!box) return;
-        _dlgCanvasTX = Math.max(60, Math.min((canvas?.width || 1280) - 60, dragging.origX + dx));
-        _dlgCanvasTY = Math.max(40, Math.min((canvas?.height || 720) - 40, dragging.origY + dy));
+        _dlgCanvasTX = Math.max(60, Math.min((canvas?.width || 1280) - 60, dragging.origX + dx * scaleX));
+        _dlgCanvasTY = Math.max(40, Math.min((canvas?.height || 720) - 40, dragging.origY + dy * scaleY));
         box.x = _dlgCanvasTX;
         box.y = _dlgCanvasTY;
       } else if (dragging.type === 'logo' && _sharedThumbnailDraft?.logo) {
-        _sharedThumbnailDraft.logo.x = Math.max(50, Math.min((canvas?.width || 1280) - 50, dragging.origX + dx));
-        _sharedThumbnailDraft.logo.y = Math.max(50, Math.min((canvas?.height || 720) - 50, dragging.origY + dy));
+        _sharedThumbnailDraft.logo.x = Math.max(50, Math.min((canvas?.width || 1280) - 50, dragging.origX + dx * scaleX));
+        _sharedThumbnailDraft.logo.y = Math.max(50, Math.min((canvas?.height || 720) - 50, dragging.origY + dy * scaleY));
       } else if (dragging.type === 'elem') {
         const found2 = (_sharedThumbnailDraft?.graphic_elements || []).find(function(el) { return el.id === dragging.elemId; });
         if (!found2) return;
-        const dx3 = (e.clientX - dragging.startX) * scaleX;
-        const dy3 = (e.clientY - dragging.startY) * scaleY;
-        found2.x = Math.round(dragging.origX + dx3);
-        found2.y = Math.round(dragging.origY + dy3);
+        found2.x = Math.round(dragging.origX + dx * scaleX);
+        found2.y = Math.round(dragging.origY + dy * scaleY);
         syncDraftFromDialogState();
         renderDialogOverlayLayer();
         return;
@@ -7496,7 +7707,8 @@
       syncDraftFromDialogState();
       renderDialogOverlayLayer();
     });
-    document.addEventListener('mouseup', () => { dragging = null; });
+
+    document.addEventListener('mouseup', function() { dragging = null; });
   })();
 
   // "Done — Use This Thumbnail" → render canvas → capture blob
@@ -7954,48 +8166,32 @@
             <div class="thumb-editor-label" style="margin-bottom:10px;">Design Elements</div>
 
             <div style="font-size:10px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:var(--muted);margin-bottom:6px;">Logo</div>
-            <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px;">
+            <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:14px;">
               <button class="design-elem-btn" type="button" onclick="dlgAddDesignElement({type:'logo'})" title="Add Foundry Logo">
                 <img src="TCF_Logo-Orange.png" alt="Logo" style="height:22px;width:auto;object-fit:contain;display:block;" onerror="this.parentElement.textContent='Logo'">
               </button>
             </div>
 
             <div style="font-size:10px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:var(--muted);margin-bottom:6px;">Shapes</div>
-            <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px;">
-              <button class="design-elem-btn" type="button" title="Circle" onclick="dlgAddDesignElement({type:'shape',shape_type:'circle',color:'#c84826'})">
-                <svg width="22" height="22" viewBox="0 0 40 40"><ellipse cx="20" cy="20" rx="15" ry="15" fill="none" stroke="#c84826" stroke-width="4" stroke-linecap="round"/></svg>
+            <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px;">
+              <button class="design-elem-btn" type="button" title="Oval highlight" onclick="dlgAddDesignElement({type:'shape',shape_type:'circle',color:'#c84826'})">
+                <svg width="22" height="22" viewBox="0 0 40 40" fill="none"><path d="M20,7 C28,6 35,12 35,20 C35,28 28,34 20,34 C12,34 5,28 5,20 C5,12 12,6 20,7 Z" stroke="#c84826" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/></svg>
               </button>
-              <button class="design-elem-btn" type="button" title="Arrow" onclick="dlgAddDesignElement({type:'shape',shape_type:'arrow',color:'#1e2530'})">
-                <svg width="22" height="22" viewBox="0 0 40 40"><line x1="5" y1="20" x2="30" y2="20" stroke="#1e2530" stroke-width="4" stroke-linecap="round"/><polyline points="22,13 32,20 22,27" fill="none" stroke="#1e2530" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              <button class="design-elem-btn" type="button" title="Curved arrow" onclick="dlgAddDesignElement({type:'shape',shape_type:'arrow',color:'#1e2530'})">
+                <svg width="22" height="22" viewBox="0 0 40 40" fill="none"><path d="M7,26 C12,20 20,12 30,14 M30,14 L24,8 M30,14 L25,20" stroke="#1e2530" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/></svg>
               </button>
-              <button class="design-elem-btn" type="button" title="Wavy underline" onclick="dlgAddDesignElement({type:'shape',shape_type:'underline',color:'#c84826'})">
-                <svg width="22" height="22" viewBox="0 0 40 40"><path d="M4,28 Q12,20 20,28 Q28,36 36,28" fill="none" stroke="#c84826" stroke-width="4" stroke-linecap="round"/></svg>
+              <button class="design-elem-btn" type="button" title="Brush underline" onclick="dlgAddDesignElement({type:'shape',shape_type:'underline',color:'#c84826'})">
+                <svg width="22" height="22" viewBox="0 0 40 40" fill="none"><path d="M4,27 C11,22 18,30 20,26 C22,22 29,28 36,24" stroke="#c84826" stroke-width="4.5" stroke-linecap="round"/></svg>
               </button>
-              <button class="design-elem-btn" type="button" title="Star" onclick="dlgAddDesignElement({type:'shape',shape_type:'star',color:'#1e2530'})">
-                <svg width="22" height="22" viewBox="0 0 40 40"><polygon points="20,4 24,15 36,15 26,22 30,34 20,27 10,34 14,22 4,15 16,15" fill="none" stroke="#1e2530" stroke-width="2.5" stroke-linejoin="round"/></svg>
+              <button class="design-elem-btn" type="button" title="Starburst" onclick="dlgAddDesignElement({type:'shape',shape_type:'star',color:'#1e2530'})">
+                <svg width="22" height="22" viewBox="0 0 40 40" fill="none"><path d="M20,4 L22,15 L31,9 L25,18 L36,18 L27,24 L32,34 L22,28 L22,37 L18,28 L10,34 L14,24 L5,18 L16,18 L11,9 L20,15 Z" stroke="#1e2530" stroke-width="2.2" stroke-linejoin="round" stroke-linecap="round"/></svg>
               </button>
-              <button class="design-elem-btn" type="button" title="Brackets" onclick="dlgAddDesignElement({type:'shape',shape_type:'brackets',color:'#1e2530'})">
-                <svg width="22" height="22" viewBox="0 0 40 40"><polyline points="14,7 7,7 7,33 14,33" fill="none" stroke="#1e2530" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"/><polyline points="26,7 33,7 33,33 26,33" fill="none" stroke="#1e2530" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              <button class="design-elem-btn" type="button" title="Focus brackets" onclick="dlgAddDesignElement({type:'shape',shape_type:'brackets',color:'#1e2530'})">
+                <svg width="22" height="22" viewBox="0 0 40 40" fill="none"><path d="M16,8 C12,10 10,14 10,20 C10,26 12,30 16,32" stroke="#1e2530" stroke-width="3.5" stroke-linecap="round"/><path d="M24,8 C28,10 30,14 30,20 C30,26 28,30 24,32" stroke="#1e2530" stroke-width="3.5" stroke-linecap="round"/></svg>
               </button>
-              <button class="design-elem-btn" type="button" title="Checkmark" onclick="dlgAddDesignElement({type:'shape',shape_type:'check',color:'#c84826'})">
-                <svg width="22" height="22" viewBox="0 0 40 40"><polyline points="6,22 16,32 34,10" fill="none" stroke="#c84826" stroke-width="4.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              <button class="design-elem-btn" type="button" title="Bold check" onclick="dlgAddDesignElement({type:'shape',shape_type:'check',color:'#c84826'})">
+                <svg width="22" height="22" viewBox="0 0 40 40" fill="none"><path d="M5,22 C9,22 13,28 17,34 C22,26 29,16 35,8" stroke="#c84826" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/></svg>
               </button>
-            </div>
-
-            <div style="font-size:10px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:var(--muted);margin-bottom:6px;">Emojis</div>
-            <div style="display:flex;gap:4px;flex-wrap:wrap;margin-bottom:10px;">
-              <button class="design-elem-btn design-elem-emoji" type="button" title="Fire" onclick="dlgAddDesignElement({type:'emoji',emoji:'🔥'})">🔥</button>
-              <button class="design-elem-btn design-elem-emoji" type="button" title="Idea" onclick="dlgAddDesignElement({type:'emoji',emoji:'💡'})">💡</button>
-              <button class="design-elem-btn design-elem-emoji" type="button" title="Question" onclick="dlgAddDesignElement({type:'emoji',emoji:'❓'})">❓</button>
-              <button class="design-elem-btn design-elem-emoji" type="button" title="Sparkles" onclick="dlgAddDesignElement({type:'emoji',emoji:'✨'})">✨</button>
-              <button class="design-elem-btn design-elem-emoji" type="button" title="Target" onclick="dlgAddDesignElement({type:'emoji',emoji:'🎯'})">🎯</button>
-              <button class="design-elem-btn design-elem-emoji" type="button" title="Speech bubble" onclick="dlgAddDesignElement({type:'emoji',emoji:'💬'})">💬</button>
-              <button class="design-elem-btn design-elem-emoji" type="button" title="Star" onclick="dlgAddDesignElement({type:'emoji',emoji:'⭐'})">⭐</button>
-              <button class="design-elem-btn design-elem-emoji" type="button" title="Cross" onclick="dlgAddDesignElement({type:'emoji',emoji:'✝️'})">✝️</button>
-              <button class="design-elem-btn design-elem-emoji" type="button" title="Praying hands" onclick="dlgAddDesignElement({type:'emoji',emoji:'🙏'})">🙏</button>
-              <button class="design-elem-btn design-elem-emoji" type="button" title="Heart" onclick="dlgAddDesignElement({type:'emoji',emoji:'❤️'})">❤️</button>
-              <button class="design-elem-btn design-elem-emoji" type="button" title="Arrow right" onclick="dlgAddDesignElement({type:'emoji',emoji:'➡️'})">➡️</button>
-              <button class="design-elem-btn design-elem-emoji" type="button" title="Point up" onclick="dlgAddDesignElement({type:'emoji',emoji:'👆'})">👆</button>
             </div>
 
             <div id="dlg-elem-list"></div>
