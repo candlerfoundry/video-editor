@@ -1,7 +1,7 @@
 # CANONICAL.md - Foundry Video Editor Backend
 # Source of truth for critical backend and thumbnail behavior.
 # Every editing session must compare server.py to this file before changing fragile paths.
-# Last updated: April 6, 2026 (session 2)
+# Last updated: June 10, 2026 (transcript trimming & word cut-outs session)
 #
 # HOW TO USE THIS FILE:
 # 1. Read it before editing server.py or launcher/launcher.py.
@@ -453,6 +453,7 @@ Canonical backend/project requirements:
 - `thumbnail_drafts` remain the source of reusable thumbnail state for export handoff.
 - `server.py` must expose `/project_export_folder/check`, `/project_export_folder/create`, and `/project_export_folder/list_all`.
 - `/project_export_folder/list_all` must return `{ "folders": [...] }` — a flat list of all available relative folder paths inside `Social Media Clips`.
+  - Regressed before the June 10, 2026 session: this route was documented here and called by `index.html` (`loadAllExportFolders`) but missing from `server.py`, so "Other — browse all folders…" 404'd. Fixed by: restoring the route (wraps `list_social_media_existing_project_folders()`, returns relative paths).
 - Clip export must save into `Social Media Clips/<parent-folder>/<project-folder>/`.
 - Thumbnail attachment after clip save must support patching the Airtable record with the thumbnail Dropbox URL.
 - `exports` records `thumbnail_mode` and `thumbnail_draft_id` when a thumbnail is attached.
@@ -519,5 +520,63 @@ Known limitations:
 - Text boxes and graphic elements are draggable but not free-resized by drag handles yet.
 - Logo placement is draggable and size-adjustable but no rotation tool exists yet.
 - The live preview uses HTML overlay layers for editing; the final PNG is re-rendered from draft data on export.
+
+Regression risk: High.
+
+---
+
+## 19. Transcript clip trimming and word cut-outs (added June 10, 2026)
+
+Canonical product rules:
+- The Stage 3 transcript panel is an editing surface, not just a readout.
+- The orange `[` and `]` boundary markers are draggable: dragging them moves
+  `editorInTime` / `editorOutTime` to the word under the pointer and stays in
+  sync with the timeline handles and the Start/End time fields.
+- Clicking a pre-clip / post-clip word still extends/trims (pre-existing
+  behavior — keep it).
+- Dragging across in-clip words strikes them out (a "cut"): the words render
+  with `tx-cut` (line-through), preview playback skips them, and export
+  stitches the kept segments together. Clicking any struck word restores its
+  whole cut range.
+
+Canonical frontend requirements in `index.html`:
+- `editorCutRanges` — module-scope array of `{start, end}` absolute-second
+  ranges, kept sorted and non-overlapping (`addCutRange` merges overlaps;
+  `clampCutRangesToClip()` runs inside `updateAllEditorUI()` so cuts never
+  escape the in/out range when boundaries move).
+- Cuts are cleared when a new candidate/split part is selected and by
+  `resetToAISuggestion()`.
+- Boundary markers carry `data-boundary="in"|"out"`. The drag logic uses
+  document-level pointer listeners (same pattern as the timeline handle drag)
+  because `renderTranscriptAlways()` rebuilds the panel mid-drag.
+- During a cut-select drag, highlight via the `tx-cut-select` class only — do
+  NOT rebuild the transcript DOM on pointermove.
+- `_txSuppressClick` swallows the click event that follows a completed drag so
+  it does not also scrub/extend.
+- `renderTimelineBar()` renders one striped `.clip-tl-cut` overlay per cut
+  range inside the selected region.
+- `playSelection()` uses a `timeupdate` listener (NOT `setTimeout`) so playback
+  stops at the out-point and seeks over cut ranges. Do not revert to the timer.
+- `doExport()` appends a `cut_ranges` form field (JSON `[[start, end], ...]`,
+  absolute seconds, clamped to in/out) when cuts exist, and excludes cut words
+  from `clip_transcript` via `isWordCut()`.
+
+Canonical backend requirements in `server.py`:
+- `/export_clip` accepts optional form field `cut_ranges`.
+- `compute_kept_segments(starttime, endtime, cut_ranges_raw)` subtracts cuts
+  from the clip range: clamps, merges overlaps, drops slivers (< 0.05s), caps
+  at 20 segments, and falls back to the full `[starttime, endtime]` range on
+  any invalid input (forgiving — never fail an export because of a bad cut
+  payload).
+- With > 1 kept segment, export runs ONE ffmpeg pass:
+  `-filter_complex "[0:v]trim=..,setpts=PTS-STARTPTS[vN];[0:a]atrim=..,asetpts=PTS-STARTPTS[aN];..concat=n=N:v=1:a=1[vcat][acat];[vcat]crop=ih*9/16:ih,scale=1080:1920[vout]"`
+  with `-map [vout] -map [acat]`, same codec settings as the legacy path.
+- With 1 kept segment (no cuts), the legacy two-pass extract+reframe path runs
+  UNCHANGED — do not merge the two paths.
+
+Known limitations:
+- Cut ranges are not yet persisted to the local project store (`/projects/update`);
+  they live only in the editor session until export.
+- Stitches are hard cuts (standard jump-cut style); no audio crossfade.
 
 Regression risk: High.

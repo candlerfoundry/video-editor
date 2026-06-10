@@ -1460,7 +1460,18 @@
     .tx-word.tx-out-pre,
     .tx-word.tx-out-post { color: #BBBBBB; }
     .tx-word.tx-in-clip  { color: #1A1A1A; }
-    .tx-boundary-marker  { color: var(--orange); font-weight: 700; }
+    .tx-boundary-marker  { color: var(--orange); font-weight: 700; cursor: ew-resize; user-select: none; padding: 0 3px; border-radius: 4px; touch-action: none; }
+    .tx-boundary-marker:hover,
+    .tx-boundary-marker.dragging { background: var(--orange-tint); }
+    .tx-word.tx-cut { text-decoration: line-through; color: #C9B0A8; opacity: 0.55; cursor: pointer; }
+    .tx-word.tx-cut:hover { background: #FBE9E7; opacity: 0.85; }
+    .tx-word.tx-cut-select { background: #FBE0DC; }
+    .clip-tl-cut {
+      position: absolute; top: 0; bottom: 0; border-radius: 3px; pointer-events: none;
+      background: repeating-linear-gradient(45deg,
+        rgba(204,34,0,0.32), rgba(204,34,0,0.32) 4px,
+        rgba(204,34,0,0.12) 4px, rgba(204,34,0,0.12) 8px);
+    }
     @keyframes txFlash {
       0%   { background: rgba(232,84,26,0.38); border-radius: 3px; }
       100% { background: transparent; }
@@ -2267,7 +2278,7 @@
             <!-- RIGHT: always-on transcript -->
             <div class="editor-right-zone">
               <div class="tx-always-wrap" id="tx-always-wrap">
-                <span class="tx-always-header">TRANSCRIPT &#8212; click outside words to extend or trim</span>
+                <span class="tx-always-header">TRANSCRIPT &#8212; drag [ ] to trim &#183; drag across words to cut them out &#183; click a struck word to restore</span>
                 <div id="transcript-panel"></div>
               </div>
             </div><!-- /.editor-right-zone -->
@@ -3843,10 +3854,17 @@
 
   // Transcript word click (Stage 3)
   document.getElementById('transcript-panel').addEventListener('click', function (e) {
+    if (_txSuppressClick) { _txSuppressClick = false; return; }
     const wordEl = e.target.closest('.tx-word');
     if (!wordEl) return;
     const t    = parseFloat(wordEl.dataset.start);
     const tEnd = parseFloat(wordEl.dataset.end);
+    if (wordEl.classList.contains('tx-cut')) {
+      // Click a struck-out word -> restore its whole cut range
+      removeCutRangeAt((t + (isNaN(tEnd) ? t : tEnd)) / 2);
+      updateAllEditorUI();
+      return;
+    }
     const video = document.getElementById('edit-video');
     if (video) video.currentTime = t;
 
@@ -4130,6 +4148,7 @@
     editorOutTime = _editCandidate.end_time;
     origInTime    = editorInTime;
     origOutTime   = editorOutTime;
+    editorCutRanges = [];
 
     const vid = document.getElementById('edit-video');
     vid.src = getPlayableVideoUrl('clips');
@@ -4211,6 +4230,7 @@
 
   // ── Select & Edit → Stage 3 ──
   function selectAndEdit(idx) {
+    editorCutRanges = [];
     const mc = document.querySelector('.main-content');
     savedScrollY = mc ? mc.scrollTop : 0;
 
@@ -4252,6 +4272,43 @@
   let editorInTime  = 0;
   let editorOutTime = 0;
   let _playSelTimer = null;
+  let editorCutRanges = [];   // [{start, end}] absolute secs to cut out of the clip (sorted, non-overlapping)
+  let _txDragBoundary = null; // 'in' | 'out' while a transcript bracket is being dragged
+  let _txSuppressClick = false; // swallow the click that follows a transcript drag
+
+  function isTimeCut(t) {
+    return editorCutRanges.some(r => t >= r.start && t < r.end);
+  }
+  function isWordCut(w) {
+    const mid = ((w.start ?? 0) + (w.end ?? w.start ?? 0)) / 2;
+    return isTimeCut(mid);
+  }
+  function addCutRange(start, end) {
+    start = Math.max(start, editorInTime);
+    end   = Math.min(end, editorOutTime);
+    if (end - start < 0.05) return;
+    editorCutRanges.push({ start, end });
+    editorCutRanges.sort((a, b) => a.start - b.start);
+    // Merge overlapping/adjacent ranges
+    const merged = [editorCutRanges[0]];
+    for (let i = 1; i < editorCutRanges.length; i++) {
+      const r = editorCutRanges[i];
+      if (r.start <= merged[merged.length - 1].end + 0.01) {
+        merged[merged.length - 1].end = Math.max(merged[merged.length - 1].end, r.end);
+      } else {
+        merged.push(r);
+      }
+    }
+    editorCutRanges = merged;
+  }
+  function removeCutRangeAt(t) {
+    editorCutRanges = editorCutRanges.filter(r => !(t >= r.start && t < r.end));
+  }
+  function clampCutRangesToClip() {
+    editorCutRanges = editorCutRanges
+      .map(r => ({ start: Math.max(r.start, editorInTime), end: Math.min(r.end, editorOutTime) }))
+      .filter(r => r.end - r.start > 0.05);
+  }
 
   function updateTimeFields() {
     document.getElementById('in-time-field').value  = fmtPrecise(editorInTime);
@@ -4277,16 +4334,30 @@
   function playSelection() {
     const video = document.getElementById('edit-video');
     if (!video.src) return;
-    if (_playSelTimer) clearTimeout(_playSelTimer);
+    if (_playSelTimer) { clearTimeout(_playSelTimer); _playSelTimer = null; }
     if (currentlyPlaying && currentlyPlaying !== video) {
       currentlyPlaying.pause();
       currentlyPlaying.currentTime = 0;
     }
     currentlyPlaying = video;
+    // timeupdate listener (not setTimeout) so playback skips cut-out ranges
+    // and stops exactly at the out-point even after seeks. Matches the
+    // togglePreview()/toggleSplitPreview() pattern (CANONICAL section 18).
+    if (video._selStop) video.removeEventListener('timeupdate', video._selStop);
+    video._selStop = function () {
+      if (video.currentTime >= editorOutTime - 0.03) {
+        video.pause();
+        video.removeEventListener('timeupdate', video._selStop);
+        video._selStop = null;
+        return;
+      }
+      const cut = editorCutRanges.find(r =>
+        video.currentTime >= r.start - 0.02 && video.currentTime < r.end - 0.02);
+      if (cut) video.currentTime = Math.min(cut.end + 0.01, editorOutTime);
+    };
+    video.addEventListener('timeupdate', video._selStop);
     video.currentTime = editorInTime;
     video.play().catch(() => {});
-    const dur = Math.max(0, editorOutTime - editorInTime);
-    _playSelTimer = setTimeout(() => video.pause(), dur * 1000);
   }
 
 
@@ -4345,6 +4416,16 @@
     const pAOut= Math.max(0, Math.min(100, (origOutTime   / dur) * 100));
 
     if (region) { region.style.left = pIn + '%'; region.style.right = (100 - pOut) + '%'; }
+
+    // Cut-range overlays (striped) inside the selected region
+    track.querySelectorAll('.clip-tl-cut').forEach(el => el.remove());
+    editorCutRanges.forEach(r => {
+      const cutEl = document.createElement('div');
+      cutEl.className = 'clip-tl-cut';
+      cutEl.style.left  = Math.max(0, Math.min(100, (r.start / dur) * 100)) + '%';
+      cutEl.style.right = (100 - Math.max(0, Math.min(100, (r.end / dur) * 100))) + '%';
+      track.insertBefore(cutEl, track.querySelector('.clip-tl-playhead'));
+    });
     if (hIn)    hIn.style.left   = pIn  + '%';
     if (hOut)   hOut.style.left  = pOut + '%';
     if (tipIn)  tipIn.textContent  = formatTime(editorInTime);
@@ -4374,10 +4455,12 @@
   function resetToAISuggestion() {
     editorInTime  = origInTime;
     editorOutTime = origOutTime;
+    editorCutRanges = [];
     updateAllEditorUI();
   }
 
   function updateAllEditorUI() {
+    clampCutRangesToClip();
     updateTimeFields();
     renderTimelineBar();
     renderTranscriptAlways(false);
@@ -4444,6 +4527,95 @@
     if (hOut) hOut.addEventListener('mousedown', e => onMousedown(e, 'out'));
   })();
 
+  // ── Transcript: drag [ ] brackets to retime, drag across words to cut them out ──
+  (function () {
+    const panel = document.getElementById('transcript-panel');
+    if (!panel) return;
+    let _cutAnchor  = null;  // {s, e} of the word where a cut-select drag started
+    let _cutCurrent = null;  // {s, e} of the word currently under the pointer
+    let _raf = null;
+
+    function wordUnderPointer(e) {
+      const el = document.elementFromPoint(e.clientX, e.clientY);
+      return el && el.closest ? el.closest('.tx-word') : null;
+    }
+
+    function onPointerDown(e) {
+      if (e.button !== undefined && e.button !== 0) return;
+      const marker = e.target.closest('.tx-boundary-marker');
+      if (marker) {
+        e.preventDefault();
+        _txDragBoundary = marker.dataset.boundary;
+        panel.style.userSelect = 'none';
+        document.addEventListener('pointermove', onMove);
+        document.addEventListener('pointerup', onUp);
+        return;
+      }
+      const wordEl = e.target.closest('.tx-word');
+      if (wordEl && wordEl.classList.contains('tx-in-clip') && !wordEl.classList.contains('tx-cut')) {
+        _cutAnchor  = { s: parseFloat(wordEl.dataset.start), e: parseFloat(wordEl.dataset.end) };
+        _cutCurrent = null;
+        panel.style.userSelect = 'none';
+        document.addEventListener('pointermove', onMove);
+        document.addEventListener('pointerup', onUp);
+      }
+    }
+
+    function onMove(e) {
+      if (_txDragBoundary) {
+        const wordEl = wordUnderPointer(e);
+        if (!wordEl) return;
+        const ws  = parseFloat(wordEl.dataset.start);
+        const we  = parseFloat(wordEl.dataset.end);
+        const MIN = 2; // seconds minimum clip width (matches timeline handles)
+        if (_txDragBoundary === 'in') {
+          if (!isNaN(ws)) editorInTime = Math.max(0, Math.min(ws, editorOutTime - MIN));
+        } else {
+          const t = isNaN(we) ? ws : we;
+          if (!isNaN(t)) editorOutTime = Math.max(t, editorInTime + MIN);
+        }
+        if (!_raf) {
+          _raf = requestAnimationFrame(() => { _raf = null; updateAllEditorUI(); });
+        }
+      } else if (_cutAnchor) {
+        const wordEl = wordUnderPointer(e);
+        if (!wordEl || !wordEl.classList.contains('tx-in-clip')) return;
+        _cutCurrent = { s: parseFloat(wordEl.dataset.start), e: parseFloat(wordEl.dataset.end) };
+        // Live highlight via classes only (no DOM rebuild during drag)
+        const lo = Math.min(_cutAnchor.s, _cutCurrent.s);
+        const hi = Math.max(_cutAnchor.e, _cutCurrent.e);
+        panel.querySelectorAll('.tx-word.tx-in-clip').forEach(el => {
+          const s  = parseFloat(el.dataset.start);
+          const en = parseFloat(el.dataset.end);
+          el.classList.toggle('tx-cut-select', en > lo && s < hi);
+        });
+      }
+    }
+
+    function onUp() {
+      document.removeEventListener('pointermove', onMove);
+      document.removeEventListener('pointerup', onUp);
+      panel.style.userSelect = '';
+      if (_txDragBoundary) {
+        _txDragBoundary = null;
+        _txSuppressClick = true;
+        updateAllEditorUI();
+      } else if (_cutAnchor) {
+        if (_cutCurrent && (_cutCurrent.s !== _cutAnchor.s || _cutCurrent.e !== _cutAnchor.e)) {
+          addCutRange(Math.min(_cutAnchor.s, _cutCurrent.s), Math.max(_cutAnchor.e, _cutCurrent.e));
+          _txSuppressClick = true;
+          updateAllEditorUI();
+        } else {
+          panel.querySelectorAll('.tx-cut-select').forEach(el => el.classList.remove('tx-cut-select'));
+        }
+        _cutAnchor  = null;
+        _cutCurrent = null;
+      }
+    }
+
+    panel.addEventListener('pointerdown', onPointerDown);
+  })();
+
   // ── Always-on transcript rendering ──
   function renderTranscriptAlways(scrollToClip) {
     const panel = document.getElementById('transcript-panel');
@@ -4461,25 +4633,30 @@
       const isPost = wStart >= editorOutTime;
       const inClip = !isPre && !isPost;
 
-      // [ marker before first in-clip word
+      // [ marker before first in-clip word (draggable to move the in-point)
       if (!firstInClipEl && inClip) {
         const m = document.createElement('span');
-        m.className = 'tx-boundary-marker';
+        m.className = 'tx-boundary-marker' + (_txDragBoundary === 'in' ? ' dragging' : '');
+        m.dataset.boundary = 'in';
+        m.title = 'Drag to move clip start';
         m.textContent = '[ ';
         panel.appendChild(m);
       }
 
-      // ] marker before first post-clip word
+      // ] marker before first post-clip word (draggable to move the out-point)
       if (!clipEndAdded && isPost && firstInClipEl) {
         const m = document.createElement('span');
-        m.className = 'tx-boundary-marker';
+        m.className = 'tx-boundary-marker' + (_txDragBoundary === 'out' ? ' dragging' : '');
+        m.dataset.boundary = 'out';
+        m.title = 'Drag to move clip end';
         m.textContent = ' ] ';
         panel.appendChild(m);
         clipEndAdded = true;
       }
 
+      const cut = inClip && isWordCut(w);
       const span = document.createElement('span');
-      span.className = 'tx-word' + (isPre ? ' tx-out-pre' : isPost ? ' tx-out-post' : ' tx-in-clip');
+      span.className = 'tx-word' + (isPre ? ' tx-out-pre' : isPost ? ' tx-out-post' : ' tx-in-clip') + (cut ? ' tx-cut' : '');
       span.dataset.idx   = i;
       span.dataset.start = wStart;
       span.dataset.end   = wEnd;
@@ -4492,7 +4669,9 @@
     // ] at end if clip extends to last word
     if (firstInClipEl && !clipEndAdded) {
       const m = document.createElement('span');
-      m.className = 'tx-boundary-marker';
+      m.className = 'tx-boundary-marker' + (_txDragBoundary === 'out' ? ' dragging' : '');
+      m.dataset.boundary = 'out';
+      m.title = 'Drag to move clip end';
       m.textContent = ' ]';
       panel.appendChild(m);
     }
@@ -7810,11 +7989,19 @@
     form.append('suggested_name', filename);
     form.append('clip_type', clipType);
     form.append('target_folder', _selectedExportFolder);
+    if (editorCutRanges.length) {
+      // Word ranges the user struck out -> backend stitches the kept segments
+      const cuts = editorCutRanges
+        .map(r => [Math.max(r.start, editorInTime), Math.min(r.end, editorOutTime)])
+        .filter(r => r[1] - r[0] > 0.05);
+      if (cuts.length) form.append('cut_ranges', JSON.stringify(cuts));
+    }
     if (_editCandidate && _editCandidate.hook_line)
       form.append('hook_line', _editCandidate.hook_line);
     if (_wordsData) {
       const clipWords = _wordsData
         .filter(w => (w.start ?? 0) < editorOutTime && (w.end ?? w.start ?? 0) >= editorInTime)
+        .filter(w => !isWordCut(w))
         .map(w => w.word).join(' ').trim();
       if (clipWords) form.append('clip_transcript', clipWords);
     }

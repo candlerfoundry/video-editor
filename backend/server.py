@@ -1202,6 +1202,18 @@ def create_project_export_folder():
         return jsonify({'error': str(exc)}), 500
 
 
+@app.route('/project_export_folder/list_all', methods=['GET'])
+def list_all_project_export_folders():
+    """Flat list of all available relative folder paths inside Social Media Clips.
+    Required by CANONICAL.md section 17 (save modal "Other - browse all folders")."""
+    try:
+        folders = list_social_media_existing_project_folders()
+        return jsonify({'folders': [item['relative_path'] for item in folders]})
+    except Exception as exc:
+        logger.exception('[export] Failed to list all export folders')
+        return jsonify({'error': str(exc), 'folders': []}), 500
+
+
 @app.route('/find_json', methods=['POST'])
 def find_json():
     try:
@@ -1870,6 +1882,51 @@ Transcript:
         return jsonify({'error': str(e), 'parts': []})
 
 
+def compute_kept_segments(starttime, endtime, cut_ranges_raw):
+    """
+    Subtract user cut-out ranges from [starttime, endtime].
+    cut_ranges_raw is a JSON string like "[[12.4, 15.0], [40.2, 41.8]]" (absolute seconds).
+    Returns a list of (start, end) kept segments. Invalid/empty input returns the
+    full [starttime, endtime] range (legacy single-segment behavior).
+    """
+    full = [(starttime, endtime)]
+    if not cut_ranges_raw:
+        return full
+    try:
+        parsed = json.loads(cut_ranges_raw)
+        cuts = []
+        for item in parsed:
+            cs = max(float(item[0]), starttime)
+            ce = min(float(item[1]), endtime)
+            if ce - cs > 0.05:
+                cuts.append((cs, ce))
+        if not cuts:
+            return full
+        cuts.sort()
+        # Merge overlapping cuts
+        merged = [cuts[0]]
+        for cs, ce in cuts[1:]:
+            if cs <= merged[-1][1] + 0.01:
+                merged[-1] = (merged[-1][0], max(merged[-1][1], ce))
+            else:
+                merged.append((cs, ce))
+        # Complement inside [starttime, endtime]
+        kept = []
+        cursor = starttime
+        for cs, ce in merged:
+            if cs - cursor > 0.05:
+                kept.append((cursor, cs))
+            cursor = max(cursor, ce)
+        if endtime - cursor > 0.05:
+            kept.append((cursor, endtime))
+        if not kept:
+            return full
+        return kept[:20]  # sanity cap on segment count
+    except Exception as exc:
+        logger.warning("[export] Ignoring invalid cut_ranges payload: %s", exc)
+        return full
+
+
 # ── Export Clip ──
 @app.route("/export_clip", methods=["POST"])
 def export_clip():
@@ -1910,6 +1967,7 @@ def export_clip():
         clip_transcript = request.form.get("clip_transcript", "")
         item_code       = request.form.get("item_code",       "")
         target_folder   = sanitize_social_media_relative_path(request.form.get("target_folder", ""))
+        cut_ranges_raw  = request.form.get("cut_ranges",      "").strip()
     except (ValueError, TypeError) as e:
         return jsonify({"error": f"Invalid parameters: {e}"}), 400
 
@@ -1940,30 +1998,68 @@ def export_clip():
             shutil.copy2(source_path, input_path)
 
         # ── Step A: 9:16 vertical reframe ──
-        # Pass 1: extract the in/out segment (stream copy, fast)
-        r1 = subprocess.run(
-            [FFMPEG_EXE, "-y",
-             "-ss", str(starttime), "-to", str(endtime),
-             "-i", input_path, "-c", "copy", temp_clip],
-            capture_output=True, creationflags=CREATE_NO_WINDOW,
-        )
-        if r1.returncode != 0:
-            err = r1.stderr.decode("utf-8", errors="replace")[-800:]
-            return jsonify({"error": "ffmpeg extract failed: " + err}), 500
+        kept_segments = compute_kept_segments(starttime, endtime, cut_ranges_raw)
 
-        # Pass 2: crop centre 9:16 and scale to 1080×1920
-        r2 = subprocess.run(
-            [FFMPEG_EXE, "-y",
-             "-i", temp_clip,
-             "-vf", "crop=ih*9/16:ih,scale=1080:1920",
-             "-c:v", "libx264", "-crf", "18", "-preset", "fast",
-             "-c:a", "aac",
-             output_path],
-            capture_output=True, creationflags=CREATE_NO_WINDOW,
-        )
-        if r2.returncode != 0:
-            err = r2.stderr.decode("utf-8", errors="replace")[-800:]
-            return jsonify({"error": "ffmpeg reframe failed: " + err}), 500
+        if len(kept_segments) > 1:
+            # Stitched export: user cut out word ranges mid-clip.
+            # Single ffmpeg pass: trim/atrim each kept segment, concat, then crop/scale.
+            logger.info(
+                "[export] Stitched export: %s kept segments from cuts %s",
+                len(kept_segments), cut_ranges_raw[:200],
+            )
+            filter_parts = []
+            concat_pads = ""
+            for i, (seg_s, seg_e) in enumerate(kept_segments):
+                filter_parts.append(
+                    f"[0:v]trim=start={seg_s:.3f}:end={seg_e:.3f},setpts=PTS-STARTPTS[v{i}]"
+                )
+                filter_parts.append(
+                    f"[0:a]atrim=start={seg_s:.3f}:end={seg_e:.3f},asetpts=PTS-STARTPTS[a{i}]"
+                )
+                concat_pads += f"[v{i}][a{i}]"
+            filter_parts.append(
+                f"{concat_pads}concat=n={len(kept_segments)}:v=1:a=1[vcat][acat]"
+            )
+            filter_parts.append("[vcat]crop=ih*9/16:ih,scale=1080:1920[vout]")
+            r2 = subprocess.run(
+                [FFMPEG_EXE, "-y",
+                 "-i", input_path,
+                 "-filter_complex", ";".join(filter_parts),
+                 "-map", "[vout]", "-map", "[acat]",
+                 "-c:v", "libx264", "-crf", "18", "-preset", "fast",
+                 "-c:a", "aac",
+                 output_path],
+                capture_output=True, creationflags=CREATE_NO_WINDOW,
+            )
+            if r2.returncode != 0:
+                err = r2.stderr.decode("utf-8", errors="replace")[-800:]
+                return jsonify({"error": "ffmpeg stitched export failed: " + err}), 500
+        else:
+            # Legacy single-segment path (unchanged)
+            # Pass 1: extract the in/out segment (stream copy, fast)
+            r1 = subprocess.run(
+                [FFMPEG_EXE, "-y",
+                 "-ss", str(starttime), "-to", str(endtime),
+                 "-i", input_path, "-c", "copy", temp_clip],
+                capture_output=True, creationflags=CREATE_NO_WINDOW,
+            )
+            if r1.returncode != 0:
+                err = r1.stderr.decode("utf-8", errors="replace")[-800:]
+                return jsonify({"error": "ffmpeg extract failed: " + err}), 500
+
+            # Pass 2: crop centre 9:16 and scale to 1080×1920
+            r2 = subprocess.run(
+                [FFMPEG_EXE, "-y",
+                 "-i", temp_clip,
+                 "-vf", "crop=ih*9/16:ih,scale=1080:1920",
+                 "-c:v", "libx264", "-crf", "18", "-preset", "fast",
+                 "-c:a", "aac",
+                 output_path],
+                capture_output=True, creationflags=CREATE_NO_WINDOW,
+            )
+            if r2.returncode != 0:
+                err = r2.stderr.decode("utf-8", errors="replace")[-800:]
+                return jsonify({"error": "ffmpeg reframe failed: " + err}), 500
 
         # ── Step B: Save thumbnail (if provided) ──
         thumb_local_path  = None
