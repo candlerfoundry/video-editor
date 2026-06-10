@@ -580,3 +580,21 @@ Known limitations:
 - Stitches are hard cuts (standard jump-cut style); no audio crossfade.
 
 Regression risk: High.
+
+---
+
+## 20. Clip suggestion ordering and transcript previews (added June 10, 2026)
+
+Canonical requirements:
+- `/clips` sorts valid candidates by `hook_score` descending before returning
+  (10s render first). `index.html` also re-sorts `_candidates` after fetch and
+  after restoring saved candidates, so order survives either path.
+- Each Stage 2 candidate card (and split part card) renders a `cand-tx`
+  transcript column to the right of the card body, built client-side by
+  `clipTranscriptText(start, end)` from `_wordsData`. If the transcript is not
+  loaded (e.g. project restore without words), the column is simply omitted —
+  never block card rendering on transcript availability.
+- The back buttons (`.stage3-back`) are styled as prominent tinted buttons,
+  not bare text links.
+
+Regression risk: Low.

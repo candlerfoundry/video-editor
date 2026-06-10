@@ -878,6 +878,20 @@
       display: none; margin-top: 12px;
       border-top: 1px solid var(--border); padding-top: 12px;
     }
+    /* Clip transcript preview column (right of the video preview) */
+    .cand-tx {
+      flex: 0 0 300px; min-width: 220px; max-height: 230px; overflow-y: auto;
+      align-self: stretch;
+      border-left: 1px solid var(--border); padding-left: 16px;
+    }
+    .cand-tx-label {
+      font-size: 10.5px; font-weight: 600; letter-spacing: 0.07em;
+      color: var(--muted-light); margin-bottom: 6px;
+    }
+    .cand-tx-body {
+      font-size: 12.5px; line-height: 1.65; color: var(--text-2);
+    }
+    @media (max-width: 1100px) { .cand-tx { display: none; } }
     .inline-preview.active { display: block; }
     .inline-preview video {
       width: 100%; max-width: 480px; border-radius: 8px;
@@ -889,12 +903,17 @@
     #clips-stage3 { display: none; }
     #clips-stage3.active { display: block; }
     .stage3-back {
-      display: inline-flex; align-items: center; gap: 6px;
-      font-size: 13px; font-weight: 500; color: var(--muted);
-      background: none; border: none; cursor: pointer;
-      margin-bottom: 20px; padding: 0;
+      display: inline-flex; align-items: center; gap: 8px;
+      font-size: 14px; font-weight: 600; color: var(--orange);
+      background: var(--orange-tint); border: 1px solid var(--orange-tint2);
+      border-radius: 8px; cursor: pointer;
+      margin-bottom: 20px; padding: 9px 18px;
+      transition: background 150ms ease, border-color 150ms ease, color 150ms ease;
     }
-    .stage3-back:hover { color: var(--orange); }
+    .stage3-back:hover {
+      background: var(--orange-tint2); border-color: var(--orange);
+      color: var(--orange-hover);
+    }
     #edit-video {
       width: 100%; max-width: 640px; border-radius: 8px;
       background: #111; border: 1px solid var(--border);
@@ -3055,6 +3074,7 @@
         hook_line: item.hook_line,
         why_it_works: item.why_it_works,
       }));
+      _candidates.sort((a, b) => (b.hook_score ?? 0) - (a.hook_score ?? 0));
       setClipMode('viral');
       renderCandidates(_candidates);
     }
@@ -3922,6 +3942,8 @@
         return;
       }
       _candidates = data.candidates || [];
+      // Highest hook_score first (10s at the top)
+      _candidates.sort((a, b) => (b.hook_score ?? 0) - (a.hook_score ?? 0));
       await updateProject('clip_candidates_updated', {
         mode: 'viral',
         candidates: _candidates,
@@ -3931,6 +3953,17 @@
       document.getElementById('clips-skeleton').style.display = 'none';
       alert('Request failed: ' + err.message);
     }
+  }
+
+  // ── Clip transcript text for a time range (suggestion-card previews) ──
+  function clipTranscriptText(startT, endT) {
+    if (!_wordsData || !_wordsData.length) return '';
+    return _wordsData
+      .filter(w => (w.start ?? 0) < endT && (w.end ?? w.start ?? 0) >= startT)
+      .map(w => (w.word ?? w.text ?? ''))
+      .join(' ')
+      .replace(/\s+/g, ' ')
+      .trim();
   }
 
   // ── Render Stage 2 candidate cards ──
@@ -3978,7 +4011,13 @@
           '<div class="inline-preview" id="' + previewId + '">' +
             '<video controls style="width:100%;max-width:480px;border-radius:8px;background:#111;border:1px solid var(--border);display:block;"></video>' +
           '</div>' +
-        '</div>';
+        '</div>' +
+        (function () {
+          const tx = clipTranscriptText(c.start_time ?? 0, c.end_time ?? 0);
+          return tx
+            ? '<div class="cand-tx"><div class="cand-tx-label">TRANSCRIPT</div><div class="cand-tx-body">' + escHtml(tx) + '</div></div>'
+            : '';
+        })();
 
       section.appendChild(card);
     });
@@ -4093,7 +4132,13 @@
           '<div class="inline-preview" id="split-preview-' + i + '">' +
             '<video controls style="width:100%;max-width:480px;border-radius:8px;background:#111;border:1px solid var(--border);display:block;"></video>' +
           '</div>' +
-        '</div>';
+        '</div>' +
+        (function () {
+          const tx = clipTranscriptText(p.start ?? 0, p.end ?? 0);
+          return tx
+            ? '<div class="cand-tx"><div class="cand-tx-label">TRANSCRIPT</div><div class="cand-tx-body">' + escHtml(tx) + '</div></div>'
+            : '';
+        })();
 
       section.appendChild(card);
     });

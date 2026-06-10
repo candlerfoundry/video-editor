@@ -1779,6 +1779,9 @@ def find_clips():
             if attempt < MAX_RETRIES - 1:
                 logger.info("[clips] Too few valid clips; retrying")
 
+        # Highest hook_score first (10s at the top)
+        valid.sort(key=lambda c: c.get('hook_score') or 0, reverse=True)
+
         return jsonify({'candidates': valid})
 
     except Exception as e:
