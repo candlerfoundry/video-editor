@@ -165,6 +165,18 @@ def read_api_key():
         return None
 
 
+# ── Airtable API key (separate file — NEVER use the Anthropic key for Airtable) ──
+AIRTABLE_KEY_PATH = os.path.join(dropbox_root, 'Scripts', 'airtable_api_key.txt')
+
+def read_airtable_api_key():
+    try:
+        with open(AIRTABLE_KEY_PATH, "r") as f:
+            return f.read().strip()
+    except FileNotFoundError:
+        logger.warning("[airtable] API key not found at %s", AIRTABLE_KEY_PATH)
+        return None
+
+
 # ── Adaptive caption sizing ──
 def get_video_dimensions(video_path, ffmpeg_exe):
     """Returns (width, height) using ffprobe. Returns (1920, 1080) as safe default on failure."""
@@ -2138,22 +2150,33 @@ def export_clip():
     except Exception as de:
         logger.warning("Dropbox error during shared-link generation: %s", de)
 
-    # ── Step D: Search source video record in Airtable ──
-    api_key          = read_api_key()
-    source_record_id = None
+    # ── Step D: Search source video record in Airtable (by item code) ──
+    airtable_key      = read_airtable_api_key()
+    source_record_id  = None
+    source_link_field = "Full-Length Video"
 
-    if api_key and item_code and clip_type != "Podcast Clip":
+    if airtable_key and item_code:
+        # Podcast originals live in the POD & YouTube table and link via
+        # "Full-Length Podcast"; everything else links "Full-Length Video".
+        if item_code.upper().startswith("POD"):
+            source_table      = "tbloVdhcMFMaMw5KC"   # POD & YouTube
+            source_link_field = "Full-Length Podcast"
+        else:
+            source_table      = "tblS1Bk29cXyGGUdo"   # 3MB, UNST, TheoEd, OND
         formula  = '{{Code}}="{}"'.format(item_code)
         params   = urllib.parse.urlencode({"filterByFormula": formula})
-        at_url   = "https://api.airtable.com/v0/appiL0Z2RilcAT2Cw/tblS1Bk29cXyGGUdo?" + params
+        at_url   = "https://api.airtable.com/v0/appiL0Z2RilcAT2Cw/" + source_table + "?" + params
         at_req   = urllib.request.Request(
-            at_url, headers={"Authorization": "Bearer " + api_key}
+            at_url, headers={"Authorization": "Bearer " + airtable_key}
         )
         try:
             with urllib.request.urlopen(at_req, timeout=10) as resp:
                 records = json.loads(resp.read()).get("records", [])
                 if records:
                     source_record_id = records[0]["id"]
+                    logger.info("[airtable] Linked source %s -> %s (%s)", item_code, source_record_id, source_link_field)
+                else:
+                    logger.warning("[airtable] No source record found for code %s in %s", item_code, source_table)
         except Exception as ae:
             logger.warning("Airtable source lookup failed: %s", ae)
 
@@ -2161,9 +2184,11 @@ def export_clip():
     airtable_record_id = None
     airtable_url       = None
 
-    if api_key:
+    if airtable_key:
         # Only include writable fields — never lookup/rollup/formula/AI/button
-        fields = {"Status": "Draft", "Type": clip_type}
+        fields = {"Status": "Draft"}
+        if clip_type:
+            fields["Type"] = clip_type
         if hook_line:
             fields["Content Title"] = hook_line
         if clip_url:
@@ -2173,29 +2198,42 @@ def export_clip():
         if clip_transcript:
             fields["Clip Transcript"] = clip_transcript
         if source_record_id:
-            fields["Full-Length Video"] = [source_record_id]
+            fields[source_link_field] = [source_record_id]
 
-        payload = json.dumps({"fields": fields}).encode("utf-8")
-        at_req  = urllib.request.Request(
-            "https://api.airtable.com/v0/appiL0Z2RilcAT2Cw/tbll0KDqmrAlwQuAx",
-            data=payload,
-            headers={
-                "Authorization": "Bearer " + api_key,
-                "Content-Type":  "application/json",
-            },
-            method="POST",
-        )
-        try:
+        def _create_shorts_record(fields_payload):
+            payload = json.dumps({"fields": fields_payload}).encode("utf-8")
+            at_req = urllib.request.Request(
+                "https://api.airtable.com/v0/appiL0Z2RilcAT2Cw/tbll0KDqmrAlwQuAx",
+                data=payload,
+                headers={
+                    "Authorization": "Bearer " + airtable_key,
+                    "Content-Type":  "application/json",
+                },
+                method="POST",
+            )
             with urllib.request.urlopen(at_req, timeout=15) as resp:
-                at_resp = json.loads(resp.read())
-                airtable_record_id = at_resp.get("id")
-                if airtable_record_id:
-                    airtable_url = (
-                        "https://airtable.com/appiL0Z2RilcAT2Cw"
-                        "/tbll0KDqmrAlwQuAx/" + airtable_record_id
-                    )
+                return json.loads(resp.read()).get("id")
+
+        try:
+            airtable_record_id = _create_shorts_record(fields)
         except Exception as ae:
-            logger.warning("Airtable record creation failed: %s", ae)
+            # An invalid single-select Type (e.g. "Other") fails the whole
+            # record — retry once without it so the record is still created.
+            if "Type" in fields:
+                logger.warning("Airtable record creation failed (%s); retrying without Type", ae)
+                fields.pop("Type", None)
+                try:
+                    airtable_record_id = _create_shorts_record(fields)
+                except Exception as ae2:
+                    logger.warning("Airtable record creation failed: %s", ae2)
+            else:
+                logger.warning("Airtable record creation failed: %s", ae)
+
+        if airtable_record_id:
+            airtable_url = (
+                "https://airtable.com/appiL0Z2RilcAT2Cw"
+                "/tbll0KDqmrAlwQuAx/" + airtable_record_id
+            )
 
     return jsonify({
         "success":               True,
@@ -2241,8 +2279,8 @@ def export_thumbnail():
         logger.warning("Dropbox error during thumbnail shared-link generation: %s", exc)
 
     if airtable_record_id and thumb_url:
-        api_key = read_api_key()
-        if api_key:
+        airtable_key = read_airtable_api_key()
+        if airtable_key:
             payload = json.dumps({
                 "fields": {
                     "Thumbnail - Dropbox URL": thumb_url,
@@ -2252,7 +2290,7 @@ def export_thumbnail():
                 "https://api.airtable.com/v0/appiL0Z2RilcAT2Cw/tbll0KDqmrAlwQuAx/" + airtable_record_id,
                 data=payload,
                 headers={
-                    "Authorization": "Bearer " + api_key,
+                    "Authorization": "Bearer " + airtable_key,
                     "Content-Type": "application/json",
                 },
                 method="PATCH",

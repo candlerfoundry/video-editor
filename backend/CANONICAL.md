@@ -648,3 +648,51 @@ Canonical frontend requirements in `index.html`:
 
 Regression risk: High — do NOT reintroduce the automatic 30-frame job into
 the live flow without explicit instruction.
+
+---
+
+## 22. Airtable export integration (fixed June 10, 2026 — was silently broken)
+
+History: the Airtable record creation in `/export_clip` had NEVER worked. It
+authenticated with `read_api_key()` (the ANTHROPIC key from `api_key.txt`),
+Airtable returned 401, and the failure was logged as a quiet warning while the
+export still reported success. The frontend also never sent `item_code`, so
+source-video linking could never fire, and Type detection used keywords
+("theoed"), missing code-prefixed filenames like `THEO-170 - ...`.
+
+Canonical requirements in `server.py`:
+- `read_airtable_api_key()` reads `Scripts\airtable_api_key.txt`. ALL Airtable
+  HTTP calls (source lookup, record creation, thumbnail PATCH) use this key.
+  NEVER use `read_api_key()` (Anthropic) for Airtable.
+- Source linking is by item code against the `Code` field:
+  - `POD-*` codes → table `tbloVdhcMFMaMw5KC` (POD & YouTube) → link field
+    `Full-Length Podcast`.
+  - All other codes → table `tblS1Bk29cXyGGUdo` (3MB, UNST, TheoEd, OND) →
+    link field `Full-Length Video`.
+  - Linking the right field populates the dependent lookups (Featured
+    Participant, transcripts, YT links) automatically — do not write to
+    lookup/rollup/formula/AI/button fields directly.
+- Record creation includes only writable fields: Status ("Draft"), Type (only
+  when non-empty), Content Title, Clip - Dropbox URL, Thumbnail - Dropbox URL,
+  Clip Transcript, and the source link field.
+- Forgiving retry: if creation fails and Type was included, retry ONCE without
+  Type (an invalid single-select rejects the whole record). Never fail the
+  clip export because of Airtable.
+
+Canonical requirements in `index.html`:
+- `extractItemCode(filename)` returns the leading filename token matching
+  `/^\s*([A-Z0-9]{2,5}-\d+(?:\.\d+)?)/` uppercased (THEO-170, POD-3.1,
+  3MB-62, UNST-223). `doExport()` sends it as `item_code`.
+- `detectClipType(filename)` maps by code prefix first (POD→Podcast Clip,
+  3MB→3MB Clip, THEO→TheoEd Clip, UNST→Unstuck), then keyword fallbacks,
+  defaulting to Podcast Clip. It only pre-fills the dropdown — the user's
+  selection wins.
+- Type dropdown options must stay aligned with the Airtable Type single-select
+  choices (as of June 10, 2026: Podcast Clip, 3MB Clip, TheoEd Clip, Unstuck,
+  Blog Promo, Course Promo). "No type" (empty value) is allowed; backend omits
+  Type when empty.
+
+Verified June 10, 2026 against the live base: a record with Type "Unstuck",
+both link fields, URLs, and transcript was accepted and all lookups populated.
+
+Regression risk: High.
