@@ -524,10 +524,32 @@ Clip preview behavior:
   - This matches the existing `toggleSplitPreview()` pattern.
 - Previewing a candidate does NOT commit `editorInTime` / `editorOutTime`. Only `selectAndEdit()` commits those values.
 
+June 11, 2026 amendments (Emily's feedback session):
+- NO baked style overlay in `renderThumbnailDraftToCanvas` — the dark scrim and
+  orange accent line were removed. Text legibility comes from each text box's
+  own background/shadow. Do not re-add `applyThumbStyleOverlay` to the draft
+  render (the helper remains only for vestigial legacy preview paths).
+- `.dlg-design-elem-overlay` MUST keep `pointer-events: auto` — the parent
+  `#dlg-overlay-layer` is `pointer-events: none`, and without the override
+  shapes cannot be selected or dragged (this was a live bug).
+- `setDlgTitleText` must NOT call `dlgBuildHeroState()` — rebuilding the frame
+  grid per keystroke made the source frame flicker/disappear. It updates the
+  selected text-box chip label in place instead.
+- The "Foundry Logo" placement card was removed; the logo is an ordinary
+  drag/drop Design Element (panel button), resizable via handles.
+- Each row in "Added elements" has a per-shape color input
+  (`setDesignElemColor`).
+- Choosing a text background color auto-raises background opacity to 70 when
+  it was 0 (an invisible color change looked like a broken control).
+- Frames captured in the save modal mirror into `_dlgFrames` (and vice versa)
+  so the user is never asked to pick the same frame twice.
+- The editor canvas column is the dominant grid column
+  (`minmax(480px, 1.8fr)`).
+- Emoji presets no longer exist (only Logo + Shapes); ignore older references.
+
 Known limitations:
-- Text boxes and graphic elements are draggable but not free-resized by drag handles yet.
-- Logo placement is draggable and size-adjustable but no rotation tool exists yet.
 - The live preview uses HTML overlay layers for editing; the final PNG is re-rendered from draft data on export.
+- No rotation tool yet.
 
 Regression risk: High.
 
@@ -582,10 +604,26 @@ Canonical backend requirements in `server.py`:
 - With 1 kept segment (no cuts), the legacy two-pass extract+reframe path runs
   UNCHANGED — do not merge the two paths.
 
+Word bleeping (added June 11, 2026):
+- `editorBleepRanges` parallels `editorCutRanges`: ranges whose AUDIO is muted
+  while video keeps playing (for words social platforms might flag).
+- A Cut/Bleep mode toggle above the transcript decides what a drag across
+  in-clip words does (`_txEditMode`). Bleeped words render `tx-bleep` (amber);
+  clicking one restores it. Amber striped `.clip-tl-bleep` overlays show on
+  the timeline. `playSelection()` mutes the video element inside bleep ranges.
+- `doExport()` sends `bleep_ranges` (JSON, absolute seconds). Backend
+  `parse_bleep_ranges()` clamps/merges (forgiving — invalid input means no
+  bleeps, never a failed export); `build_bleep_audio_chain()` emits chained
+  `volume=0:enable='between(t,a,b)'` filters. Legacy path applies it via
+  `-af` with times offset by `starttime`; stitched path prefixes each
+  `[0:a]...atrim` chain with absolute times. Verified: muted ranges measure
+  -91 dB while surrounding audio is untouched.
+
 Known limitations:
-- Cut ranges are not yet persisted to the local project store (`/projects/update`);
-  they live only in the editor session until export.
+- Cut/bleep ranges are not yet persisted to the local project store
+  (`/projects/update`); they live only in the editor session until export.
 - Stitches are hard cuts (standard jump-cut style); no audio crossfade.
+- Bleeps are silence, not a censor tone.
 
 Regression risk: High.
 
@@ -696,3 +734,31 @@ Verified June 10, 2026 against the live base: a record with Type "Unstuck",
 both link fields, URLs, and transcript was accepted and all lookups populated.
 
 Regression risk: High.
+
+---
+
+## 23. Instagram cover-frame burn and project switching (added June 11, 2026)
+
+Cover-frame burn:
+- Emily's Zapier "Publish Video" action has no cover-URL field, and Instagram
+  uses frame zero as the reel cover. When the user saves WITH a thumbnail and
+  the "Use thumbnail as Instagram cover" checkbox (`#export-cover-frame`,
+  checked by default) is on, `doExport()` sends `cover_frame=1`.
+- Backend Step B2 in `/export_clip` prepends the saved thumbnail as ONE frame
+  (1/30 s, `-t 0.04`) via a concat `filter_complex`: cover scaled/cropped to
+  1080×1920 + `setsar=1`, main video branch also `setsar=1` (REQUIRED — SAR
+  mismatch breaks concat), silent `anullsrc` audio for the cover, both audio
+  branches `aformat`-normalized to 48 kHz stereo.
+- Forgiving: if the burn fails, the un-burned clip is kept and a warning is
+  logged — never fail the export.
+- The standalone thumbnail PNG still saves to Dropbox/Airtable as before
+  (YouTube etc. take a real thumbnail upload).
+
+Project switching (Stage 2):
+- The summary-bar link is "Save & switch project" (`switchProject()`), which
+  resets the editor and shows a success banner explaining the project is
+  resumable from Recent Projects. Clip candidates are already persisted via
+  `clip_candidates_updated`, so switching loses nothing; multiple video
+  projects can be worked in parallel.
+
+Regression risk: Medium.

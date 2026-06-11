@@ -1990,6 +1990,52 @@ def compute_kept_segments(starttime, endtime, cut_ranges_raw):
         return full
 
 
+def parse_bleep_ranges(starttime, endtime, bleep_ranges_raw):
+    """
+    Parse user bleep (mute) ranges. Returns a sorted, merged list of
+    (start, end) absolute-second tuples clamped to [starttime, endtime].
+    Forgiving: invalid input returns [] (export proceeds without bleeps).
+    """
+    if not bleep_ranges_raw:
+        return []
+    try:
+        parsed = json.loads(bleep_ranges_raw)
+        ranges = []
+        for item in parsed:
+            bs = max(float(item[0]), starttime)
+            be = min(float(item[1]), endtime)
+            if be - bs > 0.02:
+                ranges.append((bs, be))
+        if not ranges:
+            return []
+        ranges.sort()
+        merged = [ranges[0]]
+        for bs, be in ranges[1:]:
+            if bs <= merged[-1][1] + 0.01:
+                merged[-1] = (merged[-1][0], max(merged[-1][1], be))
+            else:
+                merged.append((bs, be))
+        return merged[:30]
+    except Exception as exc:
+        logger.warning("[export] Ignoring invalid bleep_ranges payload: %s", exc)
+        return []
+
+
+def build_bleep_audio_chain(bleep_ranges, time_offset=0.0):
+    """
+    Returns an ffmpeg audio-filter string that mutes the given absolute-time
+    ranges, expressed relative to a stream that starts at `time_offset`
+    (0.0 for the original input; `starttime` for an extracted segment).
+    Empty string when there is nothing to mute.
+    """
+    parts = []
+    for bs, be in bleep_ranges:
+        parts.append(
+            f"volume=0:enable='between(t,{bs - time_offset:.3f},{be - time_offset:.3f})'"
+        )
+    return ",".join(parts)
+
+
 # ── Export Clip ──
 @app.route("/export_clip", methods=["POST"])
 def export_clip():
@@ -2031,6 +2077,8 @@ def export_clip():
         item_code       = request.form.get("item_code",       "")
         target_folder   = sanitize_social_media_relative_path(request.form.get("target_folder", ""))
         cut_ranges_raw  = request.form.get("cut_ranges",      "").strip()
+        bleep_ranges_raw = request.form.get("bleep_ranges",   "").strip()
+        cover_frame     = request.form.get("cover_frame",     "").strip() in {"1", "true", "yes"}
     except (ValueError, TypeError) as e:
         return jsonify({"error": f"Invalid parameters: {e}"}), 400
 
@@ -2062,6 +2110,9 @@ def export_clip():
 
         # ── Step A: 9:16 vertical reframe ──
         kept_segments = compute_kept_segments(starttime, endtime, cut_ranges_raw)
+        bleep_ranges  = parse_bleep_ranges(starttime, endtime, bleep_ranges_raw)
+        if bleep_ranges:
+            logger.info("[export] Muting %s bleep range(s)", len(bleep_ranges))
 
         if len(kept_segments) > 1:
             # Stitched export: user cut out word ranges mid-clip.
@@ -2070,6 +2121,8 @@ def export_clip():
                 "[export] Stitched export: %s kept segments from cuts %s",
                 len(kept_segments), cut_ranges_raw[:200],
             )
+            bleep_chain = build_bleep_audio_chain(bleep_ranges, time_offset=0.0)
+            audio_prefix = (bleep_chain + ",") if bleep_chain else ""
             filter_parts = []
             concat_pads = ""
             for i, (seg_s, seg_e) in enumerate(kept_segments):
@@ -2077,7 +2130,7 @@ def export_clip():
                     f"[0:v]trim=start={seg_s:.3f}:end={seg_e:.3f},setpts=PTS-STARTPTS[v{i}]"
                 )
                 filter_parts.append(
-                    f"[0:a]atrim=start={seg_s:.3f}:end={seg_e:.3f},asetpts=PTS-STARTPTS[a{i}]"
+                    f"[0:a]{audio_prefix}atrim=start={seg_s:.3f}:end={seg_e:.3f},asetpts=PTS-STARTPTS[a{i}]"
                 )
                 concat_pads += f"[v{i}][a{i}]"
             filter_parts.append(
@@ -2111,13 +2164,17 @@ def export_clip():
                 return jsonify({"error": "ffmpeg extract failed: " + err}), 500
 
             # Pass 2: crop centre 9:16 and scale to 1080×1920
+            pass2_cmd = [FFMPEG_EXE, "-y",
+                         "-i", temp_clip,
+                         "-vf", "crop=ih*9/16:ih,scale=1080:1920"]
+            bleep_chain = build_bleep_audio_chain(bleep_ranges, time_offset=starttime)
+            if bleep_chain:
+                pass2_cmd += ["-af", bleep_chain]
+            pass2_cmd += ["-c:v", "libx264", "-crf", "18", "-preset", "fast",
+                          "-c:a", "aac",
+                          output_path]
             r2 = subprocess.run(
-                [FFMPEG_EXE, "-y",
-                 "-i", temp_clip,
-                 "-vf", "crop=ih*9/16:ih,scale=1080:1920",
-                 "-c:v", "libx264", "-crf", "18", "-preset", "fast",
-                 "-c:a", "aac",
-                 output_path],
+                pass2_cmd,
                 capture_output=True, creationflags=CREATE_NO_WINDOW,
             )
             if r2.returncode != 0:
@@ -2132,6 +2189,38 @@ def export_clip():
             thumb_local_path = os.path.join(clips_folder, thumb_name)
             thumbnail_file.save(thumb_local_path)
             thumb_dbx_path   = build_social_media_dropbox_path(folder_name, thumb_name)
+
+        # ── Step B2: optional Instagram cover burn ──
+        # The basic Zapier "Publish Video" action has no cover-URL field, and
+        # Instagram uses frame zero as the reel cover. Prepending the thumbnail
+        # as ONE frame (~1/30s) makes the posted reel show it as the cover
+        # while staying imperceptible during playback.
+        if cover_frame and thumb_local_path:
+            burned_path = os.path.join(tmp_dir, "burned.mp4")
+            rb = subprocess.run(
+                [FFMPEG_EXE, "-y",
+                 "-loop", "1", "-framerate", "30", "-t", "0.04", "-i", thumb_local_path,
+                 "-i", output_path,
+                 "-f", "lavfi", "-t", "0.04", "-i", "anullsrc=r=48000:cl=stereo",
+                 "-filter_complex",
+                 "[0:v]scale=1080:1920:force_original_aspect_ratio=increase,"
+                 "crop=1080:1920,setsar=1,format=yuv420p[cv];"
+                 "[1:v]setsar=1[mv];"
+                 "[2:a]aformat=sample_rates=48000:channel_layouts=stereo[ca];"
+                 "[1:a]aformat=sample_rates=48000:channel_layouts=stereo[ma];"
+                 "[cv][ca][mv][ma]concat=n=2:v=1:a=1[v][a]",
+                 "-map", "[v]", "-map", "[a]",
+                 "-c:v", "libx264", "-crf", "18", "-preset", "fast",
+                 "-c:a", "aac",
+                 burned_path],
+                capture_output=True, creationflags=CREATE_NO_WINDOW,
+            )
+            if rb.returncode == 0 and os.path.isfile(burned_path):
+                shutil.move(burned_path, output_path)
+                logger.info("[export] Burned thumbnail as cover frame")
+            else:
+                err = rb.stderr.decode("utf-8", errors="replace")[-400:]
+                logger.warning("[export] Cover-frame burn failed (clip kept without it): %s", err)
 
     finally:
         shutil.rmtree(tmp_dir, ignore_errors=True)
