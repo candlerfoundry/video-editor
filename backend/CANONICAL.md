@@ -144,6 +144,14 @@ Regression risk: High.
 
 ## 6. Thumbnail route and async job contract
 
+> **DEPRECATED June 10, 2026 (manual thumbnail flow):** the live UI no longer
+> calls `/thumbnail` — frames are picked by hand (see section 21). The route,
+> worker, and `/thumbnailstatus/<jobid>` are retained for backward
+> compatibility (stale cached frontends) and must keep honoring this contract
+> while they exist. Sections 7 and 8 describe the retained worker. The old
+> standalone Thumbnails-tab editor code (`generateThumbnail`, `redoFrames`,
+> `redoTitles`, `thumb-state-*`) is vestigial and unreachable.
+
 Canonical requirements:
 - Keep `thumbnail_jobs` at module scope.
 - `/thumbnail` must return immediately after starting a daemon thread.
@@ -598,3 +606,45 @@ Canonical requirements:
   not bare text links.
 
 Regression risk: Low.
+
+---
+
+## 21. Manual thumbnail frame picking and /thumbnail_titles (added June 10, 2026)
+
+Canonical product rules:
+- Thumbnail frames are picked BY HAND from the video. There is no automatic
+  frame extraction, scoring, or Claude Vision ranking in the live flow.
+  ("Not a script that finds a bunch of useless images" — Emily.)
+- AI title suggestions remain, via a lightweight title-only backend call.
+
+Canonical backend requirements in `server.py`:
+- `/thumbnail_titles` (POST JSON `{"clip_transcript": "..."}`) returns
+  `{"titles": [...]}` synchronously using the same Foundry title prompt and
+  `claude-sonnet-4-6`. Forgiving contract: empty/missing transcript or any
+  failure returns `{"titles": []}` with HTTP 200 — never block the composer
+  on title generation. No Whisper fallback (too slow for a sync call).
+
+Canonical frontend requirements in `index.html`:
+- `dlgGenerateThumbnail()` opens the composer editor immediately and
+  auto-opens the frame picker (`dlgOpenFramePicker()`); it fires
+  `fetchThumbTitles(clip_start, clip_end)` in the background and repopulates
+  the titles grid when they arrive.
+- `fetchThumbTitles(startT, endT)` builds the clip transcript from
+  `_wordsData` (capped 3000 chars) and POSTs `/thumbnail_titles`; returns []
+  on any failure.
+- `dlgCapturePickedFrame()` / `efCaptureVideoFrame()` capture the paused
+  video frame to JPEG base64 (max edge 1600, q 0.92) and inject it at the
+  front of the frame list (cap 12). The composer capture also synthesizes
+  `video_info` from the video element when none exists and mirrors frames
+  into `_sharedThumbnailDraft.available_frames`.
+- `dlgRedoFrames()` is an alias for `dlgOpenFramePicker()`; the "Redo Frames"
+  button was removed. `dlgRedoTitles()` uses `/thumbnail_titles`.
+- `startExportFlowThumb()` shows saved drafts, then opens the export-flow
+  video picker (`efOpenVideoPicker()`) instead of starting a job; the
+  "Regenerate" button was removed. Existing `_dlgFrames` are still reused.
+- Frame pickers stay bounded to the clip in/out range where one exists.
+- Captured-frame rendering must keep obeying section 11 (cover-fit,
+  aspect-preserving) and section 18 (live editor draft model).
+
+Regression risk: High — do NOT reintroduce the automatic 30-frame job into
+the live flow without explicit instruction.

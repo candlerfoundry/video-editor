@@ -1645,6 +1645,54 @@ def thumbnail():
     return jsonify({'jobid': job_id, 'status': 'processing'})
 
 
+@app.route('/thumbnail_titles', methods=['POST'])
+def thumbnail_titles():
+    """
+    Lightweight title-only generation for the manual thumbnail flow
+    (June 10, 2026): frames are now picked by hand from the video, so only
+    the 8 AI title suggestions need the backend.
+    Accepts JSON: { "clip_transcript": "..." }
+    Returns:      { "titles": [...] }  (empty list if no transcript / failure)
+    """
+    try:
+        data = request.get_json(force=True) or {}
+        clip_transcript = (data.get('clip_transcript') or '').strip()[:3000]
+        if not clip_transcript:
+            return jsonify({'titles': []})
+
+        thumb_logger.info('[titles] Generating titles from %s chars of transcript', len(clip_transcript))
+        client = anthropic.Anthropic(api_key=read_api_key())
+        title_msg = client.messages.create(
+            model="claude-sonnet-4-6",
+            max_tokens=800,
+            messages=[{"role": "user", "content": (
+                "The Candler Foundry produces faith-based video content for clergy, scholars, "
+                "and the spiritually curious public. The best thumbnail titles are short, surprising, "
+                "and emotionally resonant — a question or statement that makes someone stop scrolling. "
+                "Avoid jargon, church-speak, or academic language. Aim for human, honest, direct.\n\n"
+                "Generate exactly 8 title options. Rules:\n"
+                "- MAX 60 characters each — strip any over 60 chars\n"
+                "- Short, punchy, emotionally direct: a provocative question or bold statement\n"
+                "- No filler phrases, no colons that only pad length\n"
+                "Return ONLY a JSON array of 8 strings, no markdown.\n\n"
+                f"Clip transcript ({len(clip_transcript)} chars):\n{clip_transcript}"
+            )}]
+        )
+        raw = title_msg.content[0].text.strip()
+        s = raw.find('['); e = raw.rfind(']')
+        titles = []
+        if s != -1 and e != -1:
+            parsed = json.loads(raw[s:e+1])
+            titles = [str(t) for t in parsed if len(str(t)) <= 60][:8]
+            if len(titles) < 5:
+                titles = [str(t)[:60] for t in parsed[:8]]
+        thumb_logger.info('[titles] Generated %s titles', len(titles))
+        return jsonify({'titles': titles})
+    except Exception as exc:
+        thumb_logger.warning('[titles] Title generation failed: %s', exc)
+        return jsonify({'titles': []})
+
+
 @app.route('/thumbnailstatus/<jobid>', methods=['GET'])
 def thumbnailstatus(jobid):
     """Poll thumbnail job status."""

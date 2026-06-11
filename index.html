@@ -2423,7 +2423,7 @@
                onclick="document.getElementById('thumb-file').click()">
             <div class="dz-icon">🖼</div>
             <div class="dz-label" id="thumb-dz-label">Drop an MP4 or MOV here to get started</div>
-            <div class="dz-sub">AI picks best frame &bull; 8 title options &bull; moveable text overlay</div>
+            <div class="dz-sub">Pick your frame from the video &bull; 8 AI title options &bull; moveable text overlay</div>
             <input type="file" id="thumb-file"
                    accept=".mp4,.MP4,.mov,.MOV,video/mp4,video/quicktime" />
           </div>
@@ -6443,55 +6443,19 @@
       return;
     }
 
-    // Generate thumbnails
-    if (!_clipFile || !backendOnline || _efThumbJobPending) return;
-    _efThumbJobPending = true;
-    if (statusEl) statusEl.innerHTML = '<div class="export-progress-bar"><div class="export-shimmer"></div></div><p style="font-size:11px;color:var(--muted);margin:4px 0 0;">Finding best frames\u2026</p>';
+    // Manual flow (June 10, 2026): no auto frame generation. Open the video
+    // picker so the user grabs the exact moment they want; fetch AI titles in
+    // the background for the quick lower-third draft.
+    if (!_clipFile) return;
+    if (regenBtn) regenBtn.style.display = 'none';
+    if (editorBtn) editorBtn.style.display = '';
     if (framesEl) framesEl.innerHTML = '';
-
-    try {
-      const clipTranscript = (() => {
-        if (!_wordsData) return '';
-        return _wordsData.filter(w => (w.start ?? 0) < editorOutTime && (w.end ?? w.start ?? 0) >= editorInTime)
-          .map(w => w.word).join(' ').trim().slice(0, 3000);
-      })();
-      const form = new FormData();
-      form.append('filename',        _clipFile.name);
-      form.append('clipstart',       String(editorInTime));
-      form.append('clipend',         String(editorOutTime));
-      form.append('clip_transcript', clipTranscript);
-      const startRes  = await fetch(BACKEND + '/thumbnail', { method: 'POST', body: form });
-      const startData = await startRes.json();
-      if (startData.jobid) {
-        pollThumbnailJob(
-          startData.jobid,
-          data => {
-            _efThumbJobPending = false;
-            if (data.frames && data.frames.length) {
-              _efThumbFrames = data.frames;
-              // Also cache into _dlgFrames so the full editor can reuse them
-              _dlgFrames = data.frames;
-              if (data.titles && data.titles.length) _thumbTitles = data.titles;
-              renderExportFlowThumbGrid();
-              if (statusEl) statusEl.textContent = 'Select a frame to use as thumbnail:';
-              if (regenBtn) regenBtn.style.display = '';
-              if (editorBtn) editorBtn.style.display = '';
-            } else {
-              if (statusEl) statusEl.textContent = 'No frames generated. You can skip the thumbnail.';
-            }
-          },
-          err => {
-            _efThumbJobPending = false;
-            if (statusEl) statusEl.textContent = 'Could not generate thumbnails. You can still save without one.';
-          }
-        );
-      } else {
-        _efThumbJobPending = false;
-        if (statusEl) statusEl.textContent = 'Could not start thumbnail generation.';
-      }
-    } catch (e) {
-      _efThumbJobPending = false;
-      if (statusEl) statusEl.textContent = 'Thumbnail generation unavailable.';
+    if (statusEl) statusEl.textContent = 'Pick a frame from the video to use as your thumbnail:';
+    efOpenVideoPicker();
+    if (!_thumbTitles || !_thumbTitles.length) {
+      fetchThumbTitles(editorInTime, editorOutTime).then(titles => {
+        if (titles.length) _thumbTitles = titles;
+      });
     }
   }
 
@@ -7026,55 +6990,42 @@
     }
   }
 
+  // Manual-first flow (June 10, 2026): no backend frame extraction job.
+  // The user picks the exact frame(s) from the video scrubber; only the
+  // 8 AI title suggestions hit the backend (lightweight /thumbnail_titles).
   async function dlgGenerateThumbnail() {
-    if (!_thumbFile || !backendOnline) return;
-    const clipStart = _sharedThumbnailDraft?.clip_start;
-    const clipEnd = _sharedThumbnailDraft?.clip_end;
-    let clip_transcript = '';
-    if (_wordsData && clipStart !== null && clipStart !== undefined && clipEnd !== null && clipEnd !== undefined && clipStart < clipEnd) {
-      clip_transcript = _wordsData
-        .filter(w => (w.start ?? 0) < clipEnd && (w.end ?? w.start ?? 0) >= clipStart)
-        .map(w => w.word).join(' ').trim();
-    }
-    const form = new FormData();
-    form.append('filename',        _thumbFile.name);
-    form.append('clipstart',       clipStart !== null && clipStart !== undefined ? String(clipStart) : '');
-    form.append('clipend',         clipEnd !== null && clipEnd !== undefined ? String(clipEnd) : '');
-    form.append('clip_transcript', clip_transcript);
-    let jobId;
-    try {
-      const res  = await fetch(BACKEND + '/thumbnail', { method: 'POST', body: form });
-      const data = await res.json();
-      if (!res.ok || data.error) {
-        closeThumbDialog(); alert('Thumbnail failed: ' + (data.error || res.statusText)); return;
-      }
-      jobId = data.jobid;
-    } catch (err) {
-      closeThumbDialog(); alert('Thumbnail request failed: ' + err.message); return;
-    }
-    const t1 = setTimeout(() => dlgSetStep(2), 8000);
-    const t2 = setTimeout(() => dlgSetStep(3), 25000);
-    pollThumbnailJob(
-      jobId,
-      data => {
-        clearTimeout(t1); clearTimeout(t2);
-        _dlgFrames        = data.frames || [];
-        _dlgSelectedFrame = 0;
-        _thumbTitles      = data.titles || [];
-        _dlgVideoInfo     = data.video_info || null;
-        if (_sharedThumbnailDraft) {
-          _sharedThumbnailDraft.available_frames = _dlgFrames;
-          _sharedThumbnailDraft.suggested_titles = _thumbTitles;
-          _sharedThumbnailDraft.video_info = _dlgVideoInfo;
+    if (!_thumbFile) return;
+    dlgShowState('editor');
+    dlgBuildHeroState();
+    dlgOpenEditor();
+    dlgOpenFramePicker();
+    fetchThumbTitles(_sharedThumbnailDraft?.clip_start, _sharedThumbnailDraft?.clip_end)
+      .then(titles => {
+        if (titles.length) {
+          _thumbTitles = titles;
+          if (_sharedThumbnailDraft) _sharedThumbnailDraft.suggested_titles = titles;
+          dlgBuildHeroState();
         }
-        dlgSetStep(4);
-        setTimeout(() => { dlgBuildHeroState(); dlgOpenEditor(); }, 400);
-      },
-      err => {
-        clearTimeout(t1); clearTimeout(t2);
-        closeThumbDialog(); alert('Thumbnail generation failed: ' + err);
-      }
-    );
+      });
+  }
+
+  // Lightweight AI titles for the manual thumbnail flow.
+  async function fetchThumbTitles(startT, endT) {
+    if (!backendOnline || !_wordsData) return [];
+    if (startT == null || endT == null || startT >= endT) return [];
+    const clip_transcript = _wordsData
+      .filter(w => (w.start ?? 0) < endT && (w.end ?? w.start ?? 0) >= startT)
+      .map(w => w.word).join(' ').trim().slice(0, 3000);
+    if (!clip_transcript) return [];
+    try {
+      const res  = await fetch(BACKEND + '/thumbnail_titles', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ clip_transcript }),
+      });
+      const data = await res.json();
+      return data.titles || [];
+    } catch (_) { return []; }
   }
 
   function dlgBuildHeroState() {
@@ -7171,38 +7122,9 @@
     }
   }
 
+  // Manual flow: "redo frames" just reopens the picker.
   async function dlgRedoFrames() {
-    if (!_thumbFile || !backendOnline) return;
-    const clipStart = _sharedThumbnailDraft?.clip_start;
-    const clipEnd = _sharedThumbnailDraft?.clip_end;
-    const btn = document.getElementById('dlg-btn-redo-frames');
-    btn.disabled = true; const orig = btn.innerHTML; btn.textContent = 'Fetching\u2026';
-    const form = new FormData();
-    form.append('filename',  _thumbFile.name);
-    form.append('clipstart', clipStart !== null && clipStart !== undefined ? String(clipStart) : '');
-    form.append('clipend',   clipEnd !== null && clipEnd !== undefined ? String(clipEnd) : '');
-    try {
-      const startRes  = await fetch(BACKEND + '/thumbnail', { method: 'POST', body: form });
-      const startData = await startRes.json();
-      if (startData.jobid) {
-        pollThumbnailJob(
-          startData.jobid,
-          data => {
-            if (data.frames && data.frames.length) {
-              _dlgFrames = data.frames; _dlgSelectedFrame = 0;
-              _dlgVideoInfo = data.video_info || _dlgVideoInfo;
-              if (data.titles && data.titles.length) _thumbTitles = data.titles;
-              dlgBuildHeroState();
-              dlgDrawCanvas();
-            }
-            btn.disabled = false; btn.innerHTML = orig;
-          },
-          () => { btn.disabled = false; btn.innerHTML = orig; }
-        );
-        return;
-      }
-    } catch (_) {}
-    btn.disabled = false; btn.innerHTML = orig;
+    dlgOpenFramePicker();
   }
 
   function dlgSelectStyle(style) {
@@ -7226,36 +7148,14 @@
 
   async function dlgRedoTitles() {
     if (!_thumbFile || !backendOnline) return;
-    const clipStart = _sharedThumbnailDraft?.clip_start;
-    const clipEnd = _sharedThumbnailDraft?.clip_end;
     const btn = document.getElementById('dlg-btn-redo-titles');
     btn.disabled = true; const orig = btn.innerHTML; btn.textContent = 'Generating\u2026';
-    let clip_transcript = '';
-    if (_wordsData && clipStart !== null && clipStart !== undefined && clipEnd !== null && clipEnd !== undefined && clipStart < clipEnd) {
-      clip_transcript = _wordsData
-        .filter(w => (w.start ?? 0) < clipEnd && (w.end ?? w.start ?? 0) >= clipStart)
-        .map(w => w.word).join(' ').trim();
+    const titles = await fetchThumbTitles(_sharedThumbnailDraft?.clip_start, _sharedThumbnailDraft?.clip_end);
+    if (titles.length) {
+      _thumbTitles = titles;
+      if (_sharedThumbnailDraft) _sharedThumbnailDraft.suggested_titles = titles;
+      dlgBuildHeroState();
     }
-    const form = new FormData();
-    form.append('filename',        _thumbFile.name);
-    form.append('clipstart',       clipStart !== null && clipStart !== undefined ? String(clipStart) : '');
-    form.append('clipend',         clipEnd !== null && clipEnd !== undefined ? String(clipEnd) : '');
-    form.append('clip_transcript', clip_transcript);
-    try {
-      const startRes  = await fetch(BACKEND + '/thumbnail', { method: 'POST', body: form });
-      const startData = await startRes.json();
-      if (startData.jobid) {
-        pollThumbnailJob(
-          startData.jobid,
-          data => {
-            if (data.titles && data.titles.length) { _thumbTitles = data.titles; dlgBuildHeroState(); }
-            btn.disabled = false; btn.innerHTML = orig;
-          },
-          () => { btn.disabled = false; btn.innerHTML = orig; }
-        );
-        return;
-      }
-    } catch (_) {}
     btn.disabled = false; btn.innerHTML = orig;
   }
 
@@ -7449,6 +7349,15 @@
       // Inject at front of frames array
       _dlgFrames = [b64, ..._dlgFrames].slice(0, 12);
       _dlgSelectedFrame = 0;
+      if (!_dlgVideoInfo && vidEl.videoWidth) {
+        _dlgVideoInfo = {
+          width: vidEl.videoWidth, height: vidEl.videoHeight, rotation: 0,
+          display_width: vidEl.videoWidth, display_height: vidEl.videoHeight,
+          orientation: vidEl.videoHeight > vidEl.videoWidth ? 'portrait' : 'landscape',
+        };
+        if (_sharedThumbnailDraft) _sharedThumbnailDraft.video_info = _dlgVideoInfo;
+      }
+      if (_sharedThumbnailDraft) _sharedThumbnailDraft.available_frames = _dlgFrames;
       dlgBuildHeroState();
       dlgDrawCanvas();
       dlgCloseFramePicker();
@@ -8347,11 +8256,7 @@
             <div class="thumb-editor-label">Source Frames</div>
             <div id="dlg-frame-grid" class="frame-grid"></div>
             <div class="thumb-inline-row">
-              <button class="btn-ghost btn-sm" id="dlg-btn-redo-frames" onclick="dlgRedoFrames()">
-                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 .49-3.2"/></svg>
-                Redo Frames
-              </button>
-              <button class="btn-ghost btn-sm" id="dlg-btn-pick-frame" onclick="dlgOpenFramePicker()">
+              <button class="btn btn-sm" id="dlg-btn-pick-frame" onclick="dlgOpenFramePicker()">
                 <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="16"/><line x1="8" y1="12" x2="16" y2="12"/></svg>
                 Pick Frame
               </button>
@@ -8651,7 +8556,6 @@
     <div id="export-flow-thumb-section" style="display:none; border-top:1px solid var(--border); margin-top:16px; padding-top:14px;">
       <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:8px;">
         <div style="font-size:11px; font-weight:700; letter-spacing:0.08em; text-transform:uppercase; color:var(--muted);">Thumbnail <span style="font-weight:400; text-transform:none; letter-spacing:0;">(optional)</span></div>
-        <button class="btn-ghost btn-sm" id="btn-export-regen-thumb" onclick="startExportFlowThumb(true)" style="display:none;">Regenerate</button>
       </div>
       <div id="export-flow-thumb-status" style="font-size:12px; color:var(--muted); margin-bottom:10px;"></div>
       <div id="export-flow-thumb-frames" class="frame-grid" style="margin-bottom:0;"></div>
