@@ -1493,6 +1493,22 @@
     }
     .tx-word.tx-bleep:hover { background: #FDE68A; }
     .tx-mode-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 8px; }
+    .tx-zone-row { display: flex; gap: 10px; align-items: flex-start; }
+    .tx-mode-rail {
+      position: sticky; top: 12px;
+      display: flex; flex-direction: column; gap: 8px;
+      flex: 0 0 64px; padding: 10px 6px;
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: var(--r); box-shadow: var(--shadow-sm);
+      text-align: center;
+    }
+    .tx-mode-rail-label {
+      font-size: 9px; font-weight: 700; letter-spacing: 0.08em;
+      text-transform: uppercase; color: var(--muted); line-height: 1.5;
+    }
+    .tx-mode-rail .tx-mode-btn {
+      border-radius: 10px; padding: 8px 4px; line-height: 1.45; font-size: 11px;
+    }
     .tx-mode-btn {
       font-size: 11px; font-weight: 600; padding: 3px 10px; border-radius: 14px;
       border: 1px solid var(--border-2); background: var(--surface); color: var(--muted);
@@ -2315,16 +2331,18 @@
               </div>
             </div><!-- /.editor-left-zone -->
 
-            <!-- RIGHT: always-on transcript -->
+            <!-- RIGHT: always-on transcript + edit-mode rail -->
             <div class="editor-right-zone">
-              <div class="tx-always-wrap" id="tx-always-wrap">
-                <div class="tx-mode-row">
-                  <span class="tx-always-header" style="margin:0;">TRANSCRIPT &#8212; drag [ ] to trim &#183; drag across words to:</span>
-                  <button type="button" id="tx-mode-cut" class="tx-mode-btn active" onclick="setTxEditMode('cut')" title="Dragged words are removed from the clip entirely">&#9986; Cut out</button>
-                  <button type="button" id="tx-mode-bleep" class="tx-mode-btn" onclick="setTxEditMode('bleep')" title="Dragged words stay in the clip but their audio is muted">&#128263; Bleep</button>
-                  <span style="font-size:10.5px;color:var(--muted);">click a marked word to restore</span>
+              <div class="tx-zone-row">
+                <div class="tx-always-wrap" id="tx-always-wrap" style="flex:1;min-width:0;">
+                  <span class="tx-always-header">TRANSCRIPT &#8212; drag [ ] to trim &#183; drag across words to apply the mode on the right &#183; click a marked word to restore</span>
+                  <div id="transcript-panel"></div>
                 </div>
-                <div id="transcript-panel"></div>
+                <div class="tx-mode-rail">
+                  <span class="tx-mode-rail-label">Word<br>edit<br>mode</span>
+                  <button type="button" id="tx-mode-cut" class="tx-mode-btn active" onclick="setTxEditMode('cut')" title="Dragged words (and their video frames) are removed from the clip entirely. Red strikethrough.">&#9986;<br>Edit<br>out</button>
+                  <button type="button" id="tx-mode-bleep" class="tx-mode-btn" onclick="setTxEditMode('bleep')" title="Dragged words stay in the clip but their audio is muted. Amber highlight.">&#128263;<br>Bleep</button>
+                </div>
               </div>
             </div><!-- /.editor-right-zone -->
 
@@ -8339,6 +8357,58 @@
     return '';
   }
 
+  // Build an SRT for the edited clip from the Words JSON: times remapped onto
+  // the output timeline (cuts removed), bleeped words masked. Used by the
+  // "Burn captions" export option so vertical clips get right-sized captions
+  // from UNCAPTIONED sources (baked-in captions from 16:9 masters cannot be
+  // resized or repositioned).
+  function buildClipCaptionsSrt() {
+    if (!_wordsData || !_wordsData.length) return '';
+    const cuts = editorCutRanges
+      .map(r => [Math.max(r.start, editorInTime), Math.min(r.end, editorOutTime)])
+      .filter(r => r[1] - r[0] > 0.05)
+      .sort((a, b) => a[0] - b[0]);
+    const kept = [];
+    let cursor = editorInTime;
+    for (const [cs, ce] of cuts) {
+      if (cs - cursor > 0.05) kept.push([cursor, cs]);
+      cursor = Math.max(cursor, ce);
+    }
+    if (editorOutTime - cursor > 0.05) kept.push([cursor, editorOutTime]);
+    if (!kept.length) kept.push([editorInTime, editorOutTime]);
+
+    let offset = 0;
+    const words = [];
+    for (const [s, e] of kept) {
+      for (const w of _wordsData) {
+        const ws = w.start ?? 0, we = w.end ?? ws;
+        if (ws < e && we > s) {
+          let text = (w.word ?? '').trim();
+          if (!text) continue;
+          if (isWordBleeped(w)) text = '****';
+          words.push({ start: Math.max(0, ws - s) + offset, end: Math.max(0.1, Math.min(e, we) - s) + offset, text });
+        }
+      }
+      offset += e - s;
+    }
+    if (!words.length) return '';
+
+    const fmt = t => {
+      t = Math.max(0, t);
+      const h = Math.floor(t / 3600), m = Math.floor(t / 60) % 60, sec = Math.floor(t % 60);
+      const ms = Math.min(999, Math.round((t % 1) * 1000));
+      const p = n => String(n).padStart(2, '0');
+      return p(h) + ':' + p(m) + ':' + p(sec) + ',' + String(ms).padStart(3, '0');
+    };
+    let out = '', idx = 1;
+    for (let i = 0; i < words.length; i += 10) {  // house style: max 10 words/entry
+      const grp = words.slice(i, i + 10);
+      out += (idx++) + '\n' + fmt(grp[0].start) + ' --> ' + fmt(grp[grp.length - 1].end) + '\n' +
+             grp.map(w => w.text).join(' ') + '\n\n';
+    }
+    return out;
+  }
+
   async function doExport(withThumbnail = false) {
     if (!_clipFile) { alert('No video loaded.'); return; }
     const filename = document.getElementById('flow-export-filename').value.trim() || 'clip.mp4';
@@ -8348,6 +8418,11 @@
     if (!_selectedExportFolder) {
       alert('Choose or create a folder before saving the clip.');
       return;
+    }
+    if (!withThumbnail && thumbnailBlob) {
+      if (!confirm('You created a thumbnail, but it is NOT attached to this save. Save the clip without it?')) {
+        return;
+      }
     }
 
     btn.disabled = true;
@@ -8403,6 +8478,11 @@
       const coverChk = document.getElementById('export-cover-frame');
       if (coverChk && coverChk.checked) form.append('cover_frame', '1');
     }
+    const burnCapChk = document.getElementById('export-burn-captions');
+    if (burnCapChk && burnCapChk.checked) {
+      const srt = buildClipCaptionsSrt();
+      if (srt) form.append('captions_srt', srt);
+    }
     if (_editCandidate && _editCandidate.hook_line)
       form.append('hook_line', _editCandidate.hook_line);
     if (_wordsData) {
@@ -8457,8 +8537,10 @@
         thumbnail_draft_id: '',
       });
       if (withThumbnail) {
-        // Attach the selected thumbnail (draft or new frame)
-        if (_efSelectedDraftId) {
+        // Attach the selected thumbnail (composer-made blob, draft, or legacy frame)
+        if (thumbnailBlob && !_efSelectedDraftId) {
+          await attachThumbnailBlobToSavedClip(thumbnailBlob, 'create_new', _sharedThumbnailDraft?.draft_id || '').catch(() => {});
+        } else if (_efSelectedDraftId) {
           await attachExistingThumbnailDraft(_efSelectedDraftId).catch(() => {});
         } else if (_efSelectedThumbFrame >= 0 && _efThumbFrames.length) {
           // Build a quick draft from selected frame using default lower-third layout
@@ -9073,10 +9155,16 @@
   </div>
   <div class="dialog-footer">
     <button class="btn-ghost" onclick="closeExportFlowDialogs()">Cancel</button>
-    <label id="export-cover-frame-row" class="thumb-inline-row" style="font-size:12px;color:var(--text-2);cursor:pointer;margin-right:auto;" title="Instagram uses the first frame as the reel cover. This prepends your thumbnail as a single invisible frame so the Zapier-posted reel shows it as the cover.">
+    <span style="display:flex;flex-direction:column;gap:4px;margin-right:auto;">
+    <label id="export-cover-frame-row" class="thumb-inline-row" style="font-size:12px;color:var(--text-2);cursor:pointer;" title="Instagram uses the first frame as the reel cover. This prepends your thumbnail as a single invisible frame so the Zapier-posted reel shows it as the cover.">
       <input type="checkbox" id="export-cover-frame" checked style="accent-color:var(--orange);width:15px;height:15px;cursor:pointer;">
       Use thumbnail as Instagram cover (burns 1 frame)
     </label>
+    <label class="thumb-inline-row" style="font-size:12px;color:var(--text-2);cursor:pointer;" title="For UNCAPTIONED source videos: burns phone-sized captions onto the vertical clip using the transcript (cut words removed, bleeped words masked). Don't use with already-captioned sources — you'd get double captions.">
+      <input type="checkbox" id="export-burn-captions" style="accent-color:var(--orange);width:15px;height:15px;cursor:pointer;">
+      Burn captions onto the clip (use with uncaptioned source)
+    </label>
+    </span>
     <button class="btn-ghost" id="btn-save-clip-folder" onclick="doExport(false)" disabled>Save without Thumbnail</button>
     <button class="btn" id="btn-save-with-thumb" onclick="doExport(true)" disabled style="display:none;">
       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">

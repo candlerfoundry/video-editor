@@ -877,3 +877,52 @@ Composer (amends sections 18/24):
   was wrong and was removed from the swatch rows).
 
 Regression risk: High.
+
+---
+
+## 26. True-pixel captions (srt_to_ass) and export-time caption burning (June 11, 2026, round 3)
+
+THE GIANT-CAPTION BUG (root cause of Emily's long-standing complaint):
+- ffmpeg's `subtitles=file.srt:force_style=...` styles SRT against libass's
+  default 384x288 canvas and scales to the video. On 1080x1920 vertical video
+  every size is multiplied ~6.7x — Fontsize=36 rendered ~240px tall and
+  MarginV pushed captions off the frame. Any caption burning MUST go through
+  `srt_to_ass(srt_text, width, height)`, which emits a full ASS script with
+  `PlayResX/PlayResY` set to the real video size so sizes are TRUE pixels.
+- Sizing inside srt_to_ass: vertical (<0.75) 3.4% of height; horizontal
+  (>1.4) 5.5%; square 4.5%. White, Arial, outline 3, bottom-center
+  (alignment 2), MarginV 12%/6%/8% of height.
+- `/caption` uses it (top position + yellow variants are token-replacements
+  on the Style line — keep the tokens `,1,3,0,2,` and
+  `&H00FFFFFF,&H00FFFFFF` stable or update both sides).
+- Captions baked into a source video are pixels and CANNOT be resized or
+  repositioned by the app. Cropping a captioned 16:9 master to 9:16 cuts
+  captions off. The workflow answer is uncaptioned sources + burning at
+  export (below). No library reburn needed — Words JSONs already exist.
+
+Export-time caption burning:
+- Save modal checkbox "Burn captions onto the clip" (unchecked by default;
+  for UNCAPTIONED sources — double captions otherwise).
+- Frontend `buildClipCaptionsSrt()`: words within [in,out], cut ranges
+  REMOVED with times remapped onto the output timeline, bleeped words masked
+  as `****`, max 10 words/entry (house style). Sent as `captions_srt`.
+- Backend writes `captions.ass` via `srt_to_ass(..., 1080, 1920)` and appends
+  `,subtitles=captions.ass` to the video filter in BOTH export paths; both
+  ffmpeg passes now run with `cwd=tmp_dir` (relative filter filename).
+- Verified by rendering: 65px text, two wrapped lines, bottom margin 230px on
+  a 1080x1920 frame.
+
+Also in round 3:
+- The Cut/Bleep control is a sticky `.tx-mode-rail` to the RIGHT of the
+  transcript (stays visible while scrolling). The round-2 "card under the
+  time fields" was lost to the patch-abort bug (#13) and never shipped.
+- `doExport(true)` thumbnailBlob priority (also lost to bug #13) is now
+  verified in-file: composer-made thumbnails attach and trigger the cover
+  burn via /export_thumbnail.
+- Saving WITHOUT a thumbnail when one was composed asks for confirmation.
+
+PROCESS RULE (after bug #13 struck twice): after every patch script, verify
+the change exists in the FILE with grep — never trust the script's own "ok"
+output, because an assert later in the same script aborts before the write.
+
+Regression risk: High.

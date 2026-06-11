@@ -177,6 +177,63 @@ def read_airtable_api_key():
         return None
 
 
+def srt_to_ass(srt_text, width, height):
+    """
+    Convert SRT text to a full ASS script with PlayRes set to the actual video
+    size, so font sizes are TRUE pixels. This fixes the long-standing
+    giant-caption bug: SRT via the subtitles filter is styled against libass's
+    default 384x288 canvas and scaled up (6.7x on a 1080x1920 video).
+    Sizing: vertical ~3.4% of height, horizontal ~5.5%, square ~4.5%.
+    """
+    aspect = width / height if height else 1.78
+    if aspect < 0.75:
+        font_size = max(28, int(height * 0.034))
+        margin_v = int(height * 0.12)
+    elif aspect > 1.4:
+        font_size = max(24, int(height * 0.055))
+        margin_v = int(height * 0.06)
+    else:
+        font_size = max(26, int(height * 0.045))
+        margin_v = int(height * 0.08)
+    margin_h = int(width * 0.05)
+
+    def t2ass(t):
+        t = t.strip().replace('.', ',')
+        h, m, rest = t.split(':')
+        s, ms = (rest.split(',') + ['0'])[:2]
+        return f"{int(h)}:{m}:{s}.{int(ms.ljust(3, '0')[:3]) // 10:02d}"
+
+    header = (
+        "[Script Info]\n"
+        "ScriptType: v4.00+\n"
+        f"PlayResX: {width}\n"
+        f"PlayResY: {height}\n"
+        "ScaledBorderAndShadow: yes\n"
+        "WrapStyle: 0\n\n"
+        "[V4+ Styles]\n"
+        "Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, "
+        "OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, "
+        "ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, "
+        "Alignment, MarginL, MarginR, MarginV, Encoding\n"
+        f"Style: Default,Arial,{font_size},&H00FFFFFF,&H00FFFFFF,&H00000000,"
+        f"&H7F000000,-1,0,0,0,100,100,0,0,1,3,0,2,{margin_h},{margin_h},{margin_v},1\n\n"
+        "[Events]\n"
+        "Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text\n"
+    )
+    events = []
+    for block in re.split(r'\n\s*\n', srt_text.strip()):
+        lines = [l for l in block.strip().splitlines() if l.strip()]
+        if len(lines) < 2:
+            continue
+        ti = next((i for i, l in enumerate(lines) if '-->' in l), -1)
+        if ti < 0:
+            continue
+        start, end = [x.strip() for x in lines[ti].split('-->')]
+        text = '\\N'.join(lines[ti + 1:]).replace('{', '(').replace('}', ')')
+        events.append(f"Dialogue: 0,{t2ass(start)},{t2ass(end)},Default,,0,0,0,,{text}")
+    return header + '\n'.join(events) + '\n'
+
+
 # ── Adaptive caption sizing ──
 def get_video_dimensions(video_path, ffmpeg_exe):
     """Returns (width, height) using ffprobe. Returns (1920, 1080) as safe default on failure."""
@@ -361,31 +418,35 @@ def caption():
 
         file.save(input_path)
 
-        # Detect video dimensions and choose adaptive caption style
+        # Detect video dimensions for true-pixel caption sizing
         width, height = get_video_dimensions(input_path, FFMPEG_EXE)
-        cap_style = get_caption_style(width, height)
-        logger.info(
-            '[captions] Orientation: %s fontsize=%s',
-            cap_style["label"], cap_style["fontsize"],
-        )
-
-        style = (
-            f"Fontsize={cap_style['fontsize']},{STYLE_STR},"
-            f"Alignment={alignment},PrimaryColour={primary_colour},"
-            f"MarginV={cap_style['margin_v']},MarginH={cap_style['margin_h']}"
-        )
+        logger.info('[captions] Video %sx%s — using ASS true-pixel sizing', width, height)
 
         # Transcribe with Whisper medium
         model  = get_whisper_model()
         result = model.transcribe(input_path)
         write_srt(result["segments"], srt_path)
 
-        # Burn subtitles with ffmpeg
-        # Use cwd=tmp_dir and relative filename to avoid Windows path escaping issues
+        # Burn subtitles with ffmpeg as a full ASS script (PlayRes = video size).
+        # The old force_style approach was scaled against libass's default
+        # 384x288 canvas — on vertical video that multiplied font sizes ~6.7x,
+        # which is why captions ran off the frame for years (fixed June 11, 2026).
+        with open(srt_path, 'r', encoding='utf-8') as f:
+            srt_content = f.read()
+        ass_text = srt_to_ass(srt_content, width, height)
+        if position == "top":
+            # Alignment 8 = top-center (ASS numpad layout)
+            ass_text = ass_text.replace(",1,3,0,2,", ",1,3,0,8,")
+        if text_color == "yellow":
+            ass_text = ass_text.replace("&H00FFFFFF,&H00FFFFFF", "&H0000FFFF,&H0000FFFF")
+        ass_path = os.path.join(tmp_dir, "captions.ass")
+        with open(ass_path, 'w', encoding='utf-8') as f:
+            f.write(ass_text)
+
         cmd = [
             FFMPEG_EXE, "-y",
             "-i", input_path,
-            "-vf", f"subtitles=captions.srt:force_style='{style}'",
+            "-vf", "subtitles=captions.ass",
             "-c:a", "copy",
             output_path,
         ]
@@ -2086,6 +2147,7 @@ def export_clip():
         target_folder   = sanitize_social_media_relative_path(request.form.get("target_folder", ""))
         cut_ranges_raw  = request.form.get("cut_ranges",      "").strip()
         bleep_ranges_raw = request.form.get("bleep_ranges",   "").strip()
+        captions_srt    = request.form.get("captions_srt",    "")
         cover_frame     = request.form.get("cover_frame",     "").strip() in {"1", "true", "yes"}
     except (ValueError, TypeError) as e:
         return jsonify({"error": f"Invalid parameters: {e}"}), 400
@@ -2116,6 +2178,20 @@ def export_clip():
         else:
             shutil.copy2(source_path, input_path)
 
+        # ── Optional: burn clip captions (from the Words JSON, sized for 9:16) ──
+        # Frontend remaps caption times onto the output timeline (cuts removed,
+        # bleeped words masked), so the SRT applies AFTER trim/stitch.
+        caption_filter = ""
+        if captions_srt.strip():
+            # Full ASS with PlayRes=output size, so sizes are true pixels
+            # (see srt_to_ass — fixes the giant-caption scaling bug).
+            ass_path = os.path.join(tmp_dir, "captions.ass")
+            with open(ass_path, "w", encoding="utf-8") as f:
+                f.write(srt_to_ass(captions_srt, 1080, 1920))
+            caption_filter = ",subtitles=captions.ass"
+            logger.info("[export] Burning clip captions (%s chars of SRT, ASS true-pixel sizing)",
+                        len(captions_srt))
+
         # ── Step A: 9:16 vertical reframe ──
         kept_segments = compute_kept_segments(starttime, endtime, cut_ranges_raw)
         bleep_ranges  = parse_bleep_ranges(starttime, endtime, bleep_ranges_raw)
@@ -2144,7 +2220,7 @@ def export_clip():
             filter_parts.append(
                 f"{concat_pads}concat=n={len(kept_segments)}:v=1:a=1[vcat][acat]"
             )
-            filter_parts.append("[vcat]crop=ih*9/16:ih,scale=1080:1920[vout]")
+            filter_parts.append(f"[vcat]crop=ih*9/16:ih,scale=1080:1920{caption_filter}[vout]")
             r2 = subprocess.run(
                 [FFMPEG_EXE, "-y",
                  "-i", input_path,
@@ -2154,6 +2230,7 @@ def export_clip():
                  "-c:a", "aac",
                  output_path],
                 capture_output=True, creationflags=CREATE_NO_WINDOW,
+                cwd=tmp_dir,
             )
             if r2.returncode != 0:
                 err = r2.stderr.decode("utf-8", errors="replace")[-800:]
@@ -2174,7 +2251,7 @@ def export_clip():
             # Pass 2: crop centre 9:16 and scale to 1080×1920
             pass2_cmd = [FFMPEG_EXE, "-y",
                          "-i", temp_clip,
-                         "-vf", "crop=ih*9/16:ih,scale=1080:1920"]
+                         "-vf", f"crop=ih*9/16:ih,scale=1080:1920{caption_filter}"]
             bleep_chain = build_bleep_audio_chain(bleep_ranges, time_offset=starttime)
             if bleep_chain:
                 pass2_cmd += ["-af", bleep_chain]
@@ -2184,6 +2261,7 @@ def export_clip():
             r2 = subprocess.run(
                 pass2_cmd,
                 capture_output=True, creationflags=CREATE_NO_WINDOW,
+                cwd=tmp_dir,
             )
             if r2.returncode != 0:
                 err = r2.stderr.decode("utf-8", errors="replace")[-800:]
