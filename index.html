@@ -5008,7 +5008,7 @@
       text: text || '',
       color: overrides.color || '#ffffff',
       background_color: overrides.background_color || '#111111',
-      background_opacity: overrides.background_opacity ?? 0,
+      background_opacity: overrides.background_opacity ?? 70,
       font_family: overrides.font_family || 'Montserrat',
       font_size: overrides.font_size ?? 64,
       x: overrides.x ?? null,
@@ -5069,7 +5069,7 @@
         ...textBoxes[0],
         color: options.textColor || '#ffffff',
         background_color: options.backgroundColor || '#111111',
-        background_opacity: options.backgroundOpacity ?? 0,
+        background_opacity: options.backgroundOpacity ?? 70,
         font_family: options.fontFamily || 'Montserrat',
         font_size: options.fontSize ?? 64,
         shadow: options.shadowOn ?? true,
@@ -5920,8 +5920,10 @@
     // June 11, 2026: no baked style overlay (dark scrim + orange accent line
     // removed at Emily's request). Text legibility comes from each text box's
     // own background/shadow controls.
-    // Draw graphic elements onto exported canvas (shapes + brand images)
-    for (var _gi = 0; _gi < (draft.graphic_elements || []).length; _gi++) {
+    // Draw graphic elements onto exported canvas (shapes + brand images).
+    // The live editor passes omitElements:true — elements render as HTML
+    // overlays there; baking them too created ghost duplicates after moves.
+    for (var _gi = 0; _gi < (options.omitElements ? [] : (draft.graphic_elements || [])).length; _gi++) {
       var _ge = draft.graphic_elements[_gi];
       if (_ge.type === 'shape') {
         drawShapeToCanvas(ctx, _ge);
@@ -6512,29 +6514,25 @@
       }
     }
 
-    // Reuse already-generated frames if available and not forcing regen
-    if (!forceRegenerate && _dlgFrames && _dlgFrames.length) {
-      _efThumbFrames = _dlgFrames;
-      renderExportFlowThumbGrid();
-      if (statusEl) statusEl.textContent = '';
-      if (regenBtn) regenBtn.style.display = '';
-      if (editorBtn) editorBtn.style.display = '';
-      return;
-    }
-
-    // Manual flow (June 10, 2026): no auto frame generation. Open the video
-    // picker so the user grabs the exact moment they want; fetch AI titles in
-    // the background for the quick lower-third draft.
+    // June 11, 2026: ALL frame picking/editing lives in the Create Thumbnail
+    // composer. The save modal only shows what is ready and offers entry.
     if (!_clipFile) return;
     if (regenBtn) regenBtn.style.display = 'none';
     if (editorBtn) editorBtn.style.display = '';
     if (framesEl) framesEl.innerHTML = '';
-    if (statusEl) statusEl.textContent = 'Pick a frame from the video to use as your thumbnail:';
-    efOpenVideoPicker();
-    if (!_thumbTitles || !_thumbTitles.length) {
-      fetchThumbTitles(editorInTime, editorOutTime).then(titles => {
-        if (titles.length) _thumbTitles = titles;
-      });
+    const readyRow = document.getElementById('export-flow-thumb-ready');
+    const previewImg = document.getElementById('export-flow-thumb-preview');
+    if (thumbnailBlob && thumbnailBlobUrl) {
+      if (readyRow) readyRow.style.display = 'flex';
+      if (previewImg) previewImg.src = thumbnailBlobUrl;
+      if (statusEl) statusEl.textContent = '';
+      const saveWithBtn = document.getElementById('btn-save-with-thumb');
+      if (saveWithBtn) { saveWithBtn.style.display = ''; saveWithBtn.disabled = false; }
+    } else {
+      if (readyRow) readyRow.style.display = 'none';
+      if (statusEl) statusEl.textContent = drafts.length
+        ? 'Reuse a saved thumbnail below, or create a new one:'
+        : 'No thumbnail yet \u2014 create one, or save without it.';
     }
   }
 
@@ -6886,6 +6884,8 @@
     form.append('thumbnail', blob, _savedClipExport.filename.replace(/\.mp4$/i, '') + ' - Thumbnail.png');
     form.append('suggested_name', _savedClipExport.filename);
     form.append('target_folder', _savedClipExport.folder_name);
+    const coverChk = document.getElementById('export-cover-frame');
+    if (coverChk && coverChk.checked) form.append('cover_frame', '1');
     if (_savedClipExport.airtable_record_id) form.append('airtable_record_id', _savedClipExport.airtable_record_id);
     try {
       const res = await fetch(BACKEND + '/export_thumbnail', { method: 'POST', body: form });
@@ -7103,6 +7103,7 @@
     if (startT == null || endT == null || startT >= endT) return [];
     const clip_transcript = _wordsData
       .filter(w => (w.start ?? 0) < endT && (w.end ?? w.start ?? 0) >= startT)
+      .filter(w => !isWordCut(w))
       .map(w => w.word).join(' ').trim().slice(0, 3000);
     if (!clip_transcript) return [];
     try {
@@ -7299,7 +7300,7 @@
     const canvas = document.getElementById('dlg-canvas');
     if (!canvas || !_sharedThumbnailDraft?.available_frames?.length) return;
     syncDraftFromDialogState();
-    await renderThumbnailDraftToCanvas(canvas, _sharedThumbnailDraft, { omitText: true, omitLogo: true });
+    await renderThumbnailDraftToCanvas(canvas, _sharedThumbnailDraft, { omitText: true, omitLogo: true, omitElements: true });
     renderDialogOverlayLayer();
   }
 
@@ -7623,12 +7624,12 @@
     const c = escHtml(elem.color || '#c84826');
     const def = SHAPE_LIBRARY[elem.shape_type] || SHAPE_LIBRARY.circle;
     if (def.glyph) {
-      return '<svg width="100%" height="100%" viewBox="0 0 100 100" preserveAspectRatio="none" xmlns="http://www.w3.org/2000/svg">' +
+      return '<svg width="100%" height="100%" viewBox="0 0 100 100" preserveAspectRatio="xMidYMid meet" xmlns="http://www.w3.org/2000/svg">' +
         '<text x="50" y="92" font-family="Georgia, serif" font-weight="900" font-size="125" fill="' + c + '" text-anchor="middle">' + def.glyph + '</text></svg>';
     }
     const inner = def.paths.map(pd =>
       '<path d="' + pd.d + '" fill="' + (pd.fill ? c : 'none') + '" stroke="' + (pd.fill ? 'none' : c) +
-      '" stroke-width="' + (pd.sw || 5) + '" stroke-linecap="round" stroke-linejoin="round"/>'
+      '" stroke-width="' + (pd.sw || 5) + '" vector-effect="non-scaling-stroke" stroke-linecap="round" stroke-linejoin="round"/>'
     ).join('');
     return '<svg width="100%" height="100%" viewBox="0 0 100 100" preserveAspectRatio="none" xmlns="http://www.w3.org/2000/svg">' + inner + '</svg>';
   }
@@ -7645,10 +7646,12 @@
     ctx.lineCap = 'round';
     ctx.lineJoin = 'round';
     if (def.glyph) {
-      ctx.font = '900 ' + Math.round(eh * 1.25) + 'px Georgia, serif';
+      // Match the overlay's xMidYMid-meet behavior: uniform scale within the box
+      const gs = Math.min(ew, eh);
+      ctx.font = '900 ' + Math.round(gs * 1.25) + 'px Georgia, serif';
       ctx.textAlign = 'center';
       ctx.textBaseline = 'alphabetic';
-      ctx.fillText(def.glyph, ex + ew / 2, ey + eh * 0.92);
+      ctx.fillText(def.glyph, ex + ew / 2, ey + (eh + gs * 0.84) / 2);
       ctx.restore();
       return;
     }
@@ -7693,6 +7696,47 @@
       el.appendChild(d);
     });
   }
+
+  const BRAND_LOGOS = [
+    { asset: 'brand/foundry-f-orange.png',    label: 'Foundry F \u2014 orange',    aspect: 1 },
+    { asset: 'brand/foundry-f-black.png',     label: 'Foundry F \u2014 black',     aspect: 1 },
+    { asset: 'brand/foundry-name-orange.png', label: 'Foundry name \u2014 orange', aspect: 2.49 },
+    { asset: 'brand/foundry-name-black.png',  label: 'Foundry name \u2014 black',  aspect: 2.49 },
+    { asset: 'brand/theoed-mic.png',          label: 'TheoEd mic',                  aspect: 1.03 },
+    { asset: 'brand/theoed-name.png',         label: 'TheoEd name',                 aspect: 3.76 },
+    { asset: 'brand/3mb-logo.png',            label: '3-Minute Bible',              aspect: 1.79 },
+  ];
+
+  function toggleLogoDropdown(forceClose) {
+    const dd = document.getElementById('dlg-logo-dropdown');
+    if (!dd) return;
+    const isOpen = dd.style.display !== 'none';
+    if (forceClose || isOpen) { dd.style.display = 'none'; return; }
+    if (!dd.dataset.built) {
+      dd.dataset.built = '1';
+      dd.innerHTML = BRAND_LOGOS.map((l, i) =>
+        '<div onclick="addLogoFromDropdown(' + i + ')" onmouseover="this.style.background=\'var(--orange-tint)\'" onmouseout="this.style.background=\'\'" ' +
+        'style="display:flex;align-items:center;gap:10px;padding:7px 10px;border-radius:7px;cursor:pointer;">' +
+        '<span style="flex:0 0 64px;height:30px;display:flex;align-items:center;justify-content:center;">' +
+        '<img src="' + l.asset + '" alt="" style="max-width:64px;max-height:30px;width:auto;height:auto;object-fit:contain;display:block;"></span>' +
+        '<span style="font-size:12.5px;color:var(--text);">' + l.label + '</span></div>'
+      ).join('');
+    }
+    dd.style.display = 'block';
+  }
+  function addLogoFromDropdown(i) {
+    const l = BRAND_LOGOS[i];
+    if (!l) return;
+    toggleLogoDropdown(true);
+    dlgAddDesignElement({ type: 'image', asset: l.asset, label: l.label, aspect: l.aspect });
+  }
+  document.addEventListener('mousedown', function (e) {
+    const dd = document.getElementById('dlg-logo-dropdown');
+    if (dd && dd.style.display !== 'none' &&
+        !e.target.closest('#dlg-logo-dropdown') && !e.target.closest('#dlg-logo-dd-btn')) {
+      dd.style.display = 'none';
+    }
+  });
 
   function dlgAddDesignElement(opts) {
     if (!_sharedThumbnailDraft) return;
@@ -8149,7 +8193,13 @@
         const hdx = hdxMap[dragging.handle] || 0;
         const hdy = hdyMap[dragging.handle] || 0;
         const newW = Math.max(40, dragging.origW + hdx * dx * scaleX);
-        const newH = Math.max(30, dragging.origH + hdy * dy * scaleY);
+        let newH = Math.max(30, dragging.origH + hdy * dy * scaleY);
+        // Glyphs, sparkles, stars, and brand images keep their aspect ratio
+        const aspectLocked = found.type === 'image' ||
+          ['quote', 'sparkle', 'star'].includes(found.shape_type);
+        if (aspectLocked && dragging.origW > 0) {
+          newH = Math.max(30, newW * (dragging.origH / dragging.origW));
+        }
         found.width  = Math.round(newW);
         found.height = Math.round(newH);
         found.x = Math.round(hdx < 0 ? dragging.origX + (dragging.origW - newW) : dragging.origX);
@@ -8248,13 +8298,45 @@
     lookupExportFolder();
   }
 
+  // Item code is the leading token of the Foundry filename convention:
+  // "THEO-170 - Title - Speaker - ..." / "POD-3.1 - ..." / "3MB-62 - ..." / "UNST-223 - ..."
+  function extractItemCode(filename) {
+    const m = String(filename || '').toUpperCase().match(/^\s*([A-Z0-9]{2,5}-\d+(?:\.\d+)?)/);
+    return m ? m[1] : '';
+  }
+
+  // Speaker is the last " - " part of the cleaned filename per the naming
+  // convention: "[CODE] - [Full Title] - [Speaker] - Horizontal - Uncaptioned".
+  function extractSpeakerName(filename) {
+    let stem = String(filename || '').replace(/\.(mp4|mov)$/i, '');
+    stem = stem.replace(/\s*-\s*(Horizontal|Vertical|Uncaptioned|Captioned)\s*/gi, ' ')
+               .replace(/\s*\((Captioned|Uncaptioned)\)\s*/gi, ' ');
+    const parts = stem.split(' - ').map(s => s.trim()).filter(Boolean);
+    if (parts.length >= 3) return parts[parts.length - 1];
+    return '';
+  }
+
   function detectClipType(filename) {
-    const f = (filename || '').toLowerCase();
-    if (f.includes('unstuck') && (f.includes('stor') || f.includes('story'))) return 'Unstuck Story Clip';
-    if (f.includes('unstuck')) return 'Unstuck Refl. Clip';
-    if (f.includes('theoed') || f.includes('theo ed') || f.includes('theo-ed')) return 'TheoEd Clip';
-    if (f.includes('3mb') || f.includes('3 mb')) return '3MB Clip';
-    return 'Podcast Clip';
+    // Check the given filename, then the project's source video filename
+    // (resumed projects may not carry the code in _clipFile).
+    const names = [
+      filename || '',
+      activeProject?.source_filename || activeProject?.source_video?.filename || '',
+    ];
+    for (const name of names) {
+      if (!name) continue;
+      const code = extractItemCode(name);
+      if (code.startsWith('POD-'))  return 'Podcast Clip';
+      if (code.startsWith('3MB-'))  return '3MB Clip';
+      if (code.startsWith('THEO-')) return 'TheoEd Clip';
+      if (code.startsWith('UNST-')) return 'Unstuck';
+      const f = name.toLowerCase();
+      if (f.includes('unstuck')) return 'Unstuck';
+      if (f.includes('theoed') || f.includes('theo ed') || f.includes('theo-ed')) return 'TheoEd Clip';
+      if (f.includes('3mb') || f.includes('3 mb')) return '3MB Clip';
+      if (f.includes('podcast')) return 'Podcast Clip';
+    }
+    return '';
   }
 
   async function doExport(withThumbnail = false) {
@@ -8284,6 +8366,25 @@
     form.append('suggested_name', filename);
     form.append('clip_type', clipType);
     form.append('target_folder', _selectedExportFolder);
+    const srcName = _clipFile?.name || activeProject?.source_filename || activeProject?.source_video?.filename || '';
+    const itemCode = extractItemCode(srcName);
+    if (itemCode) form.append('item_code', itemCode);
+    // Content Title: "Speaker - first words of the clip" (Emily's spec:
+    // speaker name + 3-5 word summary; first words suffice in a pinch).
+    (() => {
+      const speaker = extractSpeakerName(srcName);
+      let firstWords = '';
+      if (_wordsData) {
+        firstWords = _wordsData
+          .filter(w => (w.start ?? 0) < editorOutTime && (w.end ?? w.start ?? 0) >= editorInTime)
+          .filter(w => !isWordCut(w))
+          .slice(0, 5)
+          .map(w => (w.word ?? '').trim()).join(' ').replace(/[.,;:!?]+$/, '');
+      }
+      const title = [speaker, firstWords ? firstWords + '\u2026' : '']
+        .filter(Boolean).join(' \u2014 ');
+      if (title) form.append('content_title', title.slice(0, 120));
+    })();
     if (editorCutRanges.length) {
       // Word ranges the user struck out -> backend stitches the kept segments
       const cuts = editorCutRanges
@@ -8327,9 +8428,19 @@
         airtable_record_id: data.airtable_record_id,
         airtable_url: data.airtable_url,
       };
-      const airtableLine = data.airtable_record_id
-        ? '<span style="color:var(--green);">\u2713 Added to Airtable (Video Shorts &amp; Social)' + (data.airtable_url ? ' \u2014 <a href="' + escHtml(data.airtable_url) + '" target="_blank" rel="noopener">open record</a>' : '') + '</span>'
-        : '<span style="color:#B45309;">\u26A0 Airtable record was NOT created' + (data.airtable_error ? ': ' + escHtml(String(data.airtable_error).slice(0, 200)) : ' (check airtable_api_key.txt and restart the launcher)') + '</span>';
+      const statusLines = [];
+      statusLines.push(data.clip_dropbox_url
+        ? '<span style="color:var(--green);">\u2713 Dropbox share link created</span>'
+        : '<span style="color:#B45309;">\u26A0 No Dropbox share link' + (data.dropbox_error ? ': ' + escHtml(String(data.dropbox_error).slice(0, 160)) : '') + '</span>');
+      statusLines.push(data.airtable_record_id
+        ? '<span style="color:var(--green);">\u2713 Added to Airtable' + (data.airtable_url ? ' \u2014 <a href="' + escHtml(data.airtable_url) + '" target="_blank" rel="noopener">open record</a>' : '') + '</span>'
+        : '<span style="color:#B45309;">\u26A0 Airtable record NOT created' + (data.airtable_error ? ': ' + escHtml(String(data.airtable_error).slice(0, 160)) : '') + '</span>');
+      if (data.airtable_record_id) {
+        statusLines.push(data.source_record_id
+          ? '<span style="color:var(--green);">\u2713 Linked to the full-length video</span>'
+          : '<span style="color:#B45309;">\u26A0 Full-length video not linked' + (data.source_link_error ? ': ' + escHtml(String(data.source_link_error).slice(0, 160)) : '') + '</span>');
+      }
+      const airtableLine = statusLines.join('<br>');
       const panelStatus = document.getElementById('export-status');
       panelStatus.style.display = 'block';
       panelStatus.innerHTML =
@@ -8664,28 +8775,11 @@
             <div class="thumb-editor-label" style="margin-bottom:10px;">Design Elements</div>
 
             <div style="font-size:10px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:var(--muted);margin-bottom:6px;">Logos &amp; Branding</div>
-            <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:14px;">
-              <button class="design-elem-btn" type="button" title="Foundry F (orange)" onclick="dlgAddDesignElement({type:'image',asset:'brand/foundry-f-orange.png',label:'Foundry F (orange)',aspect:1})">
-                <img src="brand/foundry-f-orange.png" alt="" style="height:22px;width:auto;object-fit:contain;display:block;">
+            <div style="position:relative;margin-bottom:14px;">
+              <button class="btn-ghost btn-sm" type="button" id="dlg-logo-dd-btn" onclick="toggleLogoDropdown()" style="width:100%;justify-content:space-between;display:flex;align-items:center;">
+                Add a logo&hellip; <span style="font-size:10px;">&#9662;</span>
               </button>
-              <button class="design-elem-btn" type="button" title="Foundry F (black)" onclick="dlgAddDesignElement({type:'image',asset:'brand/foundry-f-black.png',label:'Foundry F (black)',aspect:1})">
-                <img src="brand/foundry-f-black.png" alt="" style="height:22px;width:auto;object-fit:contain;display:block;">
-              </button>
-              <button class="design-elem-btn" type="button" title="Foundry name (orange)" onclick="dlgAddDesignElement({type:'image',asset:'brand/foundry-name-orange.png',label:'Foundry name (orange)',aspect:2.49})">
-                <img src="brand/foundry-name-orange.png" alt="" style="height:18px;width:auto;object-fit:contain;display:block;">
-              </button>
-              <button class="design-elem-btn" type="button" title="Foundry name (black)" onclick="dlgAddDesignElement({type:'image',asset:'brand/foundry-name-black.png',label:'Foundry name (black)',aspect:2.49})">
-                <img src="brand/foundry-name-black.png" alt="" style="height:18px;width:auto;object-fit:contain;display:block;">
-              </button>
-              <button class="design-elem-btn" type="button" title="TheoEd mic" onclick="dlgAddDesignElement({type:'image',asset:'brand/theoed-mic.png',label:'TheoEd mic',aspect:1.03})">
-                <img src="brand/theoed-mic.png" alt="" style="height:22px;width:auto;object-fit:contain;display:block;">
-              </button>
-              <button class="design-elem-btn" type="button" title="TheoEd name" onclick="dlgAddDesignElement({type:'image',asset:'brand/theoed-name.png',label:'TheoEd name',aspect:3.76})">
-                <img src="brand/theoed-name.png" alt="" style="height:16px;width:auto;object-fit:contain;display:block;">
-              </button>
-              <button class="design-elem-btn" type="button" title="3-Minute Bible" onclick="dlgAddDesignElement({type:'image',asset:'brand/3mb-logo.png',label:'3-Minute Bible',aspect:1.79})">
-                <img src="brand/3mb-logo.png" alt="" style="height:20px;width:auto;object-fit:contain;display:block;">
-              </button>
+              <div id="dlg-logo-dropdown" style="display:none;position:absolute;z-index:50;top:100%;left:0;right:0;margin-top:4px;background:var(--surface);border:1px solid var(--border-2);border-radius:10px;box-shadow:var(--shadow-md);max-height:260px;overflow-y:auto;padding:4px;"></div>
             </div>
 
             <div style="font-size:10px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:var(--muted);margin-bottom:6px;">Shapes</div>
@@ -8736,7 +8830,8 @@
               <button class="color-swatch" style="background:#1E2530;" onclick="setSelectedElemBrandColor('#1E2530')" title="Brand Navy"></button>
               <button class="color-swatch" style="background:#2D6A4F;" onclick="setSelectedElemBrandColor('#2D6A4F')" title="CF Green"></button>
               <button class="color-swatch" style="background:#FFFFFF;border-color:#ccc;" onclick="setSelectedElemBrandColor('#FFFFFF')" title="White"></button>
-              <button class="color-swatch" style="background:#D6ECF9;border-color:#ccc;" onclick="setSelectedElemBrandColor('#D6ECF9')" title="Baby Blue"></button>
+              <button class="color-swatch" style="background:#103EDF;" onclick="setSelectedElemBrandColor('#103EDF')" title="TheoEd Blue"></button>
+              <button class="color-swatch" style="background:#4166E6;" onclick="setSelectedElemBrandColor('#4166E6')" title="TheoEd Light Blue"></button>
             </div>
             <div id="dlg-elem-list"></div>
           </div>
@@ -8782,7 +8877,8 @@
                 <button class="color-swatch" style="background:#C84826;" onclick="setDlgColor('#C84826',this)" title="Brand Orange"></button>
                 <button class="color-swatch" style="background:#FAFAF2;border-color:#ccc;" onclick="setDlgColor('#FAFAF2',this)" title="Brand Cream"></button>
                 <button class="color-swatch" style="background:#F6A85D;" onclick="setDlgColor('#F6A85D',this)" title="Brand Yellow"></button>
-                <button class="color-swatch" style="background:#D6ECF9;border-color:#ccc;" onclick="setDlgColor('#D6ECF9',this)" title="Brand Baby Blue"></button>
+                <button class="color-swatch" style="background:#103EDF;" onclick="setDlgColor('#103EDF',this)" title="TheoEd Blue"></button>
+                <button class="color-swatch" style="background:#4166E6;" onclick="setDlgColor('#4166E6',this)" title="TheoEd Light Blue"></button>
                 <input type="color" id="dlg-color-custom" value="#ffffff" style="width:28px;height:28px;border:1px solid var(--border);border-radius:50%;cursor:pointer;padding:0;flex-shrink:0;" oninput="setDlgColorFree(this.value)">
               </div>
             </div>
@@ -8800,7 +8896,8 @@
                   <button class="color-swatch" style="background:#1E2530;" onclick="setDlgBackgroundColor('#1E2530')" title="Brand Navy"></button>
                   <button class="color-swatch" style="background:#2D6A4F;" onclick="setDlgBackgroundColor('#2D6A4F')" title="CF Green"></button>
                   <button class="color-swatch" style="background:#FAFAF2;border-color:#ccc;" onclick="setDlgBackgroundColor('#FAFAF2')" title="Brand Cream"></button>
-                  <button class="color-swatch" style="background:#D6ECF9;border-color:#ccc;" onclick="setDlgBackgroundColor('#D6ECF9')" title="Baby Blue"></button>
+                  <button class="color-swatch" style="background:#103EDF;" onclick="setDlgBackgroundColor('#103EDF')" title="TheoEd Blue"></button>
+                  <button class="color-swatch" style="background:#4166E6;" onclick="setDlgBackgroundColor('#4166E6')" title="TheoEd Light Blue"></button>
                 </div>
                 <input type="color" id="dlg-bg-color-custom" value="#111111" style="width:100%;height:30px;border:1px solid var(--border);border-radius:8px;cursor:pointer;padding:0;" oninput="setDlgBackgroundColor(this.value)">
               </div>
@@ -8957,27 +9054,21 @@
         <div style="font-size:11px; font-weight:700; letter-spacing:0.08em; text-transform:uppercase; color:var(--muted);">Thumbnail <span style="font-weight:400; text-transform:none; letter-spacing:0;">(optional)</span></div>
       </div>
       <div id="export-flow-thumb-status" style="font-size:12px; color:var(--muted); margin-bottom:10px;"></div>
-      <div id="export-flow-thumb-frames" class="frame-grid" style="margin-bottom:0;"></div>
-      <div id="export-flow-existing-drafts" style="margin-top:10px;"></div>
-      <div style="margin-top:10px; display:flex; gap:8px; align-items:center;">
-        <button class="btn-ghost btn-sm" id="btn-export-pick-frame" onclick="efOpenVideoPicker()" style="">
-          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2" ry="2"/></svg>
-          Pick frame from video
-        </button>
-        <button class="btn-ghost btn-sm" id="btn-export-open-editor" onclick="exportFlowOpenFullEditor()" style="display:none;">Edit in detail&hellip;</button>
-      </div>
-      <!-- Inline video scrub for save-modal frame picker -->
-      <div id="ef-video-picker" style="display:none;margin-top:12px;border-top:1px solid var(--border);padding-top:12px;">
-        <video id="ef-pick-video" style="width:100%;border-radius:8px;background:#000;max-height:180px;" muted playsinline preload="metadata"></video>
-        <input type="range" id="ef-pick-scrub" min="0" max="100" value="0" step="0.1" style="width:100%;accent-color:var(--orange);margin-top:6px;" oninput="efPickScrub(this.value)">
-        <div style="display:flex;justify-content:space-between;align-items:center;margin-top:6px;">
-          <span id="ef-pick-timecode" style="font-size:11px;color:var(--muted);">0:00</span>
-          <div style="display:flex;gap:6px;">
-            <button class="btn-ghost btn-sm" onclick="efCloseVideoPicker()">Cancel</button>
-            <button class="btn btn-sm" onclick="efCaptureVideoFrame()">Use This Frame</button>
-          </div>
+      <!-- All frame picking and editing happens in the Create Thumbnail composer -->
+      <div id="export-flow-thumb-ready" style="display:none; align-items:center; gap:10px; margin-bottom:10px;">
+        <img id="export-flow-thumb-preview" src="" alt="Thumbnail" style="width:84px;border-radius:6px;border:1px solid var(--border);display:block;">
+        <div style="font-size:12px;color:var(--text-2);">Thumbnail ready — it will be saved with the clip.<br>
+          <button class="btn-ghost btn-sm" type="button" style="margin-top:4px;" onclick="exportFlowOpenFullEditor()">Edit thumbnail…</button>
         </div>
       </div>
+      <div id="export-flow-existing-drafts" style="margin-top:4px;"></div>
+      <div style="margin-top:10px; display:flex; gap:8px; align-items:center;">
+        <button class="btn btn-sm" id="btn-export-open-editor" onclick="exportFlowOpenFullEditor()">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="M21 15l-5-5L5 21"/></svg>
+          Create thumbnail…
+        </button>
+      </div>
+      <div id="export-flow-thumb-frames" class="frame-grid" style="display:none;"></div>
     </div>
   </div>
   <div class="dialog-footer">

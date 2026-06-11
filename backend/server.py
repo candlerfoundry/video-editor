@@ -2080,6 +2080,7 @@ def export_clip():
         suggested_name  = request.form.get("suggested_name",  "clip.mp4")
         clip_type       = request.form.get("clip_type",       "Podcast Clip")
         hook_line       = request.form.get("hook_line",       "")
+        content_title   = request.form.get("content_title",   "").strip()
         clip_transcript = request.form.get("clip_transcript", "")
         item_code       = request.form.get("item_code",       "")
         target_folder   = sanitize_social_media_relative_path(request.form.get("target_folder", ""))
@@ -2235,6 +2236,7 @@ def export_clip():
     # ── Step C: Dropbox shared links ──
     clip_url  = None
     thumb_url = None
+    dropbox_error = None
     try:
         dbx = get_dropbox_client()
         clip_url  = get_or_create_shared_link(dbx, build_social_media_dropbox_path(folder_name, output_name))
@@ -2242,13 +2244,19 @@ def export_clip():
             thumb_url = get_or_create_shared_link(dbx, thumb_dbx_path)
 
     except FileNotFoundError:
+        dropbox_error = "dropbox_credentials.json not found in Dropbox/Scripts"
         logger.warning("dropbox_credentials.json not found; skipping Dropbox link generation")
+    except ImportError:
+        dropbox_error = "the 'dropbox' Python package is not installed (pip install dropbox)"
+        logger.warning("dropbox package not installed; skipping link generation")
     except Exception as de:
+        dropbox_error = str(de)[:300]
         logger.warning("Dropbox error during shared-link generation: %s", de)
 
     # ── Step D: Search source video record in Airtable (by item code) ──
     airtable_key      = read_airtable_api_key()
     source_record_id  = None
+    source_link_error = None
     source_link_field = "Full-Length Video"
 
     if airtable_key and item_code:
@@ -2272,9 +2280,20 @@ def export_clip():
                     source_record_id = records[0]["id"]
                     logger.info("[airtable] Linked source %s -> %s (%s)", item_code, source_record_id, source_link_field)
                 else:
+                    source_link_error = f"no record with Code '{item_code}' in the source table"
                     logger.warning("[airtable] No source record found for code %s in %s", item_code, source_table)
         except Exception as ae:
-            logger.warning("Airtable source lookup failed: %s", ae)
+            try:
+                import urllib.error
+                if isinstance(ae, urllib.error.HTTPError):
+                    source_link_error = f"HTTP {ae.code}: " + ae.read().decode("utf-8", errors="replace")[:200]
+                else:
+                    source_link_error = str(ae)[:200]
+            except Exception:
+                source_link_error = str(ae)[:200]
+            logger.warning("Airtable source lookup failed: %s", source_link_error)
+    elif airtable_key and not item_code:
+        source_link_error = "no item code found in the source filename"
 
     # ── Step E: Create Airtable record (Video Shorts & Social) ──
     airtable_record_id = None
@@ -2289,7 +2308,9 @@ def export_clip():
         fields = {"Status": "Draft"}
         if clip_type:
             fields["Type"] = clip_type
-        if hook_line:
+        if content_title:
+            fields["Content Title"] = content_title
+        elif hook_line:
             fields["Content Title"] = hook_line
         if clip_url:
             fields["Clip - Dropbox URL"] = clip_url
@@ -2356,6 +2377,9 @@ def export_clip():
         "airtable_record_id":    airtable_record_id,
         "airtable_url":          airtable_url,
         "airtable_error":        airtable_error,
+        "dropbox_error":         dropbox_error,
+        "source_record_id":      source_record_id,
+        "source_link_error":     source_link_error,
     })
 
 
@@ -2373,6 +2397,8 @@ def export_thumbnail():
     if not folder_name:
         return jsonify({"error": "target_folder is required"}), 400
 
+    cover_frame = (request.form.get("cover_frame") or "").strip() in {"1", "true", "yes"}
+
     output_name = suggested_name if suggested_name.lower().endswith(".mp4") else suggested_name + ".mp4"
     base_name = os.path.splitext(output_name)[0]
     thumb_name = base_name + " - Thumbnail.png"
@@ -2381,6 +2407,42 @@ def export_thumbnail():
     thumb_local_path = os.path.join(clips_folder, thumb_name)
     thumbnail_file.save(thumb_local_path)
     thumb_dbx_path = build_social_media_dropbox_path(folder_name, thumb_name)
+
+    # ── Instagram cover burn (primary flow) ──
+    # Thumbnails are attached AFTER the clip is saved, so the cover burn lives
+    # here: prepend the thumbnail as one ~1/30s frame onto the already-saved
+    # clip. The Dropbox shared link is path-based, so it stays valid.
+    clip_path = os.path.join(clips_folder, output_name)
+    if cover_frame and FFMPEG_EXE and os.path.isfile(clip_path):
+        tmp_dir = tempfile.mkdtemp()
+        try:
+            burned_path = os.path.join(tmp_dir, "burned.mp4")
+            rb = subprocess.run(
+                [FFMPEG_EXE, "-y",
+                 "-loop", "1", "-framerate", "30", "-t", "0.04", "-i", thumb_local_path,
+                 "-i", clip_path,
+                 "-f", "lavfi", "-t", "0.04", "-i", "anullsrc=r=48000:cl=stereo",
+                 "-filter_complex",
+                 "[0:v]scale=1080:1920:force_original_aspect_ratio=increase,"
+                 "crop=1080:1920,setsar=1,format=yuv420p[cv];"
+                 "[1:v]setsar=1[mv];"
+                 "[2:a]aformat=sample_rates=48000:channel_layouts=stereo[ca];"
+                 "[1:a]aformat=sample_rates=48000:channel_layouts=stereo[ma];"
+                 "[cv][ca][mv][ma]concat=n=2:v=1:a=1[v][a]",
+                 "-map", "[v]", "-map", "[a]",
+                 "-c:v", "libx264", "-crf", "18", "-preset", "fast",
+                 "-c:a", "aac",
+                 burned_path],
+                capture_output=True, creationflags=CREATE_NO_WINDOW,
+            )
+            if rb.returncode == 0 and os.path.isfile(burned_path):
+                shutil.move(burned_path, clip_path)
+                logger.info("[export] Burned thumbnail as cover frame onto %s", output_name)
+            else:
+                err = rb.stderr.decode("utf-8", errors="replace")[-400:]
+                logger.warning("[export] Cover-frame burn failed (clip kept without it): %s", err)
+        finally:
+            shutil.rmtree(tmp_dir, ignore_errors=True)
 
     thumb_url = None
     try:

@@ -820,3 +820,60 @@ Airtable visibility (amends section 22):
 - Both key readers use `encoding="utf-8-sig"` (Notepad BOM tolerance).
 
 Regression risk: High.
+
+---
+
+## 25. Feedback round 2 (June 11, 2026): edit modes, metadata, single thumbnail flow
+
+Word edit modes (amends section 19):
+- The Cut/Bleep mode toggle lives in a card in the editor LEFT zone (under the
+  time fields), NOT at the top of the transcript — it must stay reachable
+  while scrolled deep into the transcript. Labels: "Edit out" (removes words
+  and their frames, red strikethrough) vs "Bleep (mute)" (keeps video,
+  silences audio, amber).
+
+Export metadata (amends section 22):
+- `extractItemCode()` + code-prefix `detectClipType()` ACTUALLY shipped this
+  commit — the a3c0073 patch script failed before writing and the old
+  keyword-based function (defaulting to 'Podcast Clip') silently survived.
+  Detection now also falls back to the active project's source filename and
+  returns '' (No type) when nothing matches.
+- `extractSpeakerName()` takes the last " - " segment of the cleaned source
+  filename. `doExport()` sends `content_title` = "Speaker — first 5 words…";
+  backend prefers it over `hook_line` for Content Title.
+- `/export_clip` returns `dropbox_error` and `source_link_error` alongside
+  `airtable_error`; the save panel shows three status lines (Dropbox link /
+  Airtable record / full-length link). NO integration failure is silent.
+
+Single thumbnail flow (amends sections 17/21):
+- ALL frame picking and editing happens in the Create Thumbnail composer.
+  The save modal's thumbnail section shows: existing drafts ("Use This" /
+  "Edit"), a "Create thumbnail…" button (opens the composer), and a preview
+  row when a composer-made thumbnail is ready. The save modal has NO frame
+  grid and NO video picker of its own (the `ef-video-picker` functions are
+  vestigial).
+- `doExport(true)` attaches in priority order: composer-made `thumbnailBlob`
+  → selected draft → legacy frame quick-draft.
+- The Instagram cover burn ALSO lives in `/export_thumbnail` (cover_frame
+  form flag): thumbnails attach after the clip is saved, so the burn prepends
+  the cover onto the already-saved clip file (Dropbox links are path-based
+  and survive the overwrite). The /export_clip Step B2 burn remains for the
+  direct-thumbnail path.
+
+Composer (amends sections 18/24):
+- Text boxes default to background_opacity 70 — the block behind the title is
+  essential because it covers burned-in captions. Do not default it to 0.
+- AI title suggestions build the transcript from the EDITED clip (cut words
+  excluded) via fetchThumbTitles.
+- The live editor canvas renders with `omitElements: true` — elements exist
+  ONLY as HTML overlays while editing. Baking them into the canvas too
+  created ghost duplicates after moves/resizes. Export still draws them.
+- Overlay shape paths use `vector-effect="non-scaling-stroke"`; the quote
+  glyph uses uniform scaling (xMidYMid meet / min(w,h) on canvas); quote,
+  sparkle, star, and brand images are aspect-locked during resize.
+- Logos are added from a dropdown with image previews (BRAND_LOGOS +
+  toggleLogoDropdown), not a thumbnail grid.
+- TheoEd brand blues are #103EDF and #4166E6 (the earlier #D6ECF9 baby blue
+  was wrong and was removed from the swatch rows).
+
+Regression risk: High.
