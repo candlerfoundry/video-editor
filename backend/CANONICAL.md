@@ -762,3 +762,61 @@ Project switching (Stage 2):
   projects can be worked in parallel.
 
 Regression risk: Medium.
+
+---
+
+## 24. Composer Phase B: shape library, brand assets, zoom/pan, undo (added June 11, 2026)
+
+Shape library:
+- `SHAPE_LIBRARY` in `index.html` is the SINGLE source of truth for design
+  shapes: SVG path data in a 100x100 viewBox. The overlay renders it via
+  `shapeOverlaySvg()`; the export canvas renders the SAME data via
+  `drawShapeToCanvas()` using `Path2D` + `DOMMatrix` (transform baked into
+  path coordinates so stroke widths stay uniform under non-uniform resize).
+  NEVER reintroduce separate hand-coded bezier drawing for export — overlay
+  and export must come from the library or they will drift apart visually.
+- Shape types: circle, scribble_circle, arrow, arrow_straight, underline,
+  underline_double, highlight, star, sparkle (filled), brackets, check, and
+  quote (a Georgia-serif U+201C glyph, rendered as text in both surfaces).
+- All shapes are draggable, resizable (handles), and recolorable (per-row
+  color input + brand swatch row in the Design Elements card).
+
+Brand image elements:
+- Brand logos live in the repo under `brand/` (served same-origin by
+  Netlify): foundry-f-orange/black, foundry-name-orange/black, theoed-mic,
+  theoed-name, 3mb-logo. Sourced from Dropbox
+  `Operations/Logos and Branding/Logos and Graphics/` + the Brand Assets
+  Airtable table (`tbl7u6D5cTuI842hH`).
+- They are ordinary `graphic_elements` entries: `{type:'image', asset,
+  label, x, y, width, height}` — draggable/resizable like shapes; export
+  draws them object-fit:contain via `loadBrandImage()` (cached).
+- The legacy single `draft.logo` model remains for old drafts but no UI
+  creates it any more.
+- Brand color swatches (cream #FAFAF2, navy #1E2530, orange #C84826,
+  yellow #F6A85D, baby blue #D6ECF9 + CF palette) appear on the text color
+  row, background color, and shape color rows.
+
+Photo zoom/pan:
+- Draft fields: `frame_zoom` (1-3), `frame_offset_x/y` (-1..1). Rendered by
+  `drawImageCoverZoomed()` (cover-fit base, zoom window, offsets within the
+  available margin). Zoom slider + Reset in the editor; when zoom > 1,
+  dragging the empty canvas area pans the photo.
+- `buildDefaultThumbnailDraft` and both composer reuse paths preserve
+  `graphic_elements`, `brightness`, and the zoom fields. Backend
+  `normalize_thumbnail_draft` persists them too — before June 11 it silently
+  DROPPED graphic_elements and brightness from every saved draft.
+
+Undo:
+- `pushDlgUndo(label)` snapshots the draft (JSON, max 50, 600ms coalescing
+  per label) before every mutating action: drags/resizes, element add/
+  remove/recolor, text typing, colors, brightness, zoom, pan.
+- Ctrl/Cmd+Z pops the stack while the composer dialog is open (native undo
+  is left alone inside text inputs).
+
+Airtable visibility (amends section 22):
+- `/export_clip` returns `airtable_error` (HTTP body excerpt) when record
+  creation fails, and the save panel shows "Added to Airtable" with a record
+  link or a visible warning with the reason. Never silent again.
+- Both key readers use `encoding="utf-8-sig"` (Notepad BOM tolerance).
+
+Regression risk: High.

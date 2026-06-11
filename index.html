@@ -1482,7 +1482,10 @@
     .tx-boundary-marker  { color: var(--orange); font-weight: 700; cursor: ew-resize; user-select: none; padding: 0 3px; border-radius: 4px; touch-action: none; }
     .tx-boundary-marker:hover,
     .tx-boundary-marker.dragging { background: var(--orange-tint); }
-    .tx-word.tx-cut { text-decoration: line-through; color: #C9B0A8; opacity: 0.55; cursor: pointer; }
+    .tx-word.tx-cut {
+      text-decoration: line-through; text-decoration-color: #DC2626; text-decoration-thickness: 2px;
+      color: #B91C1C; opacity: 0.7; cursor: pointer;
+    }
     .tx-word.tx-cut:hover { background: #FBE9E7; opacity: 0.85; }
     .tx-word.tx-cut-select { background: #FBE0DC; }
     .tx-word.tx-bleep {
@@ -5089,6 +5092,11 @@
       available_frames: options.frames || [],
       video_info: options.videoInfo || null,
       logo: normalizeThumbnailLogo(options.logo, targetFormat),
+      graphic_elements: options.graphicElements || [],
+      brightness: options.brightness ?? 100,
+      frame_zoom: options.frameZoom ?? 1,
+      frame_offset_x: options.frameOffsetX ?? 0,
+      frame_offset_y: options.frameOffsetY ?? 0,
     };
   }
 
@@ -5247,6 +5255,11 @@
       videoInfo: reusableDraft?.video_info || null,
       draftId: reusableDraft?.draft_id,
       logo: reusableDraft?.logo,
+      graphicElements: reusableDraft?.graphic_elements || [],
+      brightness: reusableDraft?.brightness,
+      frameZoom: reusableDraft?.frame_zoom,
+      frameOffsetX: reusableDraft?.frame_offset_x,
+      frameOffsetY: reusableDraft?.frame_offset_y,
     });
     applyDraftToDialogState();
     updateSharedComposerDoneLabel();
@@ -5901,81 +5914,27 @@
     const frameImg = await loadImageElement(getThumbImageSrc(frame));
     ctx.clearRect(0, 0, W, H);
     if (brightnessVal !== 100) ctx.filter = `brightness(${brightnessVal}%)`;
-    drawImageCover(ctx, frameImg, W, H);
+    drawImageCoverZoomed(ctx, frameImg, W, H,
+      draft.frame_zoom || 1, draft.frame_offset_x || 0, draft.frame_offset_y || 0);
     ctx.filter = 'none';
     // June 11, 2026: no baked style overlay (dark scrim + orange accent line
     // removed at Emily's request). Text legibility comes from each text box's
     // own background/shadow controls.
-    // Draw graphic elements onto exported canvas (shapes only — organic hand-drawn style)
+    // Draw graphic elements onto exported canvas (shapes + brand images)
     for (var _gi = 0; _gi < (draft.graphic_elements || []).length; _gi++) {
       var _ge = draft.graphic_elements[_gi];
-      if (_ge.type !== 'shape') continue;
-      var _ex = _ge.x || 0, _ey = _ge.y || 0;
-      var _ew = _ge.width || 100, _eh = _ge.height || 100;
-      var _lw = Math.max(5, Math.min(_ew, _eh) * 0.06);
-      ctx.save();
-      ctx.strokeStyle = _ge.color || '#c84826';
-      ctx.lineWidth   = _lw;
-      ctx.lineCap     = 'round';
-      ctx.lineJoin    = 'round';
-      ctx.beginPath();
-      if (_ge.shape_type === 'circle') {
-        // Organic oval using bezier curves
-        var _cx = _ex + _ew*0.5, _cy = _ey + _eh*0.5;
-        var _rx = _ew*0.42, _ry = _eh*0.43;
-        ctx.moveTo(_cx, _cy - _ry);
-        ctx.bezierCurveTo(_cx + _rx*1.12, _cy - _ry*1.05, _cx + _rx*1.12, _cy + _ry*1.05, _cx, _cy + _ry);
-        ctx.bezierCurveTo(_cx - _rx*1.12, _cy + _ry*1.05, _cx - _rx*1.12, _cy - _ry*1.05, _cx, _cy - _ry);
-        ctx.stroke();
-      } else if (_ge.shape_type === 'arrow') {
-        // Curved swooping arrow
-        ctx.moveTo(_ex + _ew*0.10, _ey + _eh*0.62);
-        ctx.bezierCurveTo(_ex + _ew*0.22, _ey + _eh*0.48, _ex + _ew*0.42, _ey + _eh*0.30, _ex + _ew*0.78, _ey + _eh*0.36);
-        ctx.moveTo(_ex + _ew*0.58, _ey + _eh*0.18);
-        ctx.lineTo(_ex + _ew*0.80, _ey + _eh*0.36);
-        ctx.lineTo(_ex + _ew*0.64, _ey + _eh*0.54);
-        ctx.stroke();
-      } else if (_ge.shape_type === 'underline') {
-        // Thick wavy brush underline
-        ctx.lineWidth = Math.max(8, _eh * 0.25);
-        ctx.moveTo(_ex + _ew*0.05, _ey + _eh*0.70);
-        ctx.bezierCurveTo(_ex + _ew*0.26, _ey + _eh*0.54, _ex + _ew*0.46, _ey + _eh*0.80, _ex + _ew*0.60, _ey + _eh*0.66);
-        ctx.bezierCurveTo(_ex + _ew*0.74, _ey + _eh*0.52, _ex + _ew*0.86, _ey + _eh*0.72, _ex + _ew*0.95, _ey + _eh*0.62);
-        ctx.stroke();
-      } else if (_ge.shape_type === 'star') {
-        // Starburst with organic varying points
-        var _pts = [
-          [0.50,0.06],[0.55,0.36],[0.78,0.20],[0.60,0.42],[0.90,0.42],
-          [0.64,0.56],[0.82,0.78],[0.54,0.66],[0.56,0.94],[0.44,0.68],
-          [0.18,0.82],[0.34,0.60],[0.08,0.48],[0.38,0.44],[0.22,0.20],[0.45,0.36]
-        ];
-        ctx.moveTo(_ex + _ew*_pts[0][0], _ey + _eh*_pts[0][1]);
-        for (var _pi = 1; _pi < _pts.length; _pi++) {
-          ctx.lineTo(_ex + _ew*_pts[_pi][0], _ey + _eh*_pts[_pi][1]);
-        }
-        ctx.closePath();
-        ctx.lineWidth = Math.max(4, Math.min(_ew, _eh) * 0.04);
-        ctx.stroke();
-      } else if (_ge.shape_type === 'brackets') {
-        // Curved hand-drawn brackets
-        ctx.moveTo(_ex + _ew*0.34, _ey + _eh*0.12);
-        ctx.bezierCurveTo(_ex + _ew*0.22, _ey + _eh*0.18, _ex + _ew*0.16, _ey + _eh*0.30, _ex + _ew*0.16, _ey + _eh*0.50);
-        ctx.bezierCurveTo(_ex + _ew*0.16, _ey + _eh*0.70, _ex + _ew*0.22, _ey + _eh*0.82, _ex + _ew*0.34, _ey + _eh*0.88);
-        ctx.moveTo(_ex + _ew*0.66, _ey + _eh*0.12);
-        ctx.bezierCurveTo(_ex + _ew*0.78, _ey + _eh*0.18, _ex + _ew*0.84, _ey + _eh*0.30, _ex + _ew*0.84, _ey + _eh*0.50);
-        ctx.bezierCurveTo(_ex + _ew*0.84, _ey + _eh*0.70, _ex + _ew*0.78, _ey + _eh*0.82, _ex + _ew*0.66, _ey + _eh*0.88);
-        ctx.stroke();
-      } else if (_ge.shape_type === 'check') {
-        // Swoopy bold checkmark
-        ctx.lineWidth = Math.max(7, Math.min(_ew, _eh) * 0.08);
-        ctx.moveTo(_ex + _ew*0.07, _ey + _eh*0.52);
-        ctx.bezierCurveTo(_ex + _ew*0.14, _ey + _eh*0.52, _ex + _ew*0.20, _ey + _eh*0.62, _ex + _ew*0.30, _ey + _eh*0.76);
-        ctx.bezierCurveTo(_ex + _ew*0.42, _ey + _eh*0.64, _ex + _ew*0.62, _ey + _eh*0.36, _ex + _ew*0.93, _ey + _eh*0.14);
-        ctx.stroke();
-      } else {
-        ctx.strokeRect(_ex+5, _ey+5, _ew-10, _eh-10);
+      if (_ge.type === 'shape') {
+        drawShapeToCanvas(ctx, _ge);
+      } else if (_ge.type === 'image' && _ge.asset) {
+        try {
+          var _bi = await loadBrandImage(_ge.asset);
+          // object-fit: contain inside the element box (matches the overlay)
+          var _bw = _ge.width || 200, _bh = _ge.height || 200;
+          var _s = Math.min(_bw / _bi.naturalWidth, _bh / _bi.naturalHeight);
+          var _rw = _bi.naturalWidth * _s, _rh = _bi.naturalHeight * _s;
+          ctx.drawImage(_bi, (_ge.x || 0) + (_bw - _rw) / 2, (_ge.y || 0) + (_bh - _rh) / 2, _rw, _rh);
+        } catch (_) {}
       }
-      ctx.restore();
     }
     if (!options.omitText) {
       (draft.text_boxes || []).forEach((box, index) => {
@@ -6026,6 +5985,22 @@
       };
       img.src = 'data:image/jpeg;base64,' + b64;
     });
+  }
+
+  // Cover-fit with user zoom (1-3x) and pan offsets (-1..1 within the available margin).
+  function drawImageCoverZoomed(ctx, img, W, H, zoom, ox, oy) {
+    zoom = Math.max(1, Math.min(3, zoom || 1));
+    ox = Math.max(-1, Math.min(1, ox || 0));
+    oy = Math.max(-1, Math.min(1, oy || 0));
+    const natW = img.naturalWidth || img.width, natH = img.naturalHeight || img.height;
+    if (!natW || !natH) return;
+    const scale = Math.max(W / natW, H / natH) * zoom;
+    const sw = W / scale, sh = H / scale;
+    const sx = (natW - sw) / 2 * (1 + ox);
+    const sy = (natH - sh) / 2 * (1 + oy);
+    ctx.imageSmoothingEnabled = true;
+    ctx.imageSmoothingQuality = 'high';
+    ctx.drawImage(img, sx, sy, sw, sh, 0, 0, W, H);
   }
 
   // Keep drawCoverFit as alias so dialog canvas code still works
@@ -7030,6 +7005,11 @@
       videoInfo: reusableDraft?.video_info || null,
       draftId: reusableDraft?.draft_id,
       logo: reusableDraft?.logo,
+      graphicElements: reusableDraft?.graphic_elements || [],
+      brightness: reusableDraft?.brightness,
+      frameZoom: reusableDraft?.frame_zoom,
+      frameOffsetX: reusableDraft?.frame_offset_x,
+      frameOffsetY: reusableDraft?.frame_offset_y,
     });
     applyDraftToDialogState();
     updateSharedComposerDoneLabel();
@@ -7290,6 +7270,10 @@
     if (customColor) customColor.value = _dlgTextColor;
     const bgColorInput = document.getElementById('dlg-bg-color-custom');
     if (bgColorInput) bgColorInput.value = _dlgBackgroundColor;
+    const zoomSlider = document.getElementById('dlg-zoom-slider');
+    if (zoomSlider) zoomSlider.value = Math.round((_sharedThumbnailDraft?.frame_zoom || 1) * 100);
+    const zoomVal = document.getElementById('dlg-zoom-val');
+    if (zoomVal) zoomVal.textContent = Math.round((_sharedThumbnailDraft?.frame_zoom || 1) * 100);
     document.querySelectorAll('#dlg-state-editor .color-swatch').forEach((b, i) => {
       b.classList.toggle('selected', i === 0 && _dlgTextColor === '#ffffff');
     });
@@ -7362,6 +7346,7 @@
   }
 
   function setDlgBackgroundColor(hex) {
+    pushDlgUndo('bg-color');
     _dlgBackgroundColor = hex;
     // Picking a background color should be visible immediately — the default
     // opacity of 0 made this control look broken.
@@ -7375,7 +7360,108 @@
     dlgUpdateText();
   }
 
+  function setDlgZoom(val) {
+    if (!_sharedThumbnailDraft) return;
+    pushDlgUndo('zoom');
+    _sharedThumbnailDraft.frame_zoom = Math.max(1, Math.min(3, parseInt(val) / 100));
+    const span = document.getElementById('dlg-zoom-val');
+    if (span) span.textContent = Math.round(_sharedThumbnailDraft.frame_zoom * 100);
+    syncDraftFromDialogState();
+    dlgDrawCanvas();
+  }
+
+  function resetDlgZoom() {
+    if (!_sharedThumbnailDraft) return;
+    pushDlgUndo('zoom-reset');
+    _sharedThumbnailDraft.frame_zoom = 1;
+    _sharedThumbnailDraft.frame_offset_x = 0;
+    _sharedThumbnailDraft.frame_offset_y = 0;
+    const slider = document.getElementById('dlg-zoom-slider');
+    if (slider) slider.value = 100;
+    const span = document.getElementById('dlg-zoom-val');
+    if (span) span.textContent = 100;
+    syncDraftFromDialogState();
+    dlgDrawCanvas();
+  }
+
+  // ── Undo (Ctrl+Z) — snapshot stack of the shared draft ──
+  let _dlgUndoStack = [];
+  let _dlgLastUndoPush = 0;
+  let _dlgLastUndoLabel = '';
+  function pushDlgUndo(label) {
+    if (!_sharedThumbnailDraft) return;
+    const now = Date.now();
+    // Coalesce rapid repeats of the same action (slider drags, typing)
+    if (label === _dlgLastUndoLabel && now - _dlgLastUndoPush < 600) return;
+    _dlgLastUndoPush = now;
+    _dlgLastUndoLabel = label || '';
+    try {
+      _dlgUndoStack.push(JSON.stringify(_sharedThumbnailDraft));
+      if (_dlgUndoStack.length > 50) _dlgUndoStack.shift();
+    } catch (_) {}
+  }
+  document.addEventListener('keydown', function (e) {
+    if (!(e.ctrlKey || e.metaKey) || e.key.toLowerCase() !== 'z' || e.shiftKey) return;
+    const dlg = document.getElementById('dialog-thumb');
+    if (!dlg || !dlg.open) return;
+    // Let native undo work inside text fields
+    if (e.target.matches('input, textarea, [contenteditable], [contenteditable="plaintext-only"]')) return;
+    if (!_dlgUndoStack.length) return;
+    e.preventDefault();
+    try {
+      _sharedThumbnailDraft = JSON.parse(_dlgUndoStack.pop());
+      _dlgLastUndoLabel = '';
+      applyDraftToDialogState();
+      dlgOpenEditor();
+      dlgBuildHeroState();
+      renderDialogOverlayLayer();
+      renderDesignElementList();
+      dlgDrawCanvas();
+      const zs = document.getElementById('dlg-zoom-slider');
+      if (zs) zs.value = Math.round((_sharedThumbnailDraft.frame_zoom || 1) * 100);
+      const zv = document.getElementById('dlg-zoom-val');
+      if (zv) zv.textContent = Math.round((_sharedThumbnailDraft.frame_zoom || 1) * 100);
+    } catch (_) {}
+  });
+
+  // ── Pan: drag the photo itself (empty canvas area) to reposition when zoomed ──
+  (function () {
+    let panning = null;
+    let panRaf = null;
+    document.addEventListener('mousedown', function (e) {
+      const wrap = document.getElementById('dlg-canvas-wrap');
+      if (!wrap || !wrap.contains(e.target)) return;
+      if (e.target.closest('.dlg-overlay-text, .dlg-logo-overlay, .dlg-design-elem-overlay, .dlg-resize-handle')) return;
+      if (!_sharedThumbnailDraft || (_sharedThumbnailDraft.frame_zoom || 1) <= 1) return;
+      pushDlgUndo('pan');
+      panning = {
+        startX: e.clientX, startY: e.clientY,
+        origX: _sharedThumbnailDraft.frame_offset_x || 0,
+        origY: _sharedThumbnailDraft.frame_offset_y || 0,
+      };
+      e.preventDefault();
+    });
+    document.addEventListener('mousemove', function (e) {
+      if (!panning || !_sharedThumbnailDraft) return;
+      const wrap = document.getElementById('dlg-canvas-wrap');
+      const rect = wrap ? wrap.getBoundingClientRect() : { width: 600, height: 600 };
+      const zoom = _sharedThumbnailDraft.frame_zoom || 1;
+      // Dragging the photo right moves the visible window left
+      const dx = (e.clientX - panning.startX) / rect.width  * 2 * zoom;
+      const dy = (e.clientY - panning.startY) / rect.height * 2 * zoom;
+      _sharedThumbnailDraft.frame_offset_x = Math.max(-1, Math.min(1, panning.origX - dx));
+      _sharedThumbnailDraft.frame_offset_y = Math.max(-1, Math.min(1, panning.origY - dy));
+      if (!panRaf) {
+        panRaf = requestAnimationFrame(() => { panRaf = null; dlgDrawCanvas(); });
+      }
+    });
+    document.addEventListener('mouseup', function () {
+      if (panning) { syncDraftFromDialogState(); panning = null; }
+    });
+  })();
+
   function setDlgBrightness(val) {
+    pushDlgUndo('brightness');
     _dlgBrightness = Math.max(30, Math.min(200, parseInt(val)));
     const slider = document.getElementById('dlg-brightness-slider');
     if (slider) slider.value = _dlgBrightness;
@@ -7485,6 +7571,116 @@
   }
 
   // ── Design Elements ──
+  // Shape library: single source of truth for overlay (SVG) AND export (Path2D).
+  // All paths use a 100x100 viewBox; sw = stroke width in that space; fill=true fills with the element color.
+  const SHAPE_LIBRARY = {
+    circle: { paths: [
+      { d: 'M 50 8 C 72 7, 92 26, 92 50 C 92 74, 73 93, 50 93 C 27 93, 8 74, 8 50 C 8 26, 28 7, 50 8 Z', sw: 4.5 },
+    ]},
+    scribble_circle: { paths: [
+      { d: 'M 50 10 C 74 8, 93 27, 92 50 C 91 73, 72 91, 49 91 C 26 91, 9 72, 10 49 C 11 28, 30 12, 52 12', sw: 4 },
+      { d: 'M 55 6 C 80 9, 96 30, 94 53 C 92 77, 70 95, 46 93', sw: 3 },
+    ]},
+    arrow: { paths: [
+      { d: 'M 10 62 C 18 50, 34 32, 72 38 M 72 38 L 58 24 M 72 38 L 62 54', sw: 5 },
+    ]},
+    arrow_straight: { paths: [
+      { d: 'M 8 50 L 78 50 M 78 50 L 58 30 M 78 50 L 58 70', sw: 8 },
+    ]},
+    underline: { paths: [
+      { d: 'M 5 70 C 20 58, 36 76, 50 66 C 64 56, 80 74, 95 64', sw: 8 },
+    ]},
+    underline_double: { paths: [
+      { d: 'M 6 58 C 28 50, 60 62, 94 54', sw: 6 },
+      { d: 'M 10 74 C 34 67, 64 77, 90 70', sw: 5 },
+    ]},
+    highlight: { paths: [
+      { d: 'M 6 28 L 94 22 L 9 44 L 91 38 L 7 61 L 93 55 L 11 78 L 89 72', sw: 11 },
+    ]},
+    star: { paths: [
+      { d: 'M50,6 L55,36 L78,20 L60,42 L90,42 L64,56 L82,78 L54,66 L56,94 L44,68 L18,82 L34,60 L8,48 L38,44 L22,20 L45,36 Z', sw: 3.5 },
+    ]},
+    sparkle: { paths: [
+      { d: 'M 50 4 C 56 34, 66 44, 96 50 C 66 56, 56 66, 50 96 C 44 66, 34 56, 4 50 C 34 44, 44 34, 50 4 Z', sw: 0, fill: true },
+    ]},
+    brackets: { paths: [
+      { d: 'M 34 12 C 24 16, 16 26, 16 50 C 16 74, 24 84, 34 88', sw: 5 },
+      { d: 'M 66 12 C 76 16, 84 26, 84 50 C 84 74, 76 84, 66 88', sw: 5 },
+    ]},
+    check: { paths: [
+      { d: 'M 7 52 C 14 52, 20 62, 30 76 C 40 66, 60 38, 93 14', sw: 7 },
+    ]},
+    quote: { glyph: '\u201C' },
+  };
+  const SHAPE_LABELS = {
+    circle: 'Circle', scribble_circle: 'Sketch circle', arrow: 'Curved arrow',
+    arrow_straight: 'Bold arrow', underline: 'Underline', underline_double: 'Double underline',
+    highlight: 'Scribble highlight', star: 'Starburst', sparkle: 'Sparkle',
+    brackets: 'Brackets', check: 'Check', quote: 'Quote mark',
+  };
+
+  function shapeOverlaySvg(elem) {
+    const c = escHtml(elem.color || '#c84826');
+    const def = SHAPE_LIBRARY[elem.shape_type] || SHAPE_LIBRARY.circle;
+    if (def.glyph) {
+      return '<svg width="100%" height="100%" viewBox="0 0 100 100" preserveAspectRatio="none" xmlns="http://www.w3.org/2000/svg">' +
+        '<text x="50" y="92" font-family="Georgia, serif" font-weight="900" font-size="125" fill="' + c + '" text-anchor="middle">' + def.glyph + '</text></svg>';
+    }
+    const inner = def.paths.map(pd =>
+      '<path d="' + pd.d + '" fill="' + (pd.fill ? c : 'none') + '" stroke="' + (pd.fill ? 'none' : c) +
+      '" stroke-width="' + (pd.sw || 5) + '" stroke-linecap="round" stroke-linejoin="round"/>'
+    ).join('');
+    return '<svg width="100%" height="100%" viewBox="0 0 100 100" preserveAspectRatio="none" xmlns="http://www.w3.org/2000/svg">' + inner + '</svg>';
+  }
+
+  // Draw a shape element onto the export canvas with uniform stroke widths.
+  function drawShapeToCanvas(ctx, elem) {
+    const def = SHAPE_LIBRARY[elem.shape_type] || SHAPE_LIBRARY.circle;
+    const ex = elem.x || 0, ey = elem.y || 0;
+    const ew = elem.width || 100, eh = elem.height || 100;
+    const color = elem.color || '#c84826';
+    ctx.save();
+    ctx.strokeStyle = color;
+    ctx.fillStyle = color;
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+    if (def.glyph) {
+      ctx.font = '900 ' + Math.round(eh * 1.25) + 'px Georgia, serif';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'alphabetic';
+      ctx.fillText(def.glyph, ex + ew / 2, ey + eh * 0.92);
+      ctx.restore();
+      return;
+    }
+    const m = new DOMMatrix().translateSelf(ex, ey).scaleSelf(ew / 100, eh / 100);
+    const swScale = (ew / 100 + eh / 100) / 2;
+    def.paths.forEach(pd => {
+      const path = new Path2D();
+      path.addPath(new Path2D(pd.d), m);
+      if (pd.fill) {
+        ctx.fill(path);
+      } else {
+        ctx.lineWidth = Math.max(2, (pd.sw || 5) * swScale);
+        ctx.stroke(path);
+      }
+    });
+    ctx.restore();
+  }
+
+  // Brand image elements (logos) — cache loaded images for export rendering.
+  const _brandImgCache = {};
+  function loadBrandImage(asset) {
+    if (_brandImgCache[asset]) return _brandImgCache[asset];
+    _brandImgCache[asset] = new Promise((resolve, reject) => {
+      const img = new Image();
+      img.crossOrigin = 'anonymous';
+      img.onload = () => resolve(img);
+      img.onerror = reject;
+      img.src = asset;
+    });
+    return _brandImgCache[asset];
+  }
+
   let _dlgSelectedElemId = null;
   let _dlgLogoSelected = false;
   let _dlgEditingTextId = null;
@@ -7500,6 +7696,7 @@
 
   function dlgAddDesignElement(opts) {
     if (!_sharedThumbnailDraft) return;
+    pushDlgUndo('add-elem-' + (opts.shape_type || opts.type));
     if (!_sharedThumbnailDraft.graphic_elements) _sharedThumbnailDraft.graphic_elements = [];
     const canvas = document.getElementById('dlg-canvas');
     const W = canvas ? canvas.width  : 1080;
@@ -7524,8 +7721,18 @@
 
     let elem;
     if (opts.type === 'shape') {
-      elem = { id, type: 'shape', shape_type: opts.shape_type || 'circle', color: opts.color || '#c84826',
-               x: Math.round(W * 0.1), y: Math.round(H * 0.45), width: Math.round(W * 0.25), height: Math.round(H * 0.12) };
+      const st = opts.shape_type || 'circle';
+      // Sensible default proportions per shape family
+      let w = Math.round(W * 0.25), h = Math.round(H * 0.12);
+      if (st === 'quote' || st === 'sparkle' || st === 'star') { w = Math.round(W * 0.16); h = w; }
+      if (st === 'circle' || st === 'scribble_circle' || st === 'brackets') { w = Math.round(W * 0.3); h = Math.round(W * 0.18); }
+      elem = { id, type: 'shape', shape_type: st, color: opts.color || '#c84826',
+               x: Math.round(W * 0.1), y: Math.round(H * 0.42), width: w, height: h };
+    } else if (opts.type === 'image') {
+      const aspect = opts.aspect || 1;
+      const w = Math.round(W * 0.24);
+      elem = { id, type: 'image', asset: opts.asset, label: opts.label || 'Logo',
+               x: Math.round(W * 0.66), y: Math.round(H * 0.05), width: w, height: Math.round(w / aspect) };
     } else { return; }
 
     _sharedThumbnailDraft.graphic_elements.push(elem);
@@ -7537,6 +7744,7 @@
   }
 
   function dlgRemoveDesignElement(id) {
+    pushDlgUndo('remove-elem');
     if (!_sharedThumbnailDraft || !_sharedThumbnailDraft.graphic_elements) return;
     _sharedThumbnailDraft.graphic_elements = _sharedThumbnailDraft.graphic_elements.filter(function(e) { return e.id !== id; });
     if (_dlgSelectedElemId === id) _dlgSelectedElemId = null;
@@ -7573,14 +7781,15 @@
       rows += '<div class="design-elem-list-row"><span>Foundry Logo</span><button class="btn-ghost btn-sm" type="button" onclick="dlgRemoveLogo()" style="padding:1px 8px;font-size:10px;">Remove</button></div>';
     }
     elems.forEach(function(e) {
-      var label = e.shape_type || 'Shape';
+      var label = e.type === 'image' ? (e.label || 'Logo') : (SHAPE_LABELS[e.shape_type] || e.shape_type || 'Shape');
+      var colorInput = e.type === 'image' ? '' :
+        '<input type="color" value="' + escHtml(e.color || '#c84826') + '" title="Shape color" ' +
+        'style="width:24px;height:22px;border:1px solid var(--border);border-radius:5px;padding:0;cursor:pointer;" ' +
+        'onclick="event.stopPropagation();" oninput="setDesignElemColor(\'' + escHtml(e.id) + '\', this.value)"> ';
       var isSelected = _dlgSelectedElemId === e.id;
       rows += '<div class="design-elem-list-row' + (isSelected ? ' selected' : '') + '" onclick="dlgSelectDesignElement(\'' + escHtml(e.id) + '\')">' +
         '<span style="text-transform:capitalize;">' + escHtml(label) + '</span>' +
-        '<span style="display:flex;gap:6px;align-items:center;">' +
-        '<input type="color" value="' + escHtml(e.color || '#c84826') + '" title="Shape color" ' +
-          'style="width:24px;height:22px;border:1px solid var(--border);border-radius:5px;padding:0;cursor:pointer;" ' +
-          'onclick="event.stopPropagation();" oninput="setDesignElemColor(\'' + escHtml(e.id) + '\', this.value)"> ' +
+        '<span style="display:flex;gap:6px;align-items:center;">' + colorInput +
         '<button class="btn-ghost btn-sm" type="button" onclick="event.stopPropagation();dlgRemoveDesignElement(\'' + escHtml(e.id) + '\')" style="padding:1px 8px;font-size:10px;">Remove</button>' +
         '</span>' +
         '</div>';
@@ -7588,9 +7797,16 @@
     listEl.innerHTML = '<div style="font-size:10px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:var(--muted);margin:8px 0 5px;">Added elements</div>' + rows;
   }
 
+  function setSelectedElemBrandColor(color) {
+    if (!_dlgSelectedElemId) return;
+    setDesignElemColor(_dlgSelectedElemId, color);
+    renderDesignElementList();
+  }
+
   function setDesignElemColor(id, color) {
     var found = (_sharedThumbnailDraft?.graphic_elements || []).find(function(e) { return e.id === id; });
     if (!found) return;
+    pushDlgUndo('elem-color-' + id);
     found.color = color;
     syncDraftFromDialogState();
     renderDialogOverlayLayer();
@@ -7605,6 +7821,7 @@
 
   function dlgAddTextBox() {
     if (!_sharedThumbnailDraft) return;
+    pushDlgUndo('add-textbox');
     const nextIndex = (_sharedThumbnailDraft.text_boxes || []).length;
     const pos = getDefaultThumbTextPosition(_dlgStyle, _dlgTargetFormat, nextIndex);
     const box = makeThumbnailTextBox('New Headline', {
@@ -7637,6 +7854,7 @@
   }
 
   function setDlgTitleText(value) {
+    pushDlgUndo('type');
     _dlgTitle = value;
     dlgUpdateText();
     // Update the selected text-box chip label in place. Do NOT call
@@ -7739,8 +7957,8 @@
       layer.appendChild(wrap);
     }
 
-    // ── Graphic Elements (shapes) ──
-    var _elems = (_sharedThumbnailDraft.graphic_elements || []).filter(function(e) { return e.type === 'shape'; });
+    // ── Graphic Elements (shapes + brand images) ──
+    var _elems = (_sharedThumbnailDraft.graphic_elements || []).filter(function(e) { return e.type === 'shape' || e.type === 'image'; });
     var _sx = scaleX, _sy = scaleY;
     _elems.forEach(function(elem) {
       var isElemSel = elem.id === _dlgSelectedElemId;
@@ -7755,25 +7973,11 @@
       wrap.style.top    = Math.round(elem.y / _sy) + 'px';
       wrap.style.width  = dw + 'px';
       wrap.style.height = dh + 'px';
-      var c = escHtml(elem.color || '#c84826');
-      var svgInner = '';
-      switch (elem.shape_type) {
-        case 'circle':
-          svgInner = '<path d="M 50 8 C 72 7, 92 26, 92 50 C 92 74, 73 93, 50 93 C 27 93, 8 74, 8 50 C 8 26, 28 7, 50 8 Z" fill="none" stroke="' + c + '" stroke-width="4.5" stroke-linecap="round" stroke-linejoin="round"/>'; break;
-        case 'arrow':
-          svgInner = '<path d="M 10 62 C 18 50, 34 32, 72 38 M 72 38 L 58 24 M 72 38 L 62 54" fill="none" stroke="' + c + '" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/>'; break;
-        case 'underline':
-          svgInner = '<path d="M 5 70 C 20 58, 36 76, 50 66 C 64 56, 80 74, 95 64" fill="none" stroke="' + c + '" stroke-width="8" stroke-linecap="round"/>'; break;
-        case 'star':
-          svgInner = '<path d="M50,6 L55,36 L78,20 L60,42 L90,42 L64,56 L82,78 L54,66 L56,94 L44,68 L18,82 L34,60 L8,48 L38,44 L22,20 L45,36 Z" fill="none" stroke="' + c + '" stroke-width="3.5" stroke-linejoin="round" stroke-linecap="round"/>'; break;
-        case 'brackets':
-          svgInner = '<path d="M 34 12 C 24 16, 16 26, 16 50 C 16 74, 24 84, 34 88" fill="none" stroke="' + c + '" stroke-width="5" stroke-linecap="round"/><path d="M 66 12 C 76 16, 84 26, 84 50 C 84 74, 76 84, 66 88" fill="none" stroke="' + c + '" stroke-width="5" stroke-linecap="round"/>'; break;
-        case 'check':
-          svgInner = '<path d="M 7 52 C 14 52, 20 62, 30 76 C 40 66, 60 38, 93 14" fill="none" stroke="' + c + '" stroke-width="7" stroke-linecap="round" stroke-linejoin="round"/>'; break;
-        default:
-          svgInner = '<rect x="5" y="5" width="90" height="90" fill="none" stroke="' + c + '" stroke-width="3" rx="4"/>'; break;
+      if (elem.type === 'image') {
+        wrap.innerHTML = '<img src="' + escHtml(elem.asset || '') + '" alt="" draggable="false" style="width:100%;height:100%;object-fit:contain;display:block;pointer-events:none;">';
+      } else {
+        wrap.innerHTML = shapeOverlaySvg(elem);
       }
-      wrap.innerHTML = '<svg width="100%" height="100%" viewBox="0 0 100 100" preserveAspectRatio="none" xmlns="http://www.w3.org/2000/svg">' + svgInner + '</svg>';
       if (isElemSel) _addResizeHandles(wrap, ALL_HANDLES);
       wrap.addEventListener('mousedown', function(ev) {
         if (ev.target.classList.contains('dlg-resize-handle')) return;
@@ -7841,6 +8045,7 @@
 
       if (!handleEl && !textEl && !logoEl && !elemEl) return;
 
+      pushDlgUndo('drag');
       const { scaleX, scaleY } = getThumbCanvasScale('dlg-canvas', 'dlg-canvas-wrap');
 
       if (handleEl) {
@@ -8122,12 +8327,15 @@
         airtable_record_id: data.airtable_record_id,
         airtable_url: data.airtable_url,
       };
+      const airtableLine = data.airtable_record_id
+        ? '<span style="color:var(--green);">\u2713 Added to Airtable (Video Shorts &amp; Social)' + (data.airtable_url ? ' \u2014 <a href="' + escHtml(data.airtable_url) + '" target="_blank" rel="noopener">open record</a>' : '') + '</span>'
+        : '<span style="color:#B45309;">\u26A0 Airtable record was NOT created' + (data.airtable_error ? ': ' + escHtml(String(data.airtable_error).slice(0, 200)) : ' (check airtable_api_key.txt and restart the launcher)') + '</span>';
       const panelStatus = document.getElementById('export-status');
       panelStatus.style.display = 'block';
       panelStatus.innerHTML =
         '<div class="export-success">' +
           '<svg class="export-success-icon" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>' +
-          '<div class="export-success-text"><strong>Clip saved to Dropbox!</strong><span>' + escHtml(filename) + ' in ' + escHtml(formatExportFolderLabel(_savedClipExport.folder_name)) + '</span></div>' +
+          '<div class="export-success-text"><strong>Clip saved to Dropbox!</strong><span>' + escHtml(filename) + ' in ' + escHtml(formatExportFolderLabel(_savedClipExport.folder_name)) + '</span><span style="display:block;margin-top:4px;font-size:12px;">' + airtableLine + '</span></div>' +
         '</div>';
       await updateProject('export_created', {
         filename,
@@ -8397,6 +8605,12 @@
               <div class="thumb-editor-label" style="margin-bottom:0;">Brightness <span id="dlg-brightness-val">100</span>%</div>
             </div>
             <input type="range" id="dlg-brightness-slider" min="30" max="200" value="100" style="width:100%;accent-color:var(--orange);margin-top:2px;" oninput="setDlgBrightness(this.value)">
+            <div class="thumb-inline-row" style="justify-content:space-between;align-items:center;margin:10px 0 4px;">
+              <div class="thumb-editor-label" style="margin-bottom:0;">Photo Zoom <span id="dlg-zoom-val">100</span>%</div>
+              <button class="btn-ghost btn-sm" type="button" style="padding:1px 8px;font-size:10px;" onclick="resetDlgZoom()">Reset</button>
+            </div>
+            <input type="range" id="dlg-zoom-slider" min="100" max="300" value="100" style="width:100%;accent-color:var(--orange);margin-top:2px;" oninput="setDlgZoom(this.value)">
+            <p style="font-size:11px;color:var(--muted);margin:6px 0 0;">When zoomed, drag the photo itself to reposition it in the frame.</p>
           </div>
 
           <div class="card">
@@ -8449,10 +8663,28 @@
           <div class="card" id="dlg-design-elements-card">
             <div class="thumb-editor-label" style="margin-bottom:10px;">Design Elements</div>
 
-            <div style="font-size:10px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:var(--muted);margin-bottom:6px;">Logo</div>
+            <div style="font-size:10px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:var(--muted);margin-bottom:6px;">Logos &amp; Branding</div>
             <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:14px;">
-              <button class="design-elem-btn" type="button" onclick="dlgAddDesignElement({type:'logo'})" title="Add Foundry Logo">
-                <img src="TCF_Logo-Orange.png" alt="Logo" style="height:22px;width:auto;object-fit:contain;display:block;" onerror="this.parentElement.textContent='Logo'">
+              <button class="design-elem-btn" type="button" title="Foundry F (orange)" onclick="dlgAddDesignElement({type:'image',asset:'brand/foundry-f-orange.png',label:'Foundry F (orange)',aspect:1})">
+                <img src="brand/foundry-f-orange.png" alt="" style="height:22px;width:auto;object-fit:contain;display:block;">
+              </button>
+              <button class="design-elem-btn" type="button" title="Foundry F (black)" onclick="dlgAddDesignElement({type:'image',asset:'brand/foundry-f-black.png',label:'Foundry F (black)',aspect:1})">
+                <img src="brand/foundry-f-black.png" alt="" style="height:22px;width:auto;object-fit:contain;display:block;">
+              </button>
+              <button class="design-elem-btn" type="button" title="Foundry name (orange)" onclick="dlgAddDesignElement({type:'image',asset:'brand/foundry-name-orange.png',label:'Foundry name (orange)',aspect:2.49})">
+                <img src="brand/foundry-name-orange.png" alt="" style="height:18px;width:auto;object-fit:contain;display:block;">
+              </button>
+              <button class="design-elem-btn" type="button" title="Foundry name (black)" onclick="dlgAddDesignElement({type:'image',asset:'brand/foundry-name-black.png',label:'Foundry name (black)',aspect:2.49})">
+                <img src="brand/foundry-name-black.png" alt="" style="height:18px;width:auto;object-fit:contain;display:block;">
+              </button>
+              <button class="design-elem-btn" type="button" title="TheoEd mic" onclick="dlgAddDesignElement({type:'image',asset:'brand/theoed-mic.png',label:'TheoEd mic',aspect:1.03})">
+                <img src="brand/theoed-mic.png" alt="" style="height:22px;width:auto;object-fit:contain;display:block;">
+              </button>
+              <button class="design-elem-btn" type="button" title="TheoEd name" onclick="dlgAddDesignElement({type:'image',asset:'brand/theoed-name.png',label:'TheoEd name',aspect:3.76})">
+                <img src="brand/theoed-name.png" alt="" style="height:16px;width:auto;object-fit:contain;display:block;">
+              </button>
+              <button class="design-elem-btn" type="button" title="3-Minute Bible" onclick="dlgAddDesignElement({type:'image',asset:'brand/3mb-logo.png',label:'3-Minute Bible',aspect:1.79})">
+                <img src="brand/3mb-logo.png" alt="" style="height:20px;width:auto;object-fit:contain;display:block;">
               </button>
             </div>
 
@@ -8476,8 +8708,36 @@
               <button class="design-elem-btn" type="button" title="Bold check" onclick="dlgAddDesignElement({type:'shape',shape_type:'check',color:'#c84826'})">
                 <svg width="22" height="22" viewBox="0 0 40 40" fill="none"><path d="M5,22 C9,22 13,28 17,34 C22,26 29,16 35,8" stroke="#c84826" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/></svg>
               </button>
+              <button class="design-elem-btn" type="button" title="Stylized quote mark" onclick="dlgAddDesignElement({type:'shape',shape_type:'quote',color:'#c84826'})">
+                <svg width="22" height="22" viewBox="0 0 40 40"><text x="20" y="34" font-family="Georgia, serif" font-weight="900" font-size="44" fill="#c84826" text-anchor="middle">&#8220;</text></svg>
+              </button>
+              <button class="design-elem-btn" type="button" title="Sketchy circle" onclick="dlgAddDesignElement({type:'shape',shape_type:'scribble_circle',color:'#c84826'})">
+                <svg width="22" height="22" viewBox="0 0 40 40" fill="none"><path d="M20,5 C30,4 37,11 36,20 C35,29 28,36 19,36 C10,36 4,29 4,19 C5,11 12,6 21,6" stroke="#c84826" stroke-width="2.4" stroke-linecap="round"/><path d="M22,3 C32,4 39,12 38,21 C37,31 28,38 18,37" stroke="#c84826" stroke-width="1.7" stroke-linecap="round"/></svg>
+              </button>
+              <button class="design-elem-btn" type="button" title="Scribble highlight" onclick="dlgAddDesignElement({type:'shape',shape_type:'highlight',color:'#F5A623'})">
+                <svg width="22" height="22" viewBox="0 0 40 40" fill="none"><path d="M3,12 L37,9 L4,18 L36,15 L3,25 L37,22 L5,31 L35,29" stroke="#F5A623" stroke-width="3.6" stroke-linecap="round"/></svg>
+              </button>
+              <button class="design-elem-btn" type="button" title="Bold straight arrow" onclick="dlgAddDesignElement({type:'shape',shape_type:'arrow_straight',color:'#1e2530'})">
+                <svg width="22" height="22" viewBox="0 0 40 40" fill="none"><path d="M4,20 L31,20 M31,20 L23,12 M31,20 L23,28" stroke="#1e2530" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              </button>
+              <button class="design-elem-btn" type="button" title="Sparkle" onclick="dlgAddDesignElement({type:'shape',shape_type:'sparkle',color:'#F5A623'})">
+                <svg width="22" height="22" viewBox="0 0 40 40"><path d="M 20 2 C 22 14, 26 18, 38 20 C 26 22, 22 26, 20 38 C 18 26, 14 22, 2 20 C 14 18, 18 14, 20 2 Z" fill="#F5A623"/></svg>
+              </button>
+              <button class="design-elem-btn" type="button" title="Double underline" onclick="dlgAddDesignElement({type:'shape',shape_type:'underline_double',color:'#c84826'})">
+                <svg width="22" height="22" viewBox="0 0 40 40" fill="none"><path d="M3,23 C12,20 24,25 37,21" stroke="#c84826" stroke-width="2.8" stroke-linecap="round"/><path d="M5,30 C14,27 25,31 35,28" stroke="#c84826" stroke-width="2.2" stroke-linecap="round"/></svg>
+              </button>
             </div>
 
+            <div class="thumb-inline-row" style="margin-top:4px;">
+              <span style="font-size:10px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:var(--muted);">Shape color</span>
+              <button class="color-swatch" style="background:#C84826;" onclick="setSelectedElemBrandColor('#C84826')" title="Brand Orange"></button>
+              <button class="color-swatch" style="background:#E8541A;" onclick="setSelectedElemBrandColor('#E8541A')" title="CF Orange"></button>
+              <button class="color-swatch" style="background:#F5A623;" onclick="setSelectedElemBrandColor('#F5A623')" title="CF Amber"></button>
+              <button class="color-swatch" style="background:#1E2530;" onclick="setSelectedElemBrandColor('#1E2530')" title="Brand Navy"></button>
+              <button class="color-swatch" style="background:#2D6A4F;" onclick="setSelectedElemBrandColor('#2D6A4F')" title="CF Green"></button>
+              <button class="color-swatch" style="background:#FFFFFF;border-color:#ccc;" onclick="setSelectedElemBrandColor('#FFFFFF')" title="White"></button>
+              <button class="color-swatch" style="background:#D6ECF9;border-color:#ccc;" onclick="setSelectedElemBrandColor('#D6ECF9')" title="Baby Blue"></button>
+            </div>
             <div id="dlg-elem-list"></div>
           </div>
 
@@ -8518,6 +8778,11 @@
                 <button class="color-swatch" style="background:#E8541A;" onclick="setDlgColor('#E8541A',this)" title="CF Orange"></button>
                 <button class="color-swatch" style="background:#F5A623;" onclick="setDlgColor('#F5A623',this)" title="CF Amber"></button>
                 <button class="color-swatch" style="background:#2D6A4F;" onclick="setDlgColor('#2D6A4F',this)" title="CF Green"></button>
+                <button class="color-swatch" style="background:#1E2530;" onclick="setDlgColor('#1E2530',this)" title="Brand Navy"></button>
+                <button class="color-swatch" style="background:#C84826;" onclick="setDlgColor('#C84826',this)" title="Brand Orange"></button>
+                <button class="color-swatch" style="background:#FAFAF2;border-color:#ccc;" onclick="setDlgColor('#FAFAF2',this)" title="Brand Cream"></button>
+                <button class="color-swatch" style="background:#F6A85D;" onclick="setDlgColor('#F6A85D',this)" title="Brand Yellow"></button>
+                <button class="color-swatch" style="background:#D6ECF9;border-color:#ccc;" onclick="setDlgColor('#D6ECF9',this)" title="Brand Baby Blue"></button>
                 <input type="color" id="dlg-color-custom" value="#ffffff" style="width:28px;height:28px;border:1px solid var(--border);border-radius:50%;cursor:pointer;padding:0;flex-shrink:0;" oninput="setDlgColorFree(this.value)">
               </div>
             </div>
@@ -8528,7 +8793,16 @@
               </div>
               <div>
                 <div class="thumb-editor-label">Background Color</div>
-                <input type="color" id="dlg-bg-color-custom" value="#111111" style="width:100%;height:38px;border:1px solid var(--border);border-radius:8px;cursor:pointer;padding:0;" oninput="setDlgBackgroundColor(this.value)">
+                <div class="thumb-inline-row" style="margin-bottom:6px;">
+                  <button class="color-swatch" style="background:#111111;" onclick="setDlgBackgroundColor('#111111')" title="Dark"></button>
+                  <button class="color-swatch" style="background:#E8541A;" onclick="setDlgBackgroundColor('#E8541A')" title="CF Orange"></button>
+                  <button class="color-swatch" style="background:#C84826;" onclick="setDlgBackgroundColor('#C84826')" title="Brand Orange"></button>
+                  <button class="color-swatch" style="background:#1E2530;" onclick="setDlgBackgroundColor('#1E2530')" title="Brand Navy"></button>
+                  <button class="color-swatch" style="background:#2D6A4F;" onclick="setDlgBackgroundColor('#2D6A4F')" title="CF Green"></button>
+                  <button class="color-swatch" style="background:#FAFAF2;border-color:#ccc;" onclick="setDlgBackgroundColor('#FAFAF2')" title="Brand Cream"></button>
+                  <button class="color-swatch" style="background:#D6ECF9;border-color:#ccc;" onclick="setDlgBackgroundColor('#D6ECF9')" title="Baby Blue"></button>
+                </div>
+                <input type="color" id="dlg-bg-color-custom" value="#111111" style="width:100%;height:30px;border:1px solid var(--border);border-radius:8px;cursor:pointer;padding:0;" oninput="setDlgBackgroundColor(this.value)">
               </div>
             </div>
             <div class="thumb-inline-row" style="margin-top:14px;">

@@ -159,7 +159,7 @@ def write_srt(segments, path):
 # ── API key ──
 def read_api_key():
     try:
-        with open(API_KEY_PATH, "r") as f:
+        with open(API_KEY_PATH, "r", encoding="utf-8-sig") as f:
             return f.read().strip()
     except FileNotFoundError:
         return None
@@ -170,7 +170,7 @@ AIRTABLE_KEY_PATH = os.path.join(dropbox_root, 'Scripts', 'airtable_api_key.txt'
 
 def read_airtable_api_key():
     try:
-        with open(AIRTABLE_KEY_PATH, "r") as f:
+        with open(AIRTABLE_KEY_PATH, "r", encoding="utf-8-sig") as f:
             return f.read().strip()
     except FileNotFoundError:
         logger.warning("[airtable] API key not found at %s", AIRTABLE_KEY_PATH)
@@ -571,6 +571,13 @@ def normalize_thumbnail_draft(payload):
         'suggested_titles': suggested_titles[:12],
         'available_frames': available_frames[:12],
         'video_info': payload.get('video_info') or {},
+        # June 11, 2026: these were silently dropped before, losing shapes/
+        # brightness/zoom on every saved draft.
+        'graphic_elements': (payload.get('graphic_elements') or [])[:40],
+        'brightness': int(payload.get('brightness') or 100),
+        'frame_zoom': float(payload.get('frame_zoom') or 1),
+        'frame_offset_x': float(payload.get('frame_offset_x') or 0),
+        'frame_offset_y': float(payload.get('frame_offset_y') or 0),
         'saved_at': iso_now(),
     }
 
@@ -2272,6 +2279,10 @@ def export_clip():
     # ── Step E: Create Airtable record (Video Shorts & Social) ──
     airtable_record_id = None
     airtable_url       = None
+    airtable_error     = None
+
+    if not airtable_key:
+        airtable_error = "Airtable API key not found at Dropbox/Scripts/airtable_api_key.txt"
 
     if airtable_key:
         # Only include writable fields — never lookup/rollup/formula/AI/button
@@ -2303,6 +2314,16 @@ def export_clip():
             with urllib.request.urlopen(at_req, timeout=15) as resp:
                 return json.loads(resp.read()).get("id")
 
+        def _describe_airtable_error(exc):
+            try:
+                import urllib.error
+                if isinstance(exc, urllib.error.HTTPError):
+                    body = exc.read().decode("utf-8", errors="replace")[:300]
+                    return f"HTTP {exc.code}: {body}"
+            except Exception:
+                pass
+            return str(exc)[:300]
+
         try:
             airtable_record_id = _create_shorts_record(fields)
         except Exception as ae:
@@ -2314,9 +2335,11 @@ def export_clip():
                 try:
                     airtable_record_id = _create_shorts_record(fields)
                 except Exception as ae2:
-                    logger.warning("Airtable record creation failed: %s", ae2)
+                    airtable_error = _describe_airtable_error(ae2)
+                    logger.warning("Airtable record creation failed: %s", airtable_error)
             else:
-                logger.warning("Airtable record creation failed: %s", ae)
+                airtable_error = _describe_airtable_error(ae)
+                logger.warning("Airtable record creation failed: %s", airtable_error)
 
         if airtable_record_id:
             airtable_url = (
@@ -2332,6 +2355,7 @@ def export_clip():
         "thumbnail_dropbox_url": thumb_url,
         "airtable_record_id":    airtable_record_id,
         "airtable_url":          airtable_url,
+        "airtable_error":        airtable_error,
     })
 
 
