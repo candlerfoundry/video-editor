@@ -961,6 +961,55 @@ def get_dropbox_client():
     )
 
 
+def _background_link_and_patch(dbx_path, airtable_record_id, field_name):
+    """
+    Big clips lose the race: the share-link is requested seconds after ffmpeg
+    writes the file, before the Dropbox desktop client finishes uploading it,
+    so the API says not_found. This daemon thread polls until the file exists
+    in the cloud (up to 30 min), creates the link, and patches the Airtable
+    record's URL field.
+    """
+    import urllib.request as _req
+    import time
+
+    def worker():
+        try:
+            dbx = get_dropbox_client()
+            deadline = time.time() + 1800
+            link = None
+            while time.time() < deadline:
+                try:
+                    dbx.files_get_metadata(dbx_path)
+                    link = get_or_create_shared_link(dbx, dbx_path)
+                    break
+                except Exception:
+                    time.sleep(15)
+            if not link:
+                logger.warning("[dropbox-retry] Gave up waiting for %s to sync", dbx_path)
+                return
+            logger.info("[dropbox-retry] Link ready for %s", dbx_path)
+            if airtable_record_id:
+                airtable_key = read_airtable_api_key()
+                if airtable_key:
+                    payload = json.dumps({"fields": {field_name: link}}).encode("utf-8")
+                    at_req = _req.Request(
+                        "https://api.airtable.com/v0/appiL0Z2RilcAT2Cw/tbll0KDqmrAlwQuAx/" + airtable_record_id,
+                        data=payload,
+                        headers={"Authorization": "Bearer " + airtable_key,
+                                 "Content-Type": "application/json"},
+                        method="PATCH",
+                    )
+                    try:
+                        with _req.urlopen(at_req, timeout=15):
+                            logger.info("[dropbox-retry] Patched Airtable %s with %s", airtable_record_id, field_name)
+                    except Exception as exc:
+                        logger.warning("[dropbox-retry] Airtable patch failed: %s", exc)
+        except Exception as exc:
+            logger.warning("[dropbox-retry] Worker failed: %s", exc)
+
+    threading.Thread(target=worker, daemon=True).start()
+
+
 def get_or_create_shared_link(dbx, dbx_path):
     import dropbox as dbx_module
 
@@ -2445,6 +2494,25 @@ def export_clip():
                 "https://airtable.com/appiL0Z2RilcAT2Cw"
                 "/tbll0KDqmrAlwQuAx/" + airtable_record_id
             )
+
+    if not clip_url and not dropbox_error:
+        # Link failed without a hard error — almost always the sync race on a
+        # big file. Retry in the background and patch Airtable when ready.
+        _background_link_and_patch(
+            build_social_media_dropbox_path(folder_name, output_name),
+            airtable_record_id,
+            "Clip - Dropbox URL",
+        )
+        dropbox_error = ("clip is still syncing to Dropbox — the share link will be "
+                         "added to Airtable automatically within a few minutes")
+    elif not clip_url and dropbox_error and "not_found" in dropbox_error:
+        _background_link_and_patch(
+            build_social_media_dropbox_path(folder_name, output_name),
+            airtable_record_id,
+            "Clip - Dropbox URL",
+        )
+        dropbox_error = ("clip is still syncing to Dropbox — the share link will be "
+                         "added to Airtable automatically within a few minutes")
 
     return jsonify({
         "success":               True,

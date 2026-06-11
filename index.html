@@ -4,6 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Foundry Video Editor</title>
+  <link rel="icon" type="image/png" href="brand/foundry-f-orange.png">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600;700&family=Bebas+Neue&family=Cormorant+Garamond:wght@400;500;600;700&family=DM+Sans:wght@400;500;600;700&family=Inter:wght@400;500;600;700&family=Lora:wght@400;500;600;700&family=Montserrat:wght@400;500;600;700&family=Oswald:wght@400;500;600;700&family=Playfair+Display:wght@600;700&family=Spectral:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -7450,8 +7451,11 @@
     document.addEventListener('mousedown', function (e) {
       const wrap = document.getElementById('dlg-canvas-wrap');
       if (!wrap || !wrap.contains(e.target)) return;
-      if (e.target.closest('.dlg-overlay-text, .dlg-logo-overlay, .dlg-design-elem-overlay, .dlg-resize-handle')) return;
+      // Shift+drag pans from ANYWHERE on the canvas (even over text/elements);
+      // a plain drag pans only from empty areas.
+      if (!e.shiftKey && e.target.closest('.dlg-overlay-text, .dlg-logo-overlay, .dlg-design-elem-overlay, .dlg-resize-handle')) return;
       if (!_sharedThumbnailDraft || (_sharedThumbnailDraft.frame_zoom || 1) <= 1) return;
+      if (e.shiftKey) { e.stopPropagation(); }
       pushDlgUndo('pan');
       panning = {
         startX: e.clientX, startY: e.clientY,
@@ -7909,10 +7913,23 @@
   }
 
   function dlgApplySuggestedTitle(title) {
+    pushDlgUndo('apply-title');
     _dlgTitle = title;
     syncDraftFromDialogState();
-    dlgBuildHeroState();
     dlgUpdateText();
+    // Targeted updates only — dlgBuildHeroState() here wiped the source frame
+    // (same bug family as the per-keystroke rebuild).
+    const grid = document.getElementById('dlg-titles-grid');
+    if (grid) {
+      grid.querySelectorAll('.thumb-chip').forEach(chip => {
+        chip.classList.toggle('selected', chip.textContent === (title.length > 60 ? title.slice(0, 60) : title));
+      });
+    }
+    const boxList = document.getElementById('dlg-textbox-list');
+    const sel = boxList ? boxList.querySelector('.thumb-chip.selected') : null;
+    if (sel) sel.textContent = (title || 'Text Box').slice(0, 60);
+    const ta = document.getElementById('dlg-title-input');
+    if (ta) ta.value = title;
   }
 
   function setDlgTitleText(value) {
@@ -8803,7 +8820,7 @@
               <button class="btn-ghost btn-sm" type="button" style="padding:1px 8px;font-size:10px;" onclick="resetDlgZoom()">Reset</button>
             </div>
             <input type="range" id="dlg-zoom-slider" min="100" max="300" value="100" style="width:100%;accent-color:var(--orange);margin-top:2px;" oninput="setDlgZoom(this.value)">
-            <p style="font-size:11px;color:var(--muted);margin:6px 0 0;">When zoomed, drag the photo itself to reposition it in the frame.</p>
+            <p style="font-size:11px;color:var(--muted);margin:6px 0 0;">When zoomed, drag an empty part of the photo to reposition it &#8212; or hold <strong>Shift</strong> and drag anywhere (even over text).</p>
           </div>
 
           <div class="card">
@@ -8913,7 +8930,7 @@
               <button class="color-swatch" style="background:#2D6A4F;" onclick="setSelectedElemBrandColor('#2D6A4F')" title="CF Green"></button>
               <button class="color-swatch" style="background:#FFFFFF;border-color:#ccc;" onclick="setSelectedElemBrandColor('#FFFFFF')" title="White"></button>
               <button class="color-swatch" style="background:#103EDF;" onclick="setSelectedElemBrandColor('#103EDF')" title="TheoEd Blue"></button>
-              <button class="color-swatch" style="background:#4166E6;" onclick="setSelectedElemBrandColor('#4166E6')" title="TheoEd Light Blue"></button>
+              <button class="color-swatch" style="background:#41B6E6;" onclick="setSelectedElemBrandColor('#41B6E6')" title="TheoEd Light Blue"></button>
             </div>
             <div id="dlg-elem-list"></div>
           </div>
@@ -8960,7 +8977,7 @@
                 <button class="color-swatch" style="background:#FAFAF2;border-color:#ccc;" onclick="setDlgColor('#FAFAF2',this)" title="Brand Cream"></button>
                 <button class="color-swatch" style="background:#F6A85D;" onclick="setDlgColor('#F6A85D',this)" title="Brand Yellow"></button>
                 <button class="color-swatch" style="background:#103EDF;" onclick="setDlgColor('#103EDF',this)" title="TheoEd Blue"></button>
-                <button class="color-swatch" style="background:#4166E6;" onclick="setDlgColor('#4166E6',this)" title="TheoEd Light Blue"></button>
+                <button class="color-swatch" style="background:#41B6E6;" onclick="setDlgColor('#41B6E6',this)" title="TheoEd Light Blue"></button>
                 <input type="color" id="dlg-color-custom" value="#ffffff" style="width:28px;height:28px;border:1px solid var(--border);border-radius:50%;cursor:pointer;padding:0;flex-shrink:0;" oninput="setDlgColorFree(this.value)">
               </div>
             </div>
@@ -8979,7 +8996,7 @@
                   <button class="color-swatch" style="background:#2D6A4F;" onclick="setDlgBackgroundColor('#2D6A4F')" title="CF Green"></button>
                   <button class="color-swatch" style="background:#FAFAF2;border-color:#ccc;" onclick="setDlgBackgroundColor('#FAFAF2')" title="Brand Cream"></button>
                   <button class="color-swatch" style="background:#103EDF;" onclick="setDlgBackgroundColor('#103EDF')" title="TheoEd Blue"></button>
-                  <button class="color-swatch" style="background:#4166E6;" onclick="setDlgBackgroundColor('#4166E6')" title="TheoEd Light Blue"></button>
+                  <button class="color-swatch" style="background:#41B6E6;" onclick="setDlgBackgroundColor('#41B6E6')" title="TheoEd Light Blue"></button>
                 </div>
                 <input type="color" id="dlg-bg-color-custom" value="#111111" style="width:100%;height:30px;border:1px solid var(--border);border-radius:8px;cursor:pointer;padding:0;" oninput="setDlgBackgroundColor(this.value)">
               </div>

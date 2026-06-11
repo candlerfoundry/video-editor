@@ -926,3 +926,34 @@ the change exists in the FILE with grep — never trust the script's own "ok"
 output, because an assert later in the same script aborts before the write.
 
 Regression risk: High.
+
+---
+
+## 27. Dropbox link sync race + night fixes (June 11, 2026, late)
+
+THE NULL-URL MYSTERY SOLVED: credentials were always fine (thumbnail links
+worked). Share links are requested seconds after ffmpeg writes the clip, but
+a ~50 MB file takes minutes for the Dropbox desktop client to upload — the
+API returns not_found and the clip URL stayed null. Small PNGs sync in
+seconds, which is why thumbnails got links.
+- `_background_link_and_patch(dbx_path, airtable_record_id, field)`: daemon
+  thread polls `files_get_metadata` (15 s interval, 30 min cap), creates the
+  link when the file lands, and PATCHes the Airtable record's
+  "Clip - Dropbox URL". Wired into /export_clip whenever the clip link fails
+  with no hard error or with not_found. The user-facing dropbox_error
+  explains the link will appear in Airtable automatically.
+
+Also fixed:
+- `dlgApplySuggestedTitle` no longer calls `dlgBuildHeroState()` (same
+  source-frame-wipe family as bug #12); it updates title chips, the text-box
+  chip, and the textarea in place.
+- Photo pan: Shift+drag pans from ANYWHERE on the canvas (even over text and
+  elements); plain drag still pans on empty areas. Hint text updated.
+- TheoEd light blue is **#41B6E6** (Emily corrected her earlier 4166e6).
+- Favicon: `<link rel="icon" ... brand/foundry-f-orange.png>` — the Chrome
+  tab now shows the Foundry F.
+- Cover burn VERIFIED working in production (frame-0 extraction of Emily's
+  Sharpe clip shows the thumbnail; it is 1/30 s by design — imperceptible in
+  playback, used by Instagram as the cover).
+
+Regression risk: Medium.
