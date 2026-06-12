@@ -62,7 +62,7 @@ CORS(app)
 
 # Bump this whenever the frontend/backend contract changes (the frontend
 # carries a matching EXPECTED_BACKEND_BUILD and warns when they differ).
-BACKEND_BUILD = "2026-06-12-wave2"
+BACKEND_BUILD = "2026-06-12-wave2b"
 
 CREATE_NO_WINDOW = 0x08000000 if platform.system() == 'Windows' else 0
 
@@ -299,7 +299,7 @@ def spec_to_ass(spec, width, height):
     pop = bool(spec.get("pop"))
     # Slight letter spacing (Emily: push letters out a touch); word gaps are
     # widened by joining words with two spaces in the event text.
-    letter_spacing = max(1, round(font_size * 0.02))
+    letter_spacing = max(1, round(font_size * 0.01))
 
     def t2ass(t):
         t = max(0.0, float(t))
@@ -376,11 +376,12 @@ def spec_to_ass(spec, width, height):
         g_start, g_end = float(g.get("start", 0)), float(g.get("end", 0))
 
         def join_runs(runs_with_words):
-            # Two spaces between words (wider word gaps); \\N at line breaks
+            # Single space + slight letter spacing (two spaces read too wide);
+            # \\N at line breaks
             out = []
             for run, w in runs_with_words:
                 out.append(run)
-                out.append("\\N" if w.get("br") else "  ")
+                out.append("\\N" if w.get("br") else " ")
             return "".join(out[:-1]) if out else ""
 
         if mode == "word":

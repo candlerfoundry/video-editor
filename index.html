@@ -1524,8 +1524,8 @@
     }
     #caption-overlay .cap-word { cursor: pointer; }
     #caption-overlay .cap-word:hover { text-decoration: underline; }
-    #caption-overlay .cap-pop { animation: capPop 180ms ease-out; display: inline-block; }
-    @keyframes capPop { 0% { transform: scale(0.6); opacity: 0.4; } 70% { transform: scale(1.12); } 100% { transform: scale(1); } }
+    #caption-overlay .cap-pop { animation: capPop 220ms cubic-bezier(0.34, 1.56, 0.64, 1); display: inline-block; }
+    @keyframes capPop { 0% { transform: scale(0.85); opacity: 0.5; } 100% { transform: scale(1); opacity: 1; } }
     #caption-overlay:not(.editing) { cursor: grab; }
     #caption-overlay.cap-dragging { cursor: grabbing; }
     #dlg-canvas-wrap.pan-mode { cursor: grab; }
@@ -2395,7 +2395,6 @@
                     <button class="color-swatch" style="background:#103EDF;" onclick="setCaptionEmphasisColor('#103EDF')" title="TheoEd Blue"></button>
                     <button class="color-swatch" style="background:#2D6A4F;" onclick="setCaptionEmphasisColor('#2D6A4F')" title="CF Green"></button>
                   </span>
-                  <button class="btn-ghost btn-sm" type="button" id="btn-ai-emphasis" onclick="runAiEmphasis(true)" title="Claude re-picks the feature words (it already ran automatically when you opened this clip) — adjust by clicking words on the video">&#10024; Re-run AI emphasis</button>
                   <span id="ai-emphasis-status" style="font-size:11px;color:var(--green);"></span>
                 </div>
                 <div class="thumb-inline-row" style="align-items:center;gap:10px;margin-top:8px;">
@@ -2889,7 +2888,7 @@
   // Must match BACKEND_BUILD in server.py — bumped together whenever the
   // frontend/backend contract changes. A mismatch means the user is running
   // an old backend (launcher not restarted after a deploy).
-  const EXPECTED_BACKEND_BUILD = '2026-06-12-wave2';
+  const EXPECTED_BACKEND_BUILD = '2026-06-12-wave2b';
   let _staleBackendWarned = false;
   function showStaleBackendBanner(stale) {
     let el = document.getElementById('stale-backend-banner');
@@ -8636,6 +8635,7 @@
   let editorCaptionOverrides = {};  // group index -> corrected text
   let editorCaptionEmphasis  = {};  // group index -> [word indices]
   let _capEditingGroup = null;
+  let _capPendingRedraw = false;
 
   function resetCaptionEdits() {
     editorCaptionOverrides = {};
@@ -8869,7 +8869,7 @@
       _capLastKey = '';
       return;
     }
-    if (_capEditingGroup != null && !force) return;  // don't redraw under the editor
+    if (_capEditingGroup != null) { _capPendingRedraw = true; return; }  // NEVER stomp the editor
     const t = vid.currentTime;
     const groups = buildClipCaptionGroups();
     const g = groups.find(x => t >= x.srcStart && t < x.srcEnd) || null;
@@ -8881,11 +8881,19 @@
     const mode = editorCaptionStyle.mode || 'group';
     let active = -1;
     if (mode === 'karaoke' || mode === 'word') {
-      active = words.findIndex(w => t >= w.srcStart && t < w.srcEnd);
-      if (active < 0) active = t >= (words[words.length - 1]?.srcEnd ?? 0) ? words.length - 1 : 0;
+      // Last word that has STARTED (plus an 80ms perceptual lead) — keeps the
+      // highlight steady through inter-word gaps instead of snapping back.
+      const tt = t + 0.08;
+      for (let i = words.length - 1; i >= 0; i--) {
+        if (tt >= words[i].srcStart) { active = i; break; }
+      }
+      if (active < 0) active = 0;
     }
     const key = g.index + ':' + active + ':' + mode;
     if (!force && key === _capLastKey) return;
+    const sameGroup = !force && _capLastKey.split(':')[0] === String(g.index) &&
+                      _capLastKey.split(':')[2] === mode && mode === 'karaoke' &&
+                      overlay.children.length > 0;
     _capLastKey = key;
 
     overlay.style.display = 'block';
@@ -8893,8 +8901,8 @@
     const scale = editorCaptionStyle.size_scale || 1;
     const sizePct = (mode === 'word' ? 0.06 : 0.034) * scale;
     overlay.style.fontSize = Math.max(13, Math.round(vid.clientHeight * sizePct)) + 'px';
-    overlay.style.letterSpacing = '0.02em';
-    overlay.style.wordSpacing = '0.18em';
+    overlay.style.letterSpacing = '0.01em';
+    overlay.style.wordSpacing = '0.10em';
     overlay.style.bottom = Math.round((editorCaptionStyle.pos_bottom ?? 0.12) * 100) + '%';
     overlay.dataset.groupIndex = g.index;
     const emph = editorCaptionEmphasis[g.index] || [];
@@ -8922,6 +8930,18 @@
       overlay.innerHTML = '<span class="' + emphClass(isEmph, true) + '" data-wi="' + wi + '"' +
         (emphStyle(isEmph, false) ? ' style="' + emphStyle(isEmph, false) + '"' : '') + '>' +
         escHtml(captionDisplayText(w, isEmph)) + '</span>';
+      return;
+    }
+    if (sameGroup) {
+      // Only restyle the spans — keeps text nodes stable so the line doesn't
+      // jitter and only the newly-active word re-animates.
+      overlay.querySelectorAll('.cap-word').forEach(el => {
+        const i = parseInt(el.dataset.wi);
+        const isEmph = emph.includes(i);
+        const isActive = i === active;
+        el.className = emphClass(isEmph, isActive);
+        el.setAttribute('style', emphStyle(isEmph, isActive));
+      });
       return;
     }
     overlay.innerHTML = words.map((w, i) => {
@@ -9019,6 +9039,7 @@
         else delete editorCaptionOverrides[gi];
         delete editorCaptionEmphasis[gi];  // indices no longer line up
         _capEditingGroup = null;
+        _capPendingRedraw = false;
         updateCaptionOverlay(true);
       };
       const onKey = (ev) => {

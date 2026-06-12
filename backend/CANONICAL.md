@@ -1138,3 +1138,27 @@ spec_to_ass v1 str()-ed them into the text).
 
 Regression risk: Medium — forgetting to bump BOTH constants makes every
 user see the stale banner (or worse, silences a real mismatch).
+
+---
+
+## 33. Caption polish round (June 12, 2026, afternoon)
+
+- EDITING GUARD IS ABSOLUTE: while `_capEditingGroup` is set, updateCaptionOverlay
+  NEVER redraws (even force=true). The pause/seeked force-redraws were stomping
+  the contentEditable buffer — that's why text edits "didn't save".
+- Active-word tracking: last word that has STARTED plus an 80ms perceptual
+  lead. The old fallback snapped back to word 0 during inter-word gaps, which
+  made captions feel laggy/jerky vs OpusClip. Do not regress this.
+- Within an unchanged karaoke group, only span classes/styles are updated
+  (DOM-preserving) — no innerHTML rebuild per word, no text jitter.
+- Pop animation: 220ms cubic-bezier(0.34,1.56,0.64,1) overshoot.
+- Spacing settled: overlay 0.01em letters / 0.10em words; burn = single-space
+  join + ASS Spacing 1% of font size. (Two spaces + 2% read too wide.)
+- The AI emphasis button was REMOVED — it runs silently per clip (auto on
+  open) with only the "✓ N words emphasized" note. Cost: ~3k chars in /
+  ~300 tokens out per opened clip (fractions of a cent); intentionally NOT
+  bundled into /clips (would compute emphasis for all candidates against
+  pre-trim text).
+- Handshake bumped: 2026-06-12-wave2b (both constants).
+
+Regression risk: Medium.
