@@ -1024,3 +1024,50 @@ a perfectly healthy startup — the werkzeug "development server" WARNING is
 normal Flask boilerplate, not an error). Deadline is now 90s. Do not lower it.
 
 Regression risk: Medium.
+
+---
+
+## 30. Caption wave 1: OpusClip-class captions (June 12, 2026)
+
+Style model (`editorCaptionStyle`): preset, font, emphasis_color, mode
+('group' | 'karaoke' | 'word'), all_caps, emphasis_caps, group_size (words
+per screen 1-8), pop, pos_bottom (draggable 0.02-0.75), show.
+
+Presets (CAPTION_PRESETS — keep these the source of defaults):
+- bold_pop (DEFAULT): Arial Black, karaoke, ALL CAPS, 4 words, pop, amber
+- karaoke: Arial, karaoke, sentence case, 6 words
+- one_word: Arial Black, word-at-a-time, ALL CAPS, pop
+- clean: Arial, whole-group, 8 words (the original June-12-morning look)
+
+Group refactor: `buildClipCaptionGroups()` words are now OBJECTS
+{text, srcStart, srcEnd, outStart, outEnd} grouped by group_size.
+`groupDisplayWords()` returns objects; overridden text distributes timings
+evenly across the group window. ALL consumers must use `.text`.
+
+Overlay v2: per-word active highlight (karaoke) and single-word mode driven
+by word srcStart/srcEnd; rAF loop while playing (timeupdate is ~4Hz, too
+coarse); render-key = group:activeWord:mode. ALL CAPS + emphasis-caps applied
+via captionDisplayText(). cap-pop CSS animation. Font 3.4% of video height
+(6% in word mode). DRAG the overlay vertically to set pos_bottom (5px
+threshold separates drag from word-click; _capSuppressClick guards).
+
+AI pre-emphasis: `/caption_emphasis` (POST {clip_transcript} ->
+{words: [...]}) — Claude picks 5-15 verbatim feature words; forgiving [] on
+failure. Frontend `runAiEmphasis()` auto-runs on clip select (once per clip
+range) + manual "AI emphasize" button; matches words case/punct-insensitively
+(_normWord) and is re-applied on regroup (reapplyAiEmphasis). Manual click
+adjustments still work on top.
+
+Burn (`spec_to_ass` v2): spec carries mode/all_caps/emphasis_caps/pop/
+pos_bottom and per-word output times. 'karaoke' emits one Dialogue per word
+window with the active word color-run; 'word' emits one Dialogue per word
+(+ \t pop scale); 'group' as before. pos_bottom -> MarginV. Word-mode font
+6%/8.5%/7% by orientation. Legacy plain-string words and captions_srt still
+accepted. VERIFIED by rendered frames (karaoke caps + amber active word at
+the correct timestamp; giant single word).
+
+Persistence: caption_style/caption_overrides/caption_emphasis ride with the
+edited clip (clip_selected payload; backend stores bounded copies) and
+restore in restoreSavedClipEdits().
+
+Regression risk: High.

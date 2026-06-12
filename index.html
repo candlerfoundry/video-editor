@@ -1524,6 +1524,10 @@
     }
     #caption-overlay .cap-word { cursor: pointer; }
     #caption-overlay .cap-word:hover { text-decoration: underline; }
+    #caption-overlay .cap-pop { animation: capPop 180ms ease-out; display: inline-block; }
+    @keyframes capPop { 0% { transform: scale(0.6); opacity: 0.4; } 70% { transform: scale(1.12); } 100% { transform: scale(1); } }
+    #caption-overlay:not(.editing) { cursor: grab; }
+    #caption-overlay.cap-dragging { cursor: grabbing; }
     #dlg-canvas-wrap.pan-mode { cursor: grab; }
     #dlg-canvas-wrap.pan-mode:active { cursor: grabbing; }
     #dlg-canvas-wrap.pan-mode .dlg-overlay-text,
@@ -2361,14 +2365,27 @@
                     <input type="checkbox" id="caption-show-toggle" checked style="accent-color:var(--orange);width:15px;height:15px;cursor:pointer;" onchange="setCaptionShow(this.checked)">
                     Captions
                   </label>
+                  <select id="caption-preset-select" class="thumb-editor-select" style="width:auto;padding:3px 8px;font-size:12px;" onchange="applyCaptionPreset(this.value)" title="Caption style preset">
+                    <option value="bold_pop">Bold Pop</option>
+                    <option value="karaoke">Karaoke</option>
+                    <option value="one_word">One Word</option>
+                    <option value="clean">Clean</option>
+                  </select>
                   <select id="caption-font-select" class="thumb-editor-select" style="width:auto;padding:3px 8px;font-size:12px;" onchange="setCaptionFont(this.value)">
                     <option value="Arial">Arial</option>
-                    <option value="Arial Black">Arial Black</option>
+                    <option value="Arial Black" selected>Arial Black</option>
                     <option value="Impact">Impact</option>
                     <option value="Verdana">Verdana</option>
                     <option value="Tahoma">Tahoma</option>
                     <option value="Trebuchet MS">Trebuchet MS</option>
                     <option value="Georgia">Georgia</option>
+                  </select>
+                  <select id="caption-group-size" class="thumb-editor-select" style="width:auto;padding:3px 8px;font-size:12px;" onchange="setCaptionGroupSize(this.value)" title="Words on screen at a time">
+                    <option value="1">1 word</option>
+                    <option value="2">2 words</option>
+                    <option value="4" selected>4 words</option>
+                    <option value="6">6 words</option>
+                    <option value="8">8 words</option>
                   </select>
                   <span class="thumb-inline-row" style="gap:5px;">
                     <span style="font-size:10px;font-weight:700;letter-spacing:0.06em;text-transform:uppercase;color:var(--muted);">Emphasis</span>
@@ -2378,8 +2395,9 @@
                     <button class="color-swatch" style="background:#103EDF;" onclick="setCaptionEmphasisColor('#103EDF')" title="TheoEd Blue"></button>
                     <button class="color-swatch" style="background:#2D6A4F;" onclick="setCaptionEmphasisColor('#2D6A4F')" title="CF Green"></button>
                   </span>
+                  <button class="btn-ghost btn-sm" type="button" id="btn-ai-emphasis" onclick="runAiEmphasis(true)" title="Claude picks the feature words to emphasize — adjust by clicking words on the video">&#10024; AI emphasize</button>
                 </div>
-                <p style="font-size:11px;color:var(--muted);margin:6px 0 0;">These captions burn into the clip exactly as shown (enable &#8220;Burn captions&#8221; at save). <strong>Click a word</strong> to emphasize it &#183; <strong>double-click a caption</strong> to correct the text.</p>
+                <p style="font-size:11px;color:var(--muted);margin:6px 0 0;">Burns exactly as shown (&#8220;Burn captions&#8221; at save). <strong>Click a word</strong> on the video to toggle emphasis &#183; <strong>double-click</strong> to correct text &#183; <strong>drag the captions</strong> up or down to reposition them.</p>
               </div>
             </div><!-- /.editor-left-zone -->
 
@@ -4407,6 +4425,19 @@
     if (saved.end_time   != null) editorOutTime = saved.end_time;
     editorCutRanges   = (saved.cut_ranges   || []).map(r => ({ start: r.start, end: r.end }));
     editorBleepRanges = (saved.bleep_ranges || []).map(r => ({ start: r.start, end: r.end }));
+    if (saved.caption_style && typeof saved.caption_style === 'object') {
+      editorCaptionStyle = { ...editorCaptionStyle, ...saved.caption_style };
+      const presetSel = document.getElementById('caption-preset-select');
+      if (presetSel && editorCaptionStyle.preset) presetSel.value = editorCaptionStyle.preset;
+      const fontSel = document.getElementById('caption-font-select');
+      if (fontSel) fontSel.value = editorCaptionStyle.font;
+      const sizeSel = document.getElementById('caption-group-size');
+      if (sizeSel) sizeSel.value = String(editorCaptionStyle.group_size || 4);
+      const showChk = document.getElementById('caption-show-toggle');
+      if (showChk) showChk.checked = !!editorCaptionStyle.show;
+    }
+    if (saved.caption_overrides) editorCaptionOverrides = { ...saved.caption_overrides };
+    if (saved.caption_emphasis) editorCaptionEmphasis = JSON.parse(JSON.stringify(saved.caption_emphasis));
     return !!(editorCutRanges.length || editorBleepRanges.length ||
               saved.start_time != null);
   }
@@ -4424,6 +4455,7 @@
     origInTime    = editorInTime;   // stored once — never overwritten
     origOutTime   = editorOutTime;
     restoreSavedClipEdits(_editCandidate.hook_line);
+    if (editorCaptionStyle.show) setTimeout(() => runAiEmphasis(false), 400);
 
     const vid = document.getElementById('edit-video');
     vid.src = getPlayableVideoUrl('clips');
@@ -7078,6 +7110,9 @@
       mode: _editCandidate?.part != null ? 'split' : 'viral',
       cut_ranges: editorCutRanges,
       bleep_ranges: editorBleepRanges,
+      caption_style: editorCaptionStyle,
+      caption_overrides: editorCaptionOverrides,
+      caption_emphasis: editorCaptionEmphasis,
     }).catch?.(() => {});
     openExportFormDialog();
   }
@@ -8502,7 +8537,41 @@
   }
 
   // ── In-frame caption editor (June 12) — preview/style exactly what burns ──
-  let editorCaptionStyle = { font: 'Arial', emphasis_color: '#F5A623', show: true };
+  const CAPTION_PRESETS = {
+    bold_pop: { label: 'Bold Pop',  font: 'Arial Black', mode: 'karaoke', all_caps: true,  emphasis_caps: true,  group_size: 4,  pop: true  },
+    karaoke:  { label: 'Karaoke',   font: 'Arial',       mode: 'karaoke', all_caps: false, emphasis_caps: true,  group_size: 6,  pop: false },
+    one_word: { label: 'One Word',  font: 'Arial Black', mode: 'word',    all_caps: true,  emphasis_caps: true,  group_size: 1,  pop: true  },
+    clean:    { label: 'Clean',     font: 'Arial',       mode: 'group',   all_caps: false, emphasis_caps: false, group_size: 8,  pop: false },
+  };
+  let editorCaptionStyle = {
+    preset: 'bold_pop', font: 'Arial Black', emphasis_color: '#F5A623',
+    mode: 'karaoke', all_caps: true, emphasis_caps: true, group_size: 4,
+    pop: true, pos_bottom: 0.12, show: true,
+  };
+  function applyCaptionPreset(name) {
+    const pr = CAPTION_PRESETS[name] || CAPTION_PRESETS.bold_pop;
+    editorCaptionStyle.preset = name;
+    editorCaptionStyle.font = pr.font;
+    editorCaptionStyle.mode = pr.mode;
+    editorCaptionStyle.all_caps = pr.all_caps;
+    editorCaptionStyle.emphasis_caps = pr.emphasis_caps;
+    editorCaptionStyle.group_size = pr.group_size;
+    editorCaptionStyle.pop = pr.pop;
+    const fontSel = document.getElementById('caption-font-select');
+    if (fontSel) fontSel.value = pr.font;
+    const sizeSel = document.getElementById('caption-group-size');
+    if (sizeSel) sizeSel.value = String(pr.group_size);
+    editorCaptionEmphasis = editorCaptionEmphasis || {};
+    updateCaptionOverlay(true);
+  }
+  function setCaptionGroupSize(n) {
+    editorCaptionStyle.group_size = Math.max(1, Math.min(10, parseInt(n) || 4));
+    // Regrouping shifts indices — re-map AI/manual emphasis by word text later;
+    // simplest correct behavior: clear stale per-group data.
+    editorCaptionOverrides = {};
+    reapplyAiEmphasis();
+    updateCaptionOverlay(true);
+  }
   let editorCaptionOverrides = {};  // group index -> corrected text
   let editorCaptionEmphasis  = {};  // group index -> [word indices]
   let _capEditingGroup = null;
@@ -8549,14 +8618,15 @@
       }
       offset += e - s;
     }
+    const size = Math.max(1, editorCaptionStyle.group_size || 4);
     const groups = [];
-    for (let i = 0; i < words.length; i += 10) {
-      const grp = words.slice(i, i + 10);
+    for (let i = 0; i < words.length; i += size) {
+      const grp = words.slice(i, i + size);
       groups.push({
         index: groups.length,
         srcStart: grp[0].srcStart, srcEnd: grp[grp.length - 1].srcEnd,
         outStart: grp[0].outStart, outEnd: grp[grp.length - 1].outEnd,
-        words: grp.map(w => w.text),
+        words: grp,  // word objects: {text, srcStart, srcEnd, outStart, outEnd}
       });
     }
     return groups;
@@ -8564,12 +8634,67 @@
 
   function groupDisplayWords(group) {
     const override = editorCaptionOverrides[group.index];
-    return override != null ? override.split(/\s+/).filter(Boolean) : group.words;
+    if (override == null) return group.words;
+    // Corrected text: distribute word timings evenly across the group window
+    const texts = override.split(/\s+/).filter(Boolean);
+    const n = Math.max(1, texts.length);
+    const srcSpan = (group.srcEnd - group.srcStart) / n;
+    const outSpan = (group.outEnd - group.outStart) / n;
+    return texts.map((t, i) => ({
+      text: t,
+      srcStart: group.srcStart + i * srcSpan, srcEnd: group.srcStart + (i + 1) * srcSpan,
+      outStart: group.outStart + i * outSpan, outEnd: group.outStart + (i + 1) * outSpan,
+    }));
+  }
+
+  let _aiEmphasisWords = null;   // Set of lowercase words Claude chose
+  let _aiEmphasisRanFor = '';
+  function _normWord(t) { return String(t).toLowerCase().replace(/[^a-z0-9']/g, ''); }
+
+  function reapplyAiEmphasis() {
+    if (!_aiEmphasisWords) return;
+    const groups = buildClipCaptionGroups();
+    editorCaptionEmphasis = {};
+    groups.forEach(g => {
+      const idx = [];
+      g.words.forEach((w, i) => { if (_aiEmphasisWords.has(_normWord(w.text))) idx.push(i); });
+      if (idx.length) editorCaptionEmphasis[g.index] = idx;
+    });
+  }
+
+  async function runAiEmphasis(manual) {
+    if (!backendOnline || !_wordsData) return;
+    const btn = document.getElementById('btn-ai-emphasis');
+    const clipKey = editorInTime + '-' + editorOutTime;
+    if (!manual && _aiEmphasisRanFor === clipKey) return;
+    _aiEmphasisRanFor = clipKey;
+    const transcript = _wordsData
+      .filter(w => (w.start ?? 0) < editorOutTime && (w.end ?? w.start ?? 0) >= editorInTime)
+      .filter(w => !isWordCut(w))
+      .map(w => w.word).join(' ').trim().slice(0, 3000);
+    if (!transcript) return;
+    if (btn) { btn.disabled = true; btn.textContent = 'Choosing\u2026'; }
+    try {
+      const res = await fetch(BACKEND + '/caption_emphasis', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ clip_transcript: transcript }),
+      });
+      const data = await res.json();
+      const words = (data.words || []).map(_normWord).filter(Boolean);
+      if (words.length) {
+        _aiEmphasisWords = new Set(words);
+        reapplyAiEmphasis();
+        updateCaptionOverlay(true);
+      }
+    } catch (_) {}
+    if (btn) { btn.disabled = false; btn.innerHTML = '&#10024; AI emphasize'; }
   }
 
   function setCaptionShow(on) {
     editorCaptionStyle.show = !!on;
     updateCaptionOverlay(true);
+    if (on) runAiEmphasis(false);
   }
   function setCaptionFont(font) {
     editorCaptionStyle.font = font;
@@ -8587,43 +8712,108 @@
     updateCaptionOverlay(true);
   }
 
-  let _capLastGroupIndex = -2;
+  let _capLastKey = '';
+  function captionDisplayText(word, emphasized) {
+    let t = word.text;
+    if (editorCaptionStyle.all_caps || (emphasized && editorCaptionStyle.emphasis_caps)) t = t.toUpperCase();
+    return t;
+  }
   function updateCaptionOverlay(force) {
     const overlay = document.getElementById('caption-overlay');
     const vid = document.getElementById('edit-video');
     if (!overlay || !vid) return;
     if (!editorCaptionStyle.show || !_wordsData || _currentStage !== 3) {
       overlay.style.display = 'none';
-      _capLastGroupIndex = -2;
+      _capLastKey = '';
       return;
     }
     if (_capEditingGroup != null && !force) return;  // don't redraw under the editor
     const t = vid.currentTime;
     const groups = buildClipCaptionGroups();
     const g = groups.find(x => t >= x.srcStart && t < x.srcEnd) || null;
-    const gi = g ? g.index : -1;
-    if (!force && gi === _capLastGroupIndex) return;
-    _capLastGroupIndex = gi;
-    if (!g) { overlay.style.display = 'none'; return; }
+    if (!g) {
+      if (_capLastKey !== 'none' || force) { overlay.style.display = 'none'; _capLastKey = 'none'; }
+      return;
+    }
+    const words = groupDisplayWords(g);
+    const mode = editorCaptionStyle.mode || 'group';
+    let active = -1;
+    if (mode === 'karaoke' || mode === 'word') {
+      active = words.findIndex(w => t >= w.srcStart && t < w.srcEnd);
+      if (active < 0) active = t >= (words[words.length - 1]?.srcEnd ?? 0) ? words.length - 1 : 0;
+    }
+    const key = g.index + ':' + active + ':' + mode;
+    if (!force && key === _capLastKey) return;
+    _capLastKey = key;
+
     overlay.style.display = 'block';
     overlay.style.fontFamily = editorCaptionStyle.font + ', sans-serif';
-    overlay.style.fontSize = Math.max(13, Math.round(vid.clientHeight * 0.034)) + 'px';
+    const sizePct = mode === 'word' ? 0.06 : 0.034;
+    overlay.style.fontSize = Math.max(13, Math.round(vid.clientHeight * sizePct)) + 'px';
+    overlay.style.bottom = Math.round((editorCaptionStyle.pos_bottom ?? 0.12) * 100) + '%';
     overlay.dataset.groupIndex = g.index;
     const emph = editorCaptionEmphasis[g.index] || [];
-    overlay.innerHTML = groupDisplayWords(g).map((w, i) =>
-      '<span class="cap-word" data-wi="' + i + '"' +
-      (emph.includes(i) ? ' style="color:' + escHtml(editorCaptionStyle.emphasis_color) + ';"' : '') +
-      '>' + escHtml(w) + '</span>'
-    ).join(' ');
+    const color = escHtml(editorCaptionStyle.emphasis_color);
+
+    if (mode === 'word') {
+      const w = words[Math.max(0, active)];
+      const isEmph = emph.includes(Math.max(0, active));
+      overlay.innerHTML = '<span class="cap-word cap-pop" data-wi="' + Math.max(0, active) + '"' +
+        (isEmph ? ' style="color:' + color + ';"' : '') + '>' +
+        escHtml(captionDisplayText(w, isEmph)) + '</span>';
+      return;
+    }
+    overlay.innerHTML = words.map((w, i) => {
+      const isEmph = emph.includes(i);
+      const isActive = mode === 'karaoke' && i === active;
+      let style = '';
+      if (isActive) style = 'color:' + color + ';transform:scale(1.08);display:inline-block;';
+      else if (isEmph) style = 'color:' + color + ';';
+      return '<span class="cap-word' + (isActive && editorCaptionStyle.pop ? ' cap-pop' : '') + '" data-wi="' + i + '"' +
+        (style ? ' style="' + style + '"' : '') + '>' + escHtml(captionDisplayText(w, isEmph)) + '</span>';
+    }).join(' ');
   }
 
-  // Sync with playback + scrubbing
+  // Sync with playback + scrubbing. Karaoke/word modes need finer timing than
+  // the ~4Hz timeupdate event, so run a rAF loop while playing.
   (function () {
     const vid = document.getElementById('edit-video');
     if (!vid) return;
+    let raf = null;
+    const loop = () => { updateCaptionOverlay(false); raf = requestAnimationFrame(loop); };
+    vid.addEventListener('play',  () => { if (!raf) loop(); });
+    vid.addEventListener('pause', () => { if (raf) { cancelAnimationFrame(raf); raf = null; } updateCaptionOverlay(true); });
+    vid.addEventListener('ended', () => { if (raf) { cancelAnimationFrame(raf); raf = null; } });
     vid.addEventListener('timeupdate', () => updateCaptionOverlay(false));
     vid.addEventListener('seeked', () => updateCaptionOverlay(true));
   })();
+
+  // Drag the caption block to reposition it on the frame
+  (function () {
+    const overlay = document.getElementById('caption-overlay');
+    const wrap = document.getElementById('edit-video-wrap');
+    if (!overlay || !wrap) return;
+    let drag = null;
+    overlay.addEventListener('mousedown', function (e) {
+      if (overlay.classList.contains('editing')) return;
+      drag = { startY: e.clientY, startBottom: editorCaptionStyle.pos_bottom ?? 0.12, moved: false };
+    });
+    document.addEventListener('mousemove', function (e) {
+      if (!drag) return;
+      const dy = e.clientY - drag.startY;
+      if (Math.abs(dy) > 5) { drag.moved = true; overlay.classList.add('cap-dragging'); _capSuppressClick = true; }
+      if (!drag.moved) return;
+      const h = wrap.getBoundingClientRect().height || 600;
+      editorCaptionStyle.pos_bottom = Math.max(0.02, Math.min(0.75, drag.startBottom - dy / h));
+      overlay.style.bottom = Math.round(editorCaptionStyle.pos_bottom * 100) + '%';
+    });
+    document.addEventListener('mouseup', function () {
+      if (drag && drag.moved) setTimeout(() => { _capSuppressClick = false; }, 50);
+      overlay.classList.remove('cap-dragging');
+      drag = null;
+    });
+  })();
+  let _capSuppressClick = false;
 
   // Click a word = toggle emphasis · double-click = edit the text
   (function () {
@@ -8632,6 +8822,7 @@
     let clickTimer = null;
     overlay.addEventListener('click', function (e) {
       if (overlay.classList.contains('editing')) return;
+      if (_capSuppressClick) return;
       const wordEl = e.target.closest('.cap-word');
       if (!wordEl) return;
       const gi = parseInt(overlay.dataset.groupIndex);
@@ -8649,7 +8840,7 @@
       overlay.classList.add('editing');
       const groups = buildClipCaptionGroups();
       const g = groups.find(x => x.index === gi);
-      overlay.textContent = groupDisplayWords(g || { index: gi, words: [] }).join(' ');
+      overlay.textContent = g ? groupDisplayWords(g).map(w => w.text).join(' ') : '';
       overlay.contentEditable = 'plaintext-only';
       overlay.focus();
       const range = document.createRange();
@@ -8662,7 +8853,7 @@
         overlay.contentEditable = 'false';
         overlay.classList.remove('editing');
         const txt = overlay.textContent.replace(/\s+/g, ' ').trim();
-        const orig = (g ? g.words.join(' ') : '');
+        const orig = (g ? g.words.map(w => w.text).join(' ') : '');
         if (txt && txt !== orig) editorCaptionOverrides[gi] = txt;
         else delete editorCaptionOverrides[gi];
         delete editorCaptionEmphasis[gi];  // indices no longer line up
@@ -8671,7 +8862,7 @@
       };
       const onKey = (ev) => {
         if (ev.key === 'Enter') { ev.preventDefault(); overlay.blur(); }
-        if (ev.key === 'Escape') { ev.preventDefault(); overlay.textContent = (g ? groupDisplayWords(g).join(' ') : ''); overlay.blur(); }
+        if (ev.key === 'Escape') { ev.preventDefault(); overlay.textContent = (g ? groupDisplayWords(g).map(w => w.text).join(' ') : ''); overlay.blur(); }
       };
       overlay.addEventListener('blur', commit);
       overlay.addEventListener('keydown', onKey);
@@ -8804,13 +8995,19 @@
     if (burnCapChk && burnCapChk.checked) {
       const groups = buildClipCaptionGroups();
       if (groups.length) {
+        const r3 = t => Math.round(t * 1000) / 1000;
         form.append('captions_spec', JSON.stringify({
           font: editorCaptionStyle.font,
           emphasis_color: editorCaptionStyle.emphasis_color,
+          mode: editorCaptionStyle.mode,
+          all_caps: !!editorCaptionStyle.all_caps,
+          emphasis_caps: !!editorCaptionStyle.emphasis_caps,
+          pop: !!editorCaptionStyle.pop,
+          pos_bottom: editorCaptionStyle.pos_bottom ?? 0.12,
           groups: groups.map(g => ({
-            start: Math.round(g.outStart * 1000) / 1000,
-            end: Math.round(g.outEnd * 1000) / 1000,
-            words: groupDisplayWords(g),
+            start: r3(g.outStart),
+            end: r3(g.outEnd),
+            words: groupDisplayWords(g).map(w => ({ t: w.text, s: r3(w.outStart), e: r3(w.outEnd) })),
             emphasis: editorCaptionEmphasis[g.index] || [],
           })),
         }));

@@ -250,29 +250,66 @@ def hex_to_ass_color(hex_color):
 def spec_to_ass(spec, width, height):
     """
     Styled caption spec from the in-frame editor -> full ASS script.
-    spec = { font, emphasis_color, groups: [{start, end, words, emphasis}] }
-    Times are on the OUTPUT clip timeline. True-pixel sizing like srt_to_ass.
+    spec = { font, emphasis_color, mode, all_caps, emphasis_caps, pop,
+             pos_bottom, groups: [{start, end, words:[{t,s,e}], emphasis}] }
+    Modes: 'group' (whole group), 'karaoke' (active word colored as spoken,
+    one Dialogue per word window), 'word' (one word at a time, pop-in).
+    Words may be plain strings (legacy) or {t,s,e} dicts. Times are on the
+    OUTPUT clip timeline. True-pixel sizing (PlayRes = real size).
     """
     aspect = width / height if height else 1.78
+    mode = spec.get("mode") or "group"
     if aspect < 0.75:
-        font_size = max(28, int(height * 0.034)); margin_v = int(height * 0.12)
+        font_size = max(28, int(height * (0.06 if mode == "word" else 0.034)))
+        default_margin = 0.12
     elif aspect > 1.4:
-        font_size = max(24, int(height * 0.055)); margin_v = int(height * 0.06)
+        font_size = max(24, int(height * (0.085 if mode == "word" else 0.055)))
+        default_margin = 0.06
     else:
-        font_size = max(26, int(height * 0.045)); margin_v = int(height * 0.08)
+        font_size = max(26, int(height * (0.07 if mode == "word" else 0.045)))
+        default_margin = 0.08
+    try:
+        pos_bottom = float(spec.get("pos_bottom"))
+    except (TypeError, ValueError):
+        pos_bottom = default_margin
+    pos_bottom = max(0.02, min(0.75, pos_bottom))
+    margin_v = int(height * pos_bottom)
     margin_h = int(width * 0.05)
 
     font = spec.get("font") or "Arial"
     if font not in ASS_CAPTION_FONTS:
         font = "Arial"
     emph_color = hex_to_ass_color(spec.get("emphasis_color") or "#F5A623")
+    all_caps = bool(spec.get("all_caps"))
+    emphasis_caps = bool(spec.get("emphasis_caps", True))
+    pop = bool(spec.get("pop"))
 
     def t2ass(t):
         t = max(0.0, float(t))
-        h = int(t // 3600); m = int(t // 60) % 60; s = int(t % 60)
+        h = int(t // 3600); m2 = int(t // 60) % 60; s = int(t % 60)
         cs = int(round((t % 1) * 100))
         if cs >= 100: cs = 99
-        return f"{h}:{m:02d}:{s:02d}.{cs:02d}"
+        return f"{h}:{m2:02d}:{s:02d}.{cs:02d}"
+
+    def norm_words(g):
+        out = []
+        n = len(g.get("words") or [])
+        for i, w in enumerate(g.get("words") or []):
+            if isinstance(w, dict):
+                out.append({"t": str(w.get("t", "")), "s": float(w.get("s", g.get("start", 0))),
+                            "e": float(w.get("e", g.get("end", 0)))})
+            else:
+                # legacy plain strings: spread evenly across the group window
+                gs, ge = float(g.get("start", 0)), float(g.get("end", 0))
+                span = (ge - gs) / max(1, n)
+                out.append({"t": str(w), "s": gs + i * span, "e": gs + (i + 1) * span})
+        return [w for w in out if w["t"].strip()]
+
+    def disp(text, emphasized):
+        text = text.replace("{", "(").replace("}", ")")
+        if all_caps or (emphasized and emphasis_caps):
+            text = text.upper()
+        return text
 
     header = (
         "[Script Info]\n"
@@ -291,24 +328,51 @@ def spec_to_ass(spec, width, height):
         "[Events]\n"
         "Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text\n"
     )
+    pop_tag = "{\\t(0,90,\\fscx112\\fscy112)\\t(90,180,\\fscx100\\fscy100)}" if pop else ""
     events = []
     for g in spec.get("groups") or []:
-        words = [str(w) for w in (g.get("words") or []) if str(w).strip()]
+        words = norm_words(g)
         if not words:
             continue
         emphasis = set(int(i) for i in (g.get("emphasis") or []) if isinstance(i, (int, float)))
-        runs = []
-        for i, w in enumerate(words):
-            w_safe = w.replace("{", "(").replace("}", ")")
-            if i in emphasis:
-                runs.append("{\\1c" + emph_color + "}" + w_safe + "{\\1c&H00FFFFFF&}")
-            else:
-                runs.append(w_safe)
-        events.append(
-            f"Dialogue: 0,{t2ass(g.get('start', 0))},{t2ass(g.get('end', 0))},Default,,0,0,0,," + " ".join(runs)
-        )
-    return header + "\n".join(events) + "\n"
+        g_start, g_end = float(g.get("start", 0)), float(g.get("end", 0))
 
+        if mode == "word":
+            for i, w in enumerate(words):
+                txt = disp(w["t"], i in emphasis)
+                color_run = ("{\\1c" + emph_color + "}") if i in emphasis else ""
+                end_t = words[i + 1]["s"] if i + 1 < len(words) else g_end
+                events.append(f"Dialogue: 0,{t2ass(w['s'])},{t2ass(max(w['s'] + 0.08, end_t))},Default,,0,0,0,,{pop_tag}{color_run}{txt}")
+            continue
+
+        if mode == "karaoke":
+            for i in range(len(words)):
+                runs = []
+                for j, w in enumerate(words):
+                    txt = disp(w["t"], j in emphasis)
+                    if j == i:
+                        runs.append("{\\1c" + emph_color + "}" + txt + "{\\1c&H00FFFFFF&}")
+                    elif j in emphasis:
+                        runs.append("{\\1c" + emph_color + "}" + txt + "{\\1c&H00FFFFFF&}")
+                    else:
+                        runs.append(txt)
+                start_t = words[i]["s"] if i > 0 else g_start
+                end_t = words[i + 1]["s"] if i + 1 < len(words) else g_end
+                if end_t - start_t < 0.04:
+                    end_t = start_t + 0.04
+                events.append(f"Dialogue: 0,{t2ass(start_t)},{t2ass(end_t)},Default,,0,0,0,," + " ".join(runs))
+            continue
+
+        # mode == 'group'
+        runs = []
+        for j, w in enumerate(words):
+            txt = disp(w["t"], j in emphasis)
+            if j in emphasis:
+                runs.append("{\\1c" + emph_color + "}" + txt + "{\\1c&H00FFFFFF&}")
+            else:
+                runs.append(txt)
+        events.append(f"Dialogue: 0,{t2ass(g_start)},{t2ass(g_end)},Default,,0,0,0,," + " ".join(runs))
+    return header + "\n".join(events) + "\n"
 
 # ── Adaptive caption sizing ──
 def get_video_dimensions(video_path, ffmpeg_exe):
@@ -1311,6 +1375,12 @@ def update_project():
                     'mode': payload.get('mode') or project['meta'].get('last_clip_mode') or 'viral',
                     'cut_ranges': _clean_ranges(payload.get('cut_ranges')),
                     'bleep_ranges': _clean_ranges(payload.get('bleep_ranges')),
+                    # Caption styling rides along (style dict, per-group text
+                    # overrides, per-group emphasis indices) — stored as-is,
+                    # bounded for sanity.
+                    'caption_style': payload.get('caption_style') if isinstance(payload.get('caption_style'), dict) else None,
+                    'caption_overrides': dict(list((payload.get('caption_overrides') or {}).items())[:60]),
+                    'caption_emphasis': dict(list((payload.get('caption_emphasis') or {}).items())[:60]),
                     'updated_at': iso_now(),
                 }
                 # Key by hook_line so re-editing the same clip UPDATES the entry
@@ -1908,6 +1978,47 @@ def thumbnail_titles():
     except Exception as exc:
         thumb_logger.warning('[titles] Title generation failed: %s', exc)
         return jsonify({'titles': []})
+
+
+@app.route('/caption_emphasis', methods=['POST'])
+def caption_emphasis():
+    """
+    AI pre-emphasis for the in-frame caption editor: Claude picks the feature
+    words (emotional peaks, key nouns/verbs, numbers, names) that deserve
+    caps/color emphasis. Accepts JSON {"clip_transcript": "..."}.
+    Returns {"words": [...]} — forgiving: [] on any failure.
+    """
+    try:
+        data = request.get_json(force=True) or {}
+        clip_transcript = (data.get('clip_transcript') or '').strip()[:3000]
+        if not clip_transcript:
+            return jsonify({'words': []})
+        client = anthropic.Anthropic(api_key=read_api_key())
+        msg = client.messages.create(
+            model="claude-sonnet-4-6",
+            max_tokens=300,
+            messages=[{"role": "user", "content": (
+                "You are styling social-media video captions (like OpusClip). "
+                "From the clip transcript below, pick the FEATURE WORDS that deserve "
+                "visual emphasis (color + ALL CAPS): emotional peaks, surprising or "
+                "counterintuitive words, key nouns and verbs, numbers, and names. "
+                "Pick roughly 1 word per sentence, 5-15 words total. Choose ONLY single "
+                "words that appear verbatim in the transcript. "
+                "Return ONLY a JSON array of the words, no markdown.\n\n"
+                f"Transcript:\n{clip_transcript}"
+            )}]
+        )
+        raw = msg.content[0].text.strip()
+        s = raw.find('['); e = raw.rfind(']')
+        words = []
+        if s != -1 and e != -1:
+            parsed = json.loads(raw[s:e+1])
+            words = [str(w) for w in parsed if str(w).strip()][:20]
+        logger.info('[emphasis] Picked %s feature words', len(words))
+        return jsonify({'words': words})
+    except Exception as exc:
+        logger.warning('[emphasis] Failed: %s', exc)
+        return jsonify({'words': []})
 
 
 @app.route('/thumbnailstatus/<jobid>', methods=['GET'])
