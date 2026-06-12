@@ -1162,3 +1162,79 @@ user see the stale banner (or worse, silences a real mismatch).
 - Handshake bumped: 2026-06-12-wave2b (both constants).
 
 Regression risk: Medium.
+
+---
+
+## 34. Export speed + metadata round (June 12, 2026, afternoon)
+
+- All export encodes use `-preset veryfast` (~35% faster than `fast`, no
+  visible quality loss at crf 18 for social video).
+- Cover frame is 0.10s (3 frames) — findable when scrubbing to the start,
+  still effectively invisible at playback speed; frame 0 is what Instagram
+  uses. `/export_thumbnail` returns `cover_burned` and the UI confirms
+  "✓ Cover frame burned — scrub to the very start to see it".
+- Thumbnails save into a `Thumbnails/` SUBFOLDER inside the project clip
+  folder (PNG clutter complaint); Dropbox links point there. The PNG is
+  still needed for the Airtable Thumbnail URL / YouTube.
+- Default filename: "[CODE] - [first three clip words] - [YYYY-MM-DD HHMM].mp4"
+  (clip-range timestamps were useless for telling clips apart).
+- Content Title is now built SERVER-side when the source record was found:
+  "[Full speaker name] — [first 4 words]…" using Instructor/Speaker (video
+  table) or Featured Participant (POD table) from the lookup; the frontend's
+  last-name version remains the fallback.
+- KNOWN INEFFICIENCY (next): saving with a thumbnail still encodes twice
+  (export + cover-burn re-encode in /export_thumbnail). Planned fix: send
+  the composer thumbnail WITH /export_clip and fold the cover into the main
+  filter graph — one encode total.
+- Handshake: 2026-06-12-wave2c.
+
+June 12 late-afternoon amendments:
+- Filename format: `CODE - Source Title (“First three words” - Month D, YYYY).mp4`
+  with TYPOGRAPHIC quotes (straight quotes are illegal Windows filename
+  characters). Source title = second ' - ' part of the cleaned source name.
+- Standalone thumbnail PNGs are OFF (Emily): frontend SAVE_THUMBNAIL_PNG=false
+  sends save_png=0; /export_thumbnail writes the image to a TEMP dir, burns
+  the cover, deletes it — no Thumbnails/ file, no shared link, no Airtable
+  thumbnail patch. Flip SAVE_THUMBNAIL_PNG to restore everything.
+
+Regression risk: Medium.
+
+---
+
+## 35. Editor usability round (June 12, 2026, evening)
+
+Three click modes (`_txEditMode`: scrub DEFAULT | cut | bleep), sticky rail:
+- Scrub: clicking an in-clip word seeks (the old behavior, now explicit).
+- Edit out / Bleep: clicking a word applies the mode to THAT WORD — no drag
+  required (Emily clicked Bleep then a word and nothing happened). Dragging
+  still applies to ranges; drag-select only arms in cut/bleep modes.
+
+Editor undo (separate from the composer's): `pushEditorUndo()` snapshots
+trims, cuts, bleeps, caption style/overrides/emphasis/breaks before every
+destructive op (mode clicks, drags, restores, split/join, group size,
+caption text commits, emphasis toggles). ↶ Undo button in the rail +
+Ctrl+Z in Stage 3 (composer closed, not in text fields). This also answers
+the split/merge data-loss complaint (regrouping clears overrides — now
+undoable; split/join buttons renamed 'Split caption' / 'Join with next'
+with an explainer line).
+
+AUDIBLE bleep (replaces silence):
+- Export: speech muted via volume=0 windows AND a 1 kHz sine (gated by
+  `build_bleep_tone_expr`, 0.25 amplitude) mixed in via
+  `amix=...:normalize=0` — normalize=0 is REQUIRED (default normalization
+  ducks the tone to near-silence; found by testing). Legacy path switches to
+  filter_complex with a lavfi sine input when bleeping; stitched path mixes
+  the tone on the full timeline then asplit→atrim per kept segment.
+- Preview: WebAudio 1 kHz oscillator (startBleepTone/stopBleepTone) during
+  bleep windows in Play Selection; stops on pause/end.
+
+Transcript follow-along: `.tx-current` highlight + centered auto-scroll
+follows playback (monotonic index cache; recompute on seeks); "Follow"
+toggle in the transcript header, on by default.
+
+Transport: large play/pause toggle (#btn-play-toggle, icon swaps with
+play/pause events) + live playhead readout (#playhead-time, M:SS.cc).
+
+Handshake: 2026-06-12-wave2d.
+
+Regression risk: High.

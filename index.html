@@ -1492,6 +1492,9 @@
     .tx-word.tx-bleep {
       background: #FEF3C7; color: #92400E; border-radius: 4px; cursor: pointer;
     }
+    .tx-word.tx-current {
+      background: var(--orange); color: #fff; border-radius: 4px;
+    }
     .tx-word.tx-bleep:hover { background: #FDE68A; }
     .tx-mode-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 8px; }
     .tx-zone-row { display: flex; gap: 10px; align-items: flex-start; }
@@ -2352,10 +2355,14 @@
                   <span class="time-field-label">End</span>
                   <input type="text" id="out-time-field" class="time-input" placeholder="0:30.00" />
                 </div>
+                <button class="btn" id="btn-play-toggle" onclick="togglePlayPause()" style="padding:10px 22px;font-size:15px;" title="Play / pause (you can also click the video)">
+                  <svg id="play-toggle-icon" width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+                </button>
                 <button class="btn btn-sm" onclick="playSelection()">
                   <svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"/></svg>
                   Play Selection
                 </button>
+                <span id="playhead-time" class="mono" style="font-size:13px;color:var(--text-2);min-width:84px;" title="Playhead position">0:00.00</span>
               </div>
 
               <!-- In-frame captions: preview + style exactly what will burn -->
@@ -2408,9 +2415,11 @@
                 </div>
                 <div class="thumb-inline-row" style="align-items:center;gap:8px;margin-top:8px;">
                   <button class="btn-ghost btn-sm" type="button" onclick="capEditCurrentGroup()" title="Edit the caption currently on screen (Enter = new line, Ctrl+Enter = done)">&#9998; Edit text</button>
-                  <button class="btn-ghost btn-sm" type="button" onclick="splitCaptionGroupAtActiveWord()" title="Start a new caption at the highlighted word">&#247; Split here</button>
-                  <button class="btn-ghost btn-sm" type="button" onclick="mergeCaptionGroupWithNext()" title="Join this caption with the next one">&#43; Merge next</button>
+                  <span style="font-size:10px;font-weight:700;letter-spacing:0.06em;text-transform:uppercase;color:var(--muted);">Caption grouping</span>
+                  <button class="btn-ghost btn-sm" type="button" onclick="splitCaptionGroupAtActiveWord()" title="The caption currently on screen gets split in two: a new caption starts at the highlighted (active) word. Use this when too many words share the screen.">&#9986; Split caption</button>
+                  <button class="btn-ghost btn-sm" type="button" onclick="mergeCaptionGroupWithNext()" title="The caption on screen and the NEXT caption become one. Use this when a thought is split awkwardly across two captions.">&#10548; Join with next</button>
                 </div>
+                <p style="font-size:11px;color:var(--muted);margin:4px 0 0;">Split/Join control which words share the screen: pause on a caption, then split it at the highlighted word or join it with the next caption. Undo (&#8630; or Ctrl+Z) reverses any of this.</p>
                 <p style="font-size:11px;color:var(--muted);margin:6px 0 0;">Burns exactly as shown. <strong>Click a word</strong> to toggle emphasis &#183; <strong>double-click</strong> (or &#9998;) to edit text &#8212; <strong>Enter makes a second line</strong> &#183; <strong>drag</strong> the captions to reposition.</p>
               </div>
             </div><!-- /.editor-left-zone -->
@@ -2419,13 +2428,20 @@
             <div class="editor-right-zone">
               <div class="tx-zone-row">
                 <div class="tx-always-wrap" id="tx-always-wrap" style="flex:1;min-width:0;">
-                  <span class="tx-always-header">TRANSCRIPT &#8212; drag [ ] to trim &#183; drag across words to apply the mode on the right &#183; click a marked word to restore</span>
+                  <span class="tx-always-header" style="display:flex;justify-content:space-between;align-items:center;gap:8px;">
+                    <span>TRANSCRIPT &#8212; click or drag words to apply the mode on the right</span>
+                    <label style="font-weight:600;cursor:pointer;display:flex;align-items:center;gap:4px;text-transform:none;letter-spacing:0;font-size:11px;color:var(--muted);">
+                      <input type="checkbox" checked onchange="setTxFollow(this.checked)" style="accent-color:var(--orange);width:13px;height:13px;cursor:pointer;">Follow
+                    </label>
+                  </span>
                   <div id="transcript-panel"></div>
                 </div>
                 <div class="tx-mode-rail">
-                  <span class="tx-mode-rail-label">Word<br>edit<br>mode</span>
-                  <button type="button" id="tx-mode-cut" class="tx-mode-btn active" onclick="setTxEditMode('cut')" title="Dragged words (and their video frames) are removed from the clip entirely. Red strikethrough.">&#9986;<br>Edit<br>out</button>
-                  <button type="button" id="tx-mode-bleep" class="tx-mode-btn" onclick="setTxEditMode('bleep')" title="Dragged words stay in the clip but their audio is muted. Amber highlight.">&#128263;<br>Bleep</button>
+                  <span class="tx-mode-rail-label">Click<br>mode</span>
+                  <button type="button" id="tx-mode-scrub" class="tx-mode-btn active" onclick="setTxEditMode('scrub')" title="Clicking a word jumps the video to that moment (default)">&#9654;<br>Scrub</button>
+                  <button type="button" id="tx-mode-cut" class="tx-mode-btn" onclick="setTxEditMode('cut')" title="Click or drag across words to REMOVE them and their video frames (red strikethrough). Click a struck word to restore.">&#9986;<br>Edit<br>out</button>
+                  <button type="button" id="tx-mode-bleep" class="tx-mode-btn" onclick="setTxEditMode('bleep')" title="Click or drag across words to BLEEP their audio (a censor tone replaces the words; amber highlight). Click a bleeped word to restore.">&#128263;<br>Bleep</button>
+                  <button type="button" class="tx-mode-btn" onclick="editorUndo()" title="Undo the last edit (Ctrl+Z) — works for cuts, bleeps, caption splits/joins, and text edits">&#8630;<br>Undo</button>
                 </div>
               </div>
             </div><!-- /.editor-right-zone -->
@@ -2888,7 +2904,7 @@
   // Must match BACKEND_BUILD in server.py — bumped together whenever the
   // frontend/backend contract changes. A mismatch means the user is running
   // an old backend (launcher not restarted after a deploy).
-  const EXPECTED_BACKEND_BUILD = '2026-06-12-wave2b';
+  const EXPECTED_BACKEND_BUILD = '2026-06-12-wave2d';
   let _staleBackendWarned = false;
   function showStaleBackendBanner(stale) {
     let el = document.getElementById('stale-backend-banner');
@@ -4056,13 +4072,25 @@
     const tEnd = parseFloat(wordEl.dataset.end);
     if (wordEl.classList.contains('tx-cut')) {
       // Click a struck-out word -> restore its whole cut range
+      pushEditorUndo('uncut');
       removeCutRangeAt((t + (isNaN(tEnd) ? t : tEnd)) / 2);
       updateAllEditorUI();
       return;
     }
     if (wordEl.classList.contains('tx-bleep')) {
       // Click a bleeped word -> unmute its whole bleep range
+      pushEditorUndo('unbleep');
       removeBleepRangeAt((t + (isNaN(tEnd) ? t : tEnd)) / 2);
+      updateAllEditorUI();
+      return;
+    }
+    // In Edit-out / Bleep mode, clicking an in-clip word applies the mode to
+    // that single word — no dragging required.
+    if (wordEl.classList.contains('tx-in-clip') && _txEditMode !== 'scrub') {
+      pushEditorUndo(_txEditMode + '-word');
+      const wEnd = isNaN(tEnd) ? t + 0.3 : tEnd;
+      if (_txEditMode === 'cut') addCutRange(t, wEnd);
+      else addBleepRange(t, wEnd);
       updateAllEditorUI();
       return;
     }
@@ -4542,19 +4570,82 @@
   let editorInTime  = 0;
   let editorOutTime = 0;
   let _playSelTimer = null;
+  // ── Editor undo: snapshots of everything destructive in Stage 3 ──
+  let _editorUndoStack = [];
+  let _editorUndoLast = 0;
+  let _editorUndoLabel = '';
+  function pushEditorUndo(label) {
+    const now = Date.now();
+    if (label === _editorUndoLabel && now - _editorUndoLast < 600) return;
+    _editorUndoLast = now; _editorUndoLabel = label || '';
+    try {
+      _editorUndoStack.push(JSON.stringify({
+        inT: editorInTime, outT: editorOutTime,
+        cuts: editorCutRanges, bleeps: editorBleepRanges,
+        capStyle: editorCaptionStyle, capOver: editorCaptionOverrides,
+        capEmph: editorCaptionEmphasis, capBreaks: editorCaptionBreaks,
+      }));
+      if (_editorUndoStack.length > 50) _editorUndoStack.shift();
+    } catch (_) {}
+  }
+  function editorUndo() {
+    if (!_editorUndoStack.length) return;
+    try {
+      const s = JSON.parse(_editorUndoStack.pop());
+      editorInTime = s.inT; editorOutTime = s.outT;
+      editorCutRanges = s.cuts || []; editorBleepRanges = s.bleeps || [];
+      editorCaptionStyle = s.capStyle || editorCaptionStyle;
+      editorCaptionOverrides = s.capOver || {};
+      editorCaptionEmphasis = s.capEmph || {};
+      editorCaptionBreaks = s.capBreaks || null;
+      _editorUndoLabel = '';
+      updateAllEditorUI();
+      const sizeSel = document.getElementById('caption-group-size');
+      if (sizeSel) sizeSel.value = String(editorCaptionStyle.group_size || 4);
+    } catch (_) {}
+  }
+  document.addEventListener('keydown', function (e) {
+    if (!(e.ctrlKey || e.metaKey) || e.key.toLowerCase() !== 'z' || e.shiftKey) return;
+    if (_currentStage !== 3) return;
+    const dlg = document.getElementById('dialog-thumb');
+    if (dlg && dlg.open) return;  // composer has its own undo
+    if (e.target.matches('input, textarea, [contenteditable], [contenteditable="plaintext-only"]')) return;
+    e.preventDefault();
+    editorUndo();
+  });
+
   let editorCutRanges = [];   // [{start, end}] absolute secs to cut out of the clip (sorted, non-overlapping)
   let editorBleepRanges = []; // [{start, end}] absolute secs to mute (bleep) in the exported clip
-  let _txEditMode = 'cut';    // 'cut' | 'bleep' — what a drag across in-clip words does
+  let _txEditMode = 'scrub';  // 'scrub' | 'cut' | 'bleep' — what clicking/dragging transcript words does
 
   function setTxEditMode(mode) {
-    _txEditMode = mode === 'bleep' ? 'bleep' : 'cut';
-    const cutBtn = document.getElementById('tx-mode-cut');
-    const bleepBtn = document.getElementById('tx-mode-bleep');
-    if (cutBtn) cutBtn.classList.toggle('active', _txEditMode === 'cut');
-    if (bleepBtn) bleepBtn.classList.toggle('active', _txEditMode === 'bleep');
+    _txEditMode = ['cut', 'bleep'].includes(mode) ? mode : 'scrub';
+    ['scrub', 'cut', 'bleep'].forEach(m => {
+      const btn = document.getElementById('tx-mode-' + m);
+      if (btn) btn.classList.toggle('active', _txEditMode === m);
+    });
   }
   function isTimeBleeped(t) {
     return editorBleepRanges.some(r => t >= r.start && t < r.end);
+  }
+
+  // Audible censor tone for previewing bleeps (export burns a matching tone)
+  let _bleepCtx = null, _bleepOsc = null, _bleepGain = null;
+  function startBleepTone() {
+    if (_bleepOsc) return;
+    try {
+      if (!_bleepCtx) _bleepCtx = new (window.AudioContext || window.webkitAudioContext)();
+      _bleepOsc = _bleepCtx.createOscillator();
+      _bleepGain = _bleepCtx.createGain();
+      _bleepOsc.frequency.value = 1000;
+      _bleepGain.gain.value = 0.12;
+      _bleepOsc.connect(_bleepGain).connect(_bleepCtx.destination);
+      _bleepOsc.start();
+    } catch (_) {}
+  }
+  function stopBleepTone() {
+    try { if (_bleepOsc) { _bleepOsc.stop(); _bleepOsc.disconnect(); } } catch (_) {}
+    _bleepOsc = null;
   }
   function isWordBleeped(w) {
     const mid = ((w.start ?? 0) + (w.end ?? w.start ?? 0)) / 2;
@@ -4641,6 +4732,29 @@
     updateClipTranscriptHighlight();
   });
 
+  function togglePlayPause() {
+    const vid = document.getElementById('edit-video');
+    if (!vid || !vid.src) return;
+    if (vid.paused) {
+      if (currentlyPlaying && currentlyPlaying !== vid) { currentlyPlaying.pause(); currentlyPlaying.currentTime = 0; }
+      currentlyPlaying = vid;
+      vid.play().catch(() => {});
+    } else {
+      vid.pause();
+    }
+  }
+  (function () {
+    const vid = document.getElementById('edit-video');
+    if (!vid) return;
+    const icon = () => document.getElementById('play-toggle-icon');
+    vid.addEventListener('play',  () => { const i = icon(); if (i) i.innerHTML = '<rect x="5" y="3" width="5" height="18"/><rect x="14" y="3" width="5" height="18"/>'; });
+    vid.addEventListener('pause', () => { const i = icon(); if (i) i.innerHTML = '<polygon points="5 3 19 12 5 21 5 3"/>'; });
+    vid.addEventListener('timeupdate', () => {
+      const el = document.getElementById('playhead-time');
+      if (el) el.textContent = fmtPrecise(vid.currentTime);
+    });
+  })();
+
   function playSelection() {
     const video = document.getElementById('edit-video');
     if (!video.src) return;
@@ -4657,6 +4771,7 @@
     video._selStop = function () {
       if (video.currentTime >= editorOutTime - 0.03) {
         video.muted = false;
+        stopBleepTone();
         video.pause();
         video.removeEventListener('timeupdate', video._selStop);
         video._selStop = null;
@@ -4665,7 +4780,9 @@
       const cut = editorCutRanges.find(r =>
         video.currentTime >= r.start - 0.02 && video.currentTime < r.end - 0.02);
       if (cut) video.currentTime = Math.min(cut.end + 0.01, editorOutTime);
-      video.muted = isTimeBleeped(video.currentTime);
+      const bleeped = isTimeBleeped(video.currentTime);
+      video.muted = bleeped;
+      if (bleeped) startBleepTone(); else stopBleepTone();
     };
     video.addEventListener('timeupdate', video._selStop);
     video.currentTime = editorInTime;
@@ -4875,7 +4992,7 @@
         return;
       }
       const wordEl = e.target.closest('.tx-word');
-      if (wordEl && wordEl.classList.contains('tx-in-clip') && !wordEl.classList.contains('tx-cut')) {
+      if (_txEditMode !== 'scrub' && wordEl && wordEl.classList.contains('tx-in-clip') && !wordEl.classList.contains('tx-cut')) {
         _cutAnchor  = { s: parseFloat(wordEl.dataset.start), e: parseFloat(wordEl.dataset.end) };
         _cutCurrent = null;
         panel.style.userSelect = 'none';
@@ -4927,6 +5044,7 @@
         if (_cutCurrent && (_cutCurrent.s !== _cutAnchor.s || _cutCurrent.e !== _cutAnchor.e)) {
           const lo = Math.min(_cutAnchor.s, _cutCurrent.s);
           const hi = Math.max(_cutAnchor.e, _cutCurrent.e);
+          pushEditorUndo(_txEditMode + '-drag');
           if (_txEditMode === 'bleep') addBleepRange(lo, hi);
           else addCutRange(lo, hi);
           _txSuppressClick = true;
@@ -4940,6 +5058,50 @@
     }
 
     panel.addEventListener('pointerdown', onPointerDown);
+  })();
+
+  // ── Transcript follow-along: highlight + auto-scroll the current word ──
+  let _txFollow = true;
+  let _txFollowIdx = -1;
+  function setTxFollow(on) { _txFollow = !!on; if (!on) clearTxCurrent(); }
+  function clearTxCurrent() {
+    const panel = document.getElementById('transcript-panel');
+    if (panel) panel.querySelectorAll('.tx-current').forEach(el => el.classList.remove('tx-current'));
+    _txFollowIdx = -1;
+  }
+  function updateTranscriptFollow() {
+    if (!_txFollow || _currentStage !== 3 || !_wordsData) return;
+    const vid = document.getElementById('edit-video');
+    const panel = document.getElementById('transcript-panel');
+    if (!vid || !panel) return;
+    const t = vid.currentTime;
+    // advance the cached index; recompute on backwards seeks
+    let i = _txFollowIdx;
+    if (i < 0 || i >= _wordsData.length || t < (_wordsData[i]?.start ?? 0) - 1.5) {
+      i = _wordsData.findIndex(w => (w.end ?? w.start ?? 0) >= t);
+      if (i < 0) i = _wordsData.length - 1;
+    }
+    while (i + 1 < _wordsData.length && (_wordsData[i + 1].start ?? 0) <= t) i++;
+    if (i === _txFollowIdx) return;
+    _txFollowIdx = i;
+    panel.querySelectorAll('.tx-current').forEach(el => el.classList.remove('tx-current'));
+    const span = panel.querySelector('.tx-word[data-idx="' + i + '"]');
+    if (span) {
+      span.classList.add('tx-current');
+      const wrap = document.getElementById('tx-always-wrap');
+      if (wrap) {
+        const sTop = span.offsetTop - wrap.offsetTop;
+        if (sTop < wrap.scrollTop + 30 || sTop > wrap.scrollTop + wrap.clientHeight - 50) {
+          wrap.scrollTo({ top: Math.max(0, sTop - wrap.clientHeight / 2), behavior: 'smooth' });
+        }
+      }
+    }
+  }
+  (function () {
+    const vid = document.getElementById('edit-video');
+    if (!vid) return;
+    vid.addEventListener('timeupdate', updateTranscriptFollow);
+    vid.addEventListener('seeked', () => { _txFollowIdx = -1; updateTranscriptFollow(); });
   })();
 
   // ── Always-on transcript rendering ──
@@ -6424,6 +6586,7 @@
   // DONE EDITING VIDEO — Modal & Export Flow
   // ══════════════════════════════════════════
 
+  const SAVE_THUMBNAIL_PNG = false;  // June 12: covers only — no PNG files, no Airtable thumb URL
   let thumbnailBlob    = null;   // PNG blob captured from dialog canvas
   let thumbnailBlobUrl = null;   // object URL for in-app display
   let _exportThumbnailMode = 'video_only';
@@ -7063,13 +7226,18 @@
     form.append('target_folder', _savedClipExport.folder_name);
     const coverChk = document.getElementById('export-cover-frame');
     if (coverChk && coverChk.checked) form.append('cover_frame', '1');
-    if (_savedClipExport.airtable_record_id) form.append('airtable_record_id', _savedClipExport.airtable_record_id);
+    // Emily (June 12): no standalone thumbnail PNGs for now — the image only
+    // exists to burn the Instagram cover. Flip to '1' to bring PNGs back.
+    form.append('save_png', SAVE_THUMBNAIL_PNG ? '1' : '0');
+    if (SAVE_THUMBNAIL_PNG && _savedClipExport.airtable_record_id) form.append('airtable_record_id', _savedClipExport.airtable_record_id);
     try {
       const res = await fetch(BACKEND + '/export_thumbnail', { method: 'POST', body: form });
       const data = await res.json();
       if (!res.ok || !data.success) throw new Error(data.error || 'Could not save the thumbnail.');
       document.getElementById('dialog-post-save-thumbnail')?.close();
-      setExportPanelStatus('Clip and thumbnail saved to Dropbox.');
+      setExportPanelStatus(data.cover_burned
+        ? 'Clip and thumbnail saved. \u2713 Cover frame burned in \u2014 scrub to the very start of the clip to see it.'
+        : 'Clip and thumbnail saved to Dropbox.');
       await updateProject('export_created', {
         filename: _savedClipExport.filename,
         clip_type: _savedClipExport.clip_type,
@@ -8526,10 +8694,31 @@
       alert('Load a video first.');
       return;
     }
+    // Filename: CODE - Source Title (\u201CFirst three words\u201D - Month D, YYYY).mp4
+    // Typographic quotes — straight quotes are illegal in Windows filenames.
+    const srcNameForCode = _clipFile?.name || activeProject?.source_filename || '';
+    const code = extractItemCode(srcNameForCode);
+    const srcTitle = (() => {
+      let stem = String(srcNameForCode || '').replace(/\.(mp4|mov)$/i, '')
+        .replace(/\s*-\s*(Horizontal|Vertical|Uncaptioned|Captioned)\s*/gi, ' ')
+        .replace(/\s*\((Captioned|Uncaptioned)\)\s*/gi, ' ');
+      const parts = stem.split(' - ').map(s => s.trim()).filter(Boolean);
+      return parts.length >= 2 ? parts[1] : stem;
+    })();
+    let firstWords = '';
+    if (_wordsData) {
+      firstWords = _wordsData
+        .filter(w => (w.start ?? 0) < editorOutTime && (w.end ?? w.start ?? 0) >= editorInTime)
+        .filter(w => !isWordCut(w))
+        .slice(0, 3)
+        .map(w => (w.word ?? '').trim()).join(' ')
+        .replace(/[<>:"/\\|?*.,;!]+/g, '').trim();
+    }
+    const dateStr = new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
     const baseName = _clipFile ? _clipFile.name.replace(/\.(mp4|mov)$/i, '') : 'clip';
-    const startFmt = editorInTime.toFixed(1);
-    const endFmt   = editorOutTime.toFixed(1);
-    document.getElementById('flow-export-filename').value = baseName + ' - Clip (' + startFmt + '-' + endFmt + ').mp4';
+    document.getElementById('flow-export-filename').value =
+      (code ? code + ' - ' : '') + (srcTitle || baseName) +
+      (firstWords ? ' (\u201C' + firstWords + '\u201D - ' + dateStr + ')' : ' (' + dateStr + ')') + '.mp4';
     document.getElementById('flow-export-type').value = detectClipType(_clipFile ? _clipFile.name : '');
     const burnChk = document.getElementById('export-burn-captions');
     if (burnChk) burnChk.checked = !!editorCaptionStyle.show;
@@ -8624,6 +8813,7 @@
     updateCaptionOverlay(true);
   }
   function setCaptionGroupSize(n) {
+    pushEditorUndo('group-size');
     editorCaptionStyle.group_size = Math.max(1, Math.min(10, parseInt(n) || 4));
     editorCaptionBreaks = null;  // back to automatic grouping
     // Regrouping shifts indices — re-map AI/manual emphasis by word text later;
@@ -8714,6 +8904,7 @@
   }
 
   function splitCaptionGroupAtActiveWord() {
+    pushEditorUndo('split-caption');
     const vid = document.getElementById('edit-video');
     if (!vid) return;
     const t = vid.currentTime;
@@ -8730,6 +8921,7 @@
   }
 
   function mergeCaptionGroupWithNext() {
+    pushEditorUndo('merge-caption');
     const vid = document.getElementById('edit-video');
     if (!vid) return;
     const t = vid.currentTime;
@@ -8847,6 +9039,7 @@
     updateCaptionOverlay(true);
   }
   function toggleCaptionWordEmphasis(groupIndex, wordIndex) {
+    pushEditorUndo('emphasis');
     const list = editorCaptionEmphasis[groupIndex] || [];
     const pos = list.indexOf(wordIndex);
     if (pos >= 0) list.splice(pos, 1); else list.push(wordIndex);
@@ -8962,7 +9155,7 @@
     let raf = null;
     const loop = () => { updateCaptionOverlay(false); raf = requestAnimationFrame(loop); };
     vid.addEventListener('play',  () => { if (!raf) loop(); });
-    vid.addEventListener('pause', () => { if (raf) { cancelAnimationFrame(raf); raf = null; } updateCaptionOverlay(true); });
+    vid.addEventListener('pause', () => { if (raf) { cancelAnimationFrame(raf); raf = null; } stopBleepTone(); updateCaptionOverlay(true); });
     vid.addEventListener('ended', () => { if (raf) { cancelAnimationFrame(raf); raf = null; } });
     vid.addEventListener('timeupdate', () => updateCaptionOverlay(false));
     vid.addEventListener('seeked', () => updateCaptionOverlay(true));
@@ -9035,7 +9228,7 @@
         // innerText preserves the line breaks typed with Enter
         const txt = overlay.innerText.replace(/[ \t]+/g, ' ').replace(/\n{2,}/g, '\n').trim();
         const orig = (g ? g.words.map(w => w.text).join(' ') : '');
-        if (txt && txt !== orig) editorCaptionOverrides[gi] = txt;
+        if (txt && txt !== orig) { pushEditorUndo('caption-text'); editorCaptionOverrides[gi] = txt; }
         else delete editorCaptionOverrides[gi];
         delete editorCaptionEmphasis[gi];  // indices no longer line up
         _capEditingGroup = null;
@@ -9865,7 +10058,7 @@
       <!-- All frame picking and editing happens in the Create Thumbnail composer -->
       <div id="export-flow-thumb-ready" style="display:none; align-items:center; gap:10px; margin-bottom:10px;">
         <img id="export-flow-thumb-preview" src="" alt="Thumbnail" style="width:84px;border-radius:6px;border:1px solid var(--border);display:block;">
-        <div style="font-size:12px;color:var(--text-2);">Thumbnail ready — it will be saved with the clip.<br>
+        <div style="font-size:12px;color:var(--text-2);">Cover ready — it will be burned into the start of the clip.<br>
           <button class="btn-ghost btn-sm" type="button" style="margin-top:4px;" onclick="exportFlowOpenFullEditor()">Edit thumbnail…</button>
         </div>
       </div>

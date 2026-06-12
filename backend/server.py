@@ -62,7 +62,7 @@ CORS(app)
 
 # Bump this whenever the frontend/backend contract changes (the frontend
 # carries a matching EXPECTED_BACKEND_BUILD and warns when they differ).
-BACKEND_BUILD = "2026-06-12-wave2b"
+BACKEND_BUILD = "2026-06-12-wave2d"
 
 CREATE_NO_WINDOW = 0x08000000 if platform.system() == 'Windows' else 0
 
@@ -2383,9 +2383,9 @@ def parse_bleep_ranges(starttime, endtime, bleep_ranges_raw):
 def build_bleep_audio_chain(bleep_ranges, time_offset=0.0):
     """
     Returns an ffmpeg audio-filter string that mutes the given absolute-time
-    ranges, expressed relative to a stream that starts at `time_offset`
-    (0.0 for the original input; `starttime` for an extracted segment).
-    Empty string when there is nothing to mute.
+    ranges, expressed relative to a stream that starts at `time_offset`.
+    Empty string when there is nothing to mute. (The censor tone is mixed in
+    separately — see build_bleep_tone_expr.)
     """
     parts = []
     for bs, be in bleep_ranges:
@@ -2393,6 +2393,20 @@ def build_bleep_audio_chain(bleep_ranges, time_offset=0.0):
             f"volume=0:enable='between(t,{bs - time_offset:.3f},{be - time_offset:.3f})'"
         )
     return ",".join(parts)
+
+
+def build_bleep_tone_expr(bleep_ranges, time_offset=0.0):
+    """
+    Volume expression that gates a 1 kHz sine to the bleep windows
+    (audible censor tone — Emily prefers it over silence).
+    """
+    if not bleep_ranges:
+        return None
+    terms = "+".join(
+        f"between(t,{bs - time_offset:.3f},{be - time_offset:.3f})"
+        for bs, be in bleep_ranges
+    )
+    return f"volume='0.25*({terms})':eval=frame"
 
 
 # ── Export Clip ──
@@ -2507,29 +2521,46 @@ def export_clip():
                 len(kept_segments), cut_ranges_raw[:200],
             )
             bleep_chain = build_bleep_audio_chain(bleep_ranges, time_offset=0.0)
-            audio_prefix = (bleep_chain + ",") if bleep_chain else ""
+            tone_expr   = build_bleep_tone_expr(bleep_ranges, time_offset=0.0)
             filter_parts = []
+            audio_src = "0:a"
+            if bleep_chain and tone_expr:
+                # Build a bleeped full-timeline audio track once, then split it
+                # so each kept segment can atrim from it.
+                filter_parts.append(f"[0:a]{bleep_chain}[mutefull]")
+                filter_parts.append(f"[1:a]{tone_expr}[tonefull]")
+                filter_parts.append(
+                    f"[mutefull][tonefull]amix=inputs=2:duration=first:dropout_transition=0:normalize=0[bfull]"
+                )
+                filter_parts.append(
+                    f"[bfull]asplit={len(kept_segments)}" +
+                    "".join(f"[bs{i}]" for i in range(len(kept_segments)))
+                )
             concat_pads = ""
             for i, (seg_s, seg_e) in enumerate(kept_segments):
                 filter_parts.append(
                     f"[0:v]trim=start={seg_s:.3f}:end={seg_e:.3f},setpts=PTS-STARTPTS[v{i}]"
                 )
+                a_in = f"[bs{i}]" if (bleep_chain and tone_expr) else f"[{audio_src}]"
                 filter_parts.append(
-                    f"[0:a]{audio_prefix}atrim=start={seg_s:.3f}:end={seg_e:.3f},asetpts=PTS-STARTPTS[a{i}]"
+                    f"{a_in}atrim=start={seg_s:.3f}:end={seg_e:.3f},asetpts=PTS-STARTPTS[a{i}]"
                 )
                 concat_pads += f"[v{i}][a{i}]"
             filter_parts.append(
                 f"{concat_pads}concat=n={len(kept_segments)}:v=1:a=1[vcat][acat]"
             )
             filter_parts.append(f"[vcat]crop=ih*9/16:ih,scale=1080:1920{caption_filter}[vout]")
+            stitched_cmd = [FFMPEG_EXE, "-y", "-i", input_path]
+            if bleep_chain and tone_expr:
+                stitched_cmd += ["-f", "lavfi", "-i", "sine=frequency=1000:sample_rate=48000"]
+            stitched_cmd += [
+                "-filter_complex", ";".join(filter_parts),
+                "-map", "[vout]", "-map", "[acat]",
+                "-c:v", "libx264", "-crf", "18", "-preset", "veryfast",
+                "-c:a", "aac",
+                output_path]
             r2 = subprocess.run(
-                [FFMPEG_EXE, "-y",
-                 "-i", input_path,
-                 "-filter_complex", ";".join(filter_parts),
-                 "-map", "[vout]", "-map", "[acat]",
-                 "-c:v", "libx264", "-crf", "18", "-preset", "fast",
-                 "-c:a", "aac",
-                 output_path],
+                stitched_cmd,
                 capture_output=True, creationflags=CREATE_NO_WINDOW,
                 cwd=tmp_dir,
             )
@@ -2550,15 +2581,31 @@ def export_clip():
                 return jsonify({"error": "ffmpeg extract failed: " + err}), 500
 
             # Pass 2: crop centre 9:16 and scale to 1080×1920
-            pass2_cmd = [FFMPEG_EXE, "-y",
-                         "-i", temp_clip,
-                         "-vf", f"crop=ih*9/16:ih,scale=1080:1920{caption_filter}"]
             bleep_chain = build_bleep_audio_chain(bleep_ranges, time_offset=starttime)
-            if bleep_chain:
-                pass2_cmd += ["-af", bleep_chain]
-            pass2_cmd += ["-c:v", "libx264", "-crf", "18", "-preset", "fast",
-                          "-c:a", "aac",
-                          output_path]
+            tone_expr   = build_bleep_tone_expr(bleep_ranges, time_offset=starttime)
+            if bleep_chain and tone_expr:
+                # Censor tone: mute the speech and mix in a gated 1 kHz sine
+                fc = (
+                    f"[0:v]crop=ih*9/16:ih,scale=1080:1920{caption_filter}[vout];"
+                    f"[0:a]{bleep_chain}[mute];"
+                    f"[1:a]{tone_expr}[tone];"
+                    f"[mute][tone]amix=inputs=2:duration=first:dropout_transition=0:normalize=0[aout]"
+                )
+                pass2_cmd = [FFMPEG_EXE, "-y",
+                             "-i", temp_clip,
+                             "-f", "lavfi", "-i", "sine=frequency=1000:sample_rate=48000",
+                             "-filter_complex", fc,
+                             "-map", "[vout]", "-map", "[aout]",
+                             "-c:v", "libx264", "-crf", "18", "-preset", "veryfast",
+                             "-c:a", "aac",
+                             output_path]
+            else:
+                pass2_cmd = [FFMPEG_EXE, "-y",
+                             "-i", temp_clip,
+                             "-vf", f"crop=ih*9/16:ih,scale=1080:1920{caption_filter}",
+                             "-c:v", "libx264", "-crf", "18", "-preset", "veryfast",
+                             "-c:a", "aac",
+                             output_path]
             r2 = subprocess.run(
                 pass2_cmd,
                 capture_output=True, creationflags=CREATE_NO_WINDOW,
@@ -2573,9 +2620,11 @@ def export_clip():
         thumb_dbx_path    = None
         if thumbnail_file and thumbnail_file.filename:
             thumb_name       = base_name + " - Thumbnail.png"
-            thumb_local_path = os.path.join(clips_folder, thumb_name)
+            thumb_dir        = os.path.join(clips_folder, "Thumbnails")
+            os.makedirs(thumb_dir, exist_ok=True)
+            thumb_local_path = os.path.join(thumb_dir, thumb_name)
             thumbnail_file.save(thumb_local_path)
-            thumb_dbx_path   = build_social_media_dropbox_path(folder_name, thumb_name)
+            thumb_dbx_path   = build_social_media_dropbox_path(folder_name + "/Thumbnails", thumb_name)
 
         # ── Step B2: optional Instagram cover burn ──
         # The basic Zapier "Publish Video" action has no cover-URL field, and
@@ -2586,9 +2635,9 @@ def export_clip():
             burned_path = os.path.join(tmp_dir, "burned.mp4")
             rb = subprocess.run(
                 [FFMPEG_EXE, "-y",
-                 "-loop", "1", "-framerate", "30", "-t", "0.04", "-i", thumb_local_path,
+                 "-loop", "1", "-framerate", "30", "-t", "0.10", "-i", thumb_local_path,
                  "-i", output_path,
-                 "-f", "lavfi", "-t", "0.04", "-i", "anullsrc=r=48000:cl=stereo",
+                 "-f", "lavfi", "-t", "0.10", "-i", "anullsrc=r=48000:cl=stereo",
                  "-filter_complex",
                  "[0:v]scale=1080:1920:force_original_aspect_ratio=increase,"
                  "crop=1080:1920,setsar=1,format=yuv420p[cv];"
@@ -2597,7 +2646,7 @@ def export_clip():
                  "[1:a]aformat=sample_rates=48000:channel_layouts=stereo[ma];"
                  "[cv][ca][mv][ma]concat=n=2:v=1:a=1[v][a]",
                  "-map", "[v]", "-map", "[a]",
-                 "-c:v", "libx264", "-crf", "18", "-preset", "fast",
+                 "-c:v", "libx264", "-crf", "18", "-preset", "veryfast",
                  "-c:a", "aac",
                  burned_path],
                 capture_output=True, creationflags=CREATE_NO_WINDOW,
@@ -2635,6 +2684,7 @@ def export_clip():
     # ── Step D: Search source video record in Airtable (by item code) ──
     airtable_key      = read_airtable_api_key()
     source_record_id  = None
+    source_speaker_name = None
     source_link_error = None
     source_link_field = "Full-Length Video"
 
@@ -2657,7 +2707,15 @@ def export_clip():
                 records = json.loads(resp.read()).get("records", [])
                 if records:
                     source_record_id = records[0]["id"]
-                    logger.info("[airtable] Linked source %s -> %s (%s)", item_code, source_record_id, source_link_field)
+                    rec_fields = records[0].get("fields", {})
+                    source_speaker_name = rec_fields.get("Instructor/Speaker")
+                    if not source_speaker_name:
+                        fp = rec_fields.get("Featured Participant")
+                        if isinstance(fp, list) and fp:
+                            source_speaker_name = fp[0]
+                        elif isinstance(fp, str):
+                            source_speaker_name = fp
+                    logger.info("[airtable] Linked source %s -> %s (%s, speaker=%s)", item_code, source_record_id, source_link_field, source_speaker_name)
                 else:
                     source_link_error = f"no record with Code '{item_code}' in the source table"
                     logger.warning("[airtable] No source record found for code %s in %s", item_code, source_table)
@@ -2678,6 +2736,15 @@ def export_clip():
     airtable_record_id = None
     airtable_url       = None
     airtable_error     = None
+
+    # Prefer "Full Speaker Name — first 4 words…" when we found the source
+    # record (the filename only carries the last name).
+    try:
+        if source_speaker_name and clip_transcript:
+            first4 = " ".join(clip_transcript.split()[:4]).rstrip(".,;:!?")
+            content_title = f"{source_speaker_name} \u2014 {first4}\u2026"[:120]
+    except Exception:
+        pass
 
     if not airtable_key:
         airtable_error = "Airtable API key not found at Dropbox/Scripts/airtable_api_key.txt"
@@ -2796,15 +2863,25 @@ def export_thumbnail():
         return jsonify({"error": "target_folder is required"}), 400
 
     cover_frame = (request.form.get("cover_frame") or "").strip() in {"1", "true", "yes"}
+    # June 12 (Emily): standalone thumbnail PNGs are OFF by default — the
+    # image exists only to burn the Instagram cover. save_png=1 restores the
+    # old behavior (Thumbnails/ subfolder + shared link + Airtable patch).
+    save_png = (request.form.get("save_png") or "0").strip() in {"1", "true", "yes"}
+    cover_burned = False
 
     output_name = suggested_name if suggested_name.lower().endswith(".mp4") else suggested_name + ".mp4"
     base_name = os.path.splitext(output_name)[0]
     thumb_name = base_name + " - Thumbnail.png"
     clips_folder = build_social_media_local_path(folder_name)
-    os.makedirs(clips_folder, exist_ok=True)
-    thumb_local_path = os.path.join(clips_folder, thumb_name)
+    thumb_dbx_path = None
+    if save_png:
+        thumb_dir = os.path.join(clips_folder, "Thumbnails")
+        os.makedirs(thumb_dir, exist_ok=True)
+        thumb_local_path = os.path.join(thumb_dir, thumb_name)
+        thumb_dbx_path = build_social_media_dropbox_path(folder_name + "/Thumbnails", thumb_name)
+    else:
+        thumb_local_path = os.path.join(tempfile.mkdtemp(), thumb_name)
     thumbnail_file.save(thumb_local_path)
-    thumb_dbx_path = build_social_media_dropbox_path(folder_name, thumb_name)
 
     # ── Instagram cover burn (primary flow) ──
     # Thumbnails are attached AFTER the clip is saved, so the cover burn lives
@@ -2817,9 +2894,9 @@ def export_thumbnail():
             burned_path = os.path.join(tmp_dir, "burned.mp4")
             rb = subprocess.run(
                 [FFMPEG_EXE, "-y",
-                 "-loop", "1", "-framerate", "30", "-t", "0.04", "-i", thumb_local_path,
+                 "-loop", "1", "-framerate", "30", "-t", "0.10", "-i", thumb_local_path,
                  "-i", clip_path,
-                 "-f", "lavfi", "-t", "0.04", "-i", "anullsrc=r=48000:cl=stereo",
+                 "-f", "lavfi", "-t", "0.10", "-i", "anullsrc=r=48000:cl=stereo",
                  "-filter_complex",
                  "[0:v]scale=1080:1920:force_original_aspect_ratio=increase,"
                  "crop=1080:1920,setsar=1,format=yuv420p[cv];"
@@ -2828,13 +2905,14 @@ def export_thumbnail():
                  "[1:a]aformat=sample_rates=48000:channel_layouts=stereo[ma];"
                  "[cv][ca][mv][ma]concat=n=2:v=1:a=1[v][a]",
                  "-map", "[v]", "-map", "[a]",
-                 "-c:v", "libx264", "-crf", "18", "-preset", "fast",
+                 "-c:v", "libx264", "-crf", "18", "-preset", "veryfast",
                  "-c:a", "aac",
                  burned_path],
                 capture_output=True, creationflags=CREATE_NO_WINDOW,
             )
             if rb.returncode == 0 and os.path.isfile(burned_path):
                 shutil.move(burned_path, clip_path)
+                cover_burned = True
                 logger.info("[export] Burned thumbnail as cover frame onto %s", output_name)
             else:
                 err = rb.stderr.decode("utf-8", errors="replace")[-400:]
@@ -2843,13 +2921,14 @@ def export_thumbnail():
             shutil.rmtree(tmp_dir, ignore_errors=True)
 
     thumb_url = None
-    try:
-        dbx = get_dropbox_client()
-        thumb_url = get_or_create_shared_link(dbx, thumb_dbx_path)
-    except FileNotFoundError:
-        logger.warning("dropbox_credentials.json not found; skipping Dropbox link generation")
-    except Exception as exc:
-        logger.warning("Dropbox error during thumbnail shared-link generation: %s", exc)
+    if save_png and thumb_dbx_path:
+        try:
+            dbx = get_dropbox_client()
+            thumb_url = get_or_create_shared_link(dbx, thumb_dbx_path)
+        except FileNotFoundError:
+            logger.warning("dropbox_credentials.json not found; skipping Dropbox link generation")
+        except Exception as exc:
+            logger.warning("Dropbox error during thumbnail shared-link generation: %s", exc)
 
     if airtable_record_id and thumb_url:
         airtable_key = read_airtable_api_key()
@@ -2874,10 +2953,17 @@ def export_thumbnail():
             except Exception as exc:
                 logger.warning("Airtable thumbnail update failed: %s", exc)
 
+    if not save_png:
+        try:
+            shutil.rmtree(os.path.dirname(thumb_local_path), ignore_errors=True)
+        except Exception:
+            pass
+
     return jsonify({
         "success": True,
         "thumbnail_filename": thumb_name,
         "thumbnail_dropbox_url": thumb_url,
+        "cover_burned": cover_burned,
         "folder_name": folder_name,
     })
 
