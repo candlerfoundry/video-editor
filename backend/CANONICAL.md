@@ -1012,3 +1012,15 @@ Morning items also shipped:
   to server.py (PyInstaller is Windows-side).
 
 Regression risk: High.
+
+---
+
+## 29. Launcher health-check patience (June 12, 2026)
+
+The backend imports Whisper/torch at module load — 20-60s on a cold start.
+The launcher's health deadline was 15s, so it declared "Backend failed to
+start" and dumped the log while the server was still loading (the log showed
+a perfectly healthy startup — the werkzeug "development server" WARNING is
+normal Flask boilerplate, not an error). Deadline is now 90s. Do not lower it.
+
+Regression risk: Medium.

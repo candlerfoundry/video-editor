@@ -261,7 +261,9 @@ class LauncherApp:
             self._show_copy_error_btn()
             return
 
-        deadline = time.time() + 15
+        # Whisper/torch imports can take 30-60s on a cold start — 15s caused
+        # false "failed to start" errors while the backend was still loading.
+        deadline = time.time() + 90
         while time.time() < deadline:
             if self.proc.poll() is not None:
                 self._set_status('Backend failed to start - see error below', DOT_RED)
@@ -284,7 +286,7 @@ class LauncherApp:
             time.sleep(0.5)
 
         self._set_status('Backend failed to start - see error below', DOT_RED)
-        self._log_line('[launcher] Backend did not respond within 15s.')
+        self._log_line('[launcher] Backend did not respond within 90s.')
         for line in self._read_backend_log_tail():
             self._log_line(line)
         self._show_copy_error_btn()
