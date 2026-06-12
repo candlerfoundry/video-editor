@@ -2395,9 +2395,24 @@
                     <button class="color-swatch" style="background:#103EDF;" onclick="setCaptionEmphasisColor('#103EDF')" title="TheoEd Blue"></button>
                     <button class="color-swatch" style="background:#2D6A4F;" onclick="setCaptionEmphasisColor('#2D6A4F')" title="CF Green"></button>
                   </span>
-                  <button class="btn-ghost btn-sm" type="button" id="btn-ai-emphasis" onclick="runAiEmphasis(true)" title="Claude picks the feature words to emphasize — adjust by clicking words on the video">&#10024; AI emphasize</button>
+                  <button class="btn-ghost btn-sm" type="button" id="btn-ai-emphasis" onclick="runAiEmphasis(true)" title="Claude re-picks the feature words (it already ran automatically when you opened this clip) — adjust by clicking words on the video">&#10024; Re-run AI emphasis</button>
+                  <span id="ai-emphasis-status" style="font-size:11px;color:var(--green);"></span>
                 </div>
-                <p style="font-size:11px;color:var(--muted);margin:6px 0 0;">Burns exactly as shown (&#8220;Burn captions&#8221; at save). <strong>Click a word</strong> on the video to toggle emphasis &#183; <strong>double-click</strong> to correct text &#183; <strong>drag the captions</strong> up or down to reposition them.</p>
+                <div class="thumb-inline-row" style="align-items:center;gap:10px;margin-top:8px;">
+                  <span style="font-size:10px;font-weight:700;letter-spacing:0.06em;text-transform:uppercase;color:var(--muted);">Size <span id="caption-size-val">100</span>%</span>
+                  <input type="range" id="caption-size-slider" min="70" max="160" value="100" style="width:110px;accent-color:var(--orange);" oninput="setCaptionSizeScale(this.value)">
+                  <span style="font-size:10px;font-weight:700;letter-spacing:0.06em;text-transform:uppercase;color:var(--muted);">Emphasis style</span>
+                  <label class="thumb-inline-row" style="font-size:11px;cursor:pointer;gap:3px;"><input type="checkbox" id="emph-color" checked onchange="setEmphasisOption('emphasis_color_on', this.checked)" style="accent-color:var(--orange);">Color</label>
+                  <label class="thumb-inline-row" style="font-size:11px;cursor:pointer;gap:3px;"><input type="checkbox" id="emph-caps" checked onchange="setEmphasisOption('emphasis_caps', this.checked)" style="accent-color:var(--orange);">CAPS</label>
+                  <label class="thumb-inline-row" style="font-size:11px;cursor:pointer;gap:3px;"><input type="checkbox" id="emph-larger" onchange="setEmphasisOption('emphasis_larger', this.checked)" style="accent-color:var(--orange);">Larger</label>
+                  <label class="thumb-inline-row" style="font-size:11px;cursor:pointer;gap:3px;"><input type="checkbox" id="emph-pulse" onchange="setEmphasisOption('emphasis_pulse', this.checked)" style="accent-color:var(--orange);">Grow-in</label>
+                </div>
+                <div class="thumb-inline-row" style="align-items:center;gap:8px;margin-top:8px;">
+                  <button class="btn-ghost btn-sm" type="button" onclick="capEditCurrentGroup()" title="Edit the caption currently on screen (Enter = new line, Ctrl+Enter = done)">&#9998; Edit text</button>
+                  <button class="btn-ghost btn-sm" type="button" onclick="splitCaptionGroupAtActiveWord()" title="Start a new caption at the highlighted word">&#247; Split here</button>
+                  <button class="btn-ghost btn-sm" type="button" onclick="mergeCaptionGroupWithNext()" title="Join this caption with the next one">&#43; Merge next</button>
+                </div>
+                <p style="font-size:11px;color:var(--muted);margin:6px 0 0;">Burns exactly as shown. <strong>Click a word</strong> to toggle emphasis &#183; <strong>double-click</strong> (or &#9998;) to edit text &#8212; <strong>Enter makes a second line</strong> &#183; <strong>drag</strong> the captions to reposition.</p>
               </div>
             </div><!-- /.editor-left-zone -->
 
@@ -2871,6 +2886,25 @@
     }
   }
 
+  // Must match BACKEND_BUILD in server.py — bumped together whenever the
+  // frontend/backend contract changes. A mismatch means the user is running
+  // an old backend (launcher not restarted after a deploy).
+  const EXPECTED_BACKEND_BUILD = '2026-06-12-wave2';
+  let _staleBackendWarned = false;
+  function showStaleBackendBanner(stale) {
+    let el = document.getElementById('stale-backend-banner');
+    if (!stale) { if (el) el.style.display = 'none'; return; }
+    if (!el) {
+      el = document.createElement('div');
+      el.id = 'stale-backend-banner';
+      el.style.cssText = 'position:fixed;top:0;left:0;right:0;z-index:9999;background:#B45309;color:#fff;' +
+        'font-size:13px;font-weight:600;text-align:center;padding:8px 16px;box-shadow:0 2px 8px rgba(0,0,0,0.25);';
+      el.innerHTML = '\u26A0 Your backend is running an OLD version \u2014 close and reopen the Foundry Video Editor launcher, then reload this page. (Saving clips now may produce broken captions or missing features.)';
+      document.body.appendChild(el);
+    }
+    el.style.display = 'block';
+  }
+
   async function pollHealth() {
     try {
       const res = await fetch('http://localhost:5000/health', {
@@ -2878,6 +2912,15 @@
       });
       if (res.ok) {
         setConnectionStatus('connected');
+        try {
+          const data = await res.json();
+          const stale = (data.build || 'pre-2026-06-12') !== EXPECTED_BACKEND_BUILD;
+          showStaleBackendBanner(stale);
+          if (stale && !_staleBackendWarned) {
+            _staleBackendWarned = true;
+            console.warn('Backend build', data.build, '!= expected', EXPECTED_BACKEND_BUILD);
+          }
+        } catch (_) {}
       } else {
         setConnectionStatus('connecting');
       }
@@ -4438,6 +4481,17 @@
     }
     if (saved.caption_overrides) editorCaptionOverrides = { ...saved.caption_overrides };
     if (saved.caption_emphasis) editorCaptionEmphasis = JSON.parse(JSON.stringify(saved.caption_emphasis));
+    if (Array.isArray(saved.caption_breaks) && saved.caption_breaks.length) editorCaptionBreaks = [...saved.caption_breaks];
+    // Reflect restored style in the new controls
+    const sizeSlider = document.getElementById('caption-size-slider');
+    if (sizeSlider) sizeSlider.value = Math.round((editorCaptionStyle.size_scale || 1) * 100);
+    const sizeVal = document.getElementById('caption-size-val');
+    if (sizeVal) sizeVal.textContent = Math.round((editorCaptionStyle.size_scale || 1) * 100);
+    ['emph-color:emphasis_color_on', 'emph-caps:emphasis_caps', 'emph-larger:emphasis_larger', 'emph-pulse:emphasis_pulse'].forEach(pair => {
+      const [id, key] = pair.split(':');
+      const el = document.getElementById(id);
+      if (el) el.checked = editorCaptionStyle[key] !== false && !!editorCaptionStyle[key];
+    });
     return !!(editorCutRanges.length || editorBleepRanges.length ||
               saved.start_time != null);
   }
@@ -7113,6 +7167,7 @@
       caption_style: editorCaptionStyle,
       caption_overrides: editorCaptionOverrides,
       caption_emphasis: editorCaptionEmphasis,
+      caption_breaks: editorCaptionBreaks || [],
     }).catch?.(() => {});
     openExportFormDialog();
   }
@@ -8547,7 +8602,12 @@
     preset: 'bold_pop', font: 'Arial Black', emphasis_color: '#F5A623',
     mode: 'karaoke', all_caps: true, emphasis_caps: true, group_size: 4,
     pop: true, pos_bottom: 0.12, show: true,
+    size_scale: 1.0,           // 0.7-1.6 multiplier on the base caption size
+    emphasis_color_on: true,   // emphasis options — any combination
+    emphasis_larger: false,
+    emphasis_pulse: false,
   };
+  let editorCaptionBreaks = null;  // manual grouping: array of global word start-indices (null = auto by group_size)
   function applyCaptionPreset(name) {
     const pr = CAPTION_PRESETS[name] || CAPTION_PRESETS.bold_pop;
     editorCaptionStyle.preset = name;
@@ -8566,6 +8626,7 @@
   }
   function setCaptionGroupSize(n) {
     editorCaptionStyle.group_size = Math.max(1, Math.min(10, parseInt(n) || 4));
+    editorCaptionBreaks = null;  // back to automatic grouping
     // Regrouping shifts indices — re-map AI/manual emphasis by word text later;
     // simplest correct behavior: clear stale per-group data.
     editorCaptionOverrides = {};
@@ -8579,6 +8640,7 @@
   function resetCaptionEdits() {
     editorCaptionOverrides = {};
     editorCaptionEmphasis = {};
+    editorCaptionBreaks = null;
     _capEditingGroup = null;
   }
 
@@ -8618,30 +8680,85 @@
       }
       offset += e - s;
     }
+    words.forEach((w, i) => { w.gIdx = i; });
     const size = Math.max(1, editorCaptionStyle.group_size || 4);
+    // Manual grouping (split/merge) takes over once used; group_size resets it.
+    let bounds;
+    if (editorCaptionBreaks && editorCaptionBreaks.length) {
+      bounds = editorCaptionBreaks.filter(b => b > 0 && b < words.length).sort((a, b) => a - b);
+    } else {
+      bounds = [];
+      for (let i = size; i < words.length; i += size) bounds.push(i);
+    }
     const groups = [];
-    for (let i = 0; i < words.length; i += size) {
-      const grp = words.slice(i, i + size);
+    let start = 0;
+    const cutsAt = [...bounds, words.length];
+    for (const end of cutsAt) {
+      if (end <= start) continue;
+      const grp = words.slice(start, end);
       groups.push({
         index: groups.length,
         srcStart: grp[0].srcStart, srcEnd: grp[grp.length - 1].srcEnd,
         outStart: grp[0].outStart, outEnd: grp[grp.length - 1].outEnd,
-        words: grp,  // word objects: {text, srcStart, srcEnd, outStart, outEnd}
+        words: grp,  // word objects: {text, srcStart, srcEnd, outStart, outEnd, gIdx}
       });
+      start = end;
     }
     return groups;
+  }
+
+  function materializeCaptionBreaks() {
+    if (editorCaptionBreaks && editorCaptionBreaks.length) return;
+    const groups = buildClipCaptionGroups();
+    editorCaptionBreaks = groups.slice(1).map(g => g.words[0].gIdx);
+  }
+
+  function splitCaptionGroupAtActiveWord() {
+    const vid = document.getElementById('edit-video');
+    if (!vid) return;
+    const t = vid.currentTime;
+    const groups = buildClipCaptionGroups();
+    const g = groups.find(x => t >= x.srcStart && t < x.srcEnd);
+    if (!g || g.words.length < 2) return;
+    let ai = g.words.findIndex(w => t >= w.srcStart && t < w.srcEnd);
+    if (ai <= 0) ai = Math.ceil(g.words.length / 2);
+    materializeCaptionBreaks();
+    const breakIdx = g.words[ai].gIdx;
+    if (!editorCaptionBreaks.includes(breakIdx)) editorCaptionBreaks.push(breakIdx);
+    editorCaptionOverrides = {}; reapplyAiEmphasis();
+    updateCaptionOverlay(true);
+  }
+
+  function mergeCaptionGroupWithNext() {
+    const vid = document.getElementById('edit-video');
+    if (!vid) return;
+    const t = vid.currentTime;
+    const groups = buildClipCaptionGroups();
+    const g = groups.find(x => t >= x.srcStart && t < x.srcEnd);
+    if (!g) return;
+    const next = groups.find(x => x.index === g.index + 1);
+    if (!next) return;
+    materializeCaptionBreaks();
+    editorCaptionBreaks = editorCaptionBreaks.filter(b => b !== next.words[0].gIdx);
+    editorCaptionOverrides = {}; reapplyAiEmphasis();
+    updateCaptionOverlay(true);
   }
 
   function groupDisplayWords(group) {
     const override = editorCaptionOverrides[group.index];
     if (override == null) return group.words;
-    // Corrected text: distribute word timings evenly across the group window
-    const texts = override.split(/\s+/).filter(Boolean);
-    const n = Math.max(1, texts.length);
+    // Corrected text: distribute word timings evenly across the group window.
+    // Newlines (Enter while editing) become line breaks: word.br = true.
+    const tokens = [];
+    override.split('\n').forEach((line, li, lines) => {
+      const ws = line.split(/\s+/).filter(Boolean);
+      ws.forEach((t, wi) => tokens.push({ t, br: wi === ws.length - 1 && li < lines.length - 1 }));
+    });
+    const n = Math.max(1, tokens.length);
     const srcSpan = (group.srcEnd - group.srcStart) / n;
     const outSpan = (group.outEnd - group.outStart) / n;
-    return texts.map((t, i) => ({
-      text: t,
+    return tokens.map((tok, i) => ({
+      text: tok.t, br: tok.br,
       srcStart: group.srcStart + i * srcSpan, srcEnd: group.srcStart + (i + 1) * srcSpan,
       outStart: group.outStart + i * outSpan, outEnd: group.outStart + (i + 1) * outSpan,
     }));
@@ -8682,19 +8799,44 @@
       });
       const data = await res.json();
       const words = (data.words || []).map(_normWord).filter(Boolean);
+      const statusEl = document.getElementById('ai-emphasis-status');
       if (words.length) {
         _aiEmphasisWords = new Set(words);
         reapplyAiEmphasis();
         updateCaptionOverlay(true);
+        if (statusEl) statusEl.textContent = '\u2713 ' + words.length + ' words emphasized \u2014 click words to adjust';
+      } else if (statusEl && manual) {
+        statusEl.textContent = 'No suggestions \u2014 try again or click words manually';
       }
-    } catch (_) {}
-    if (btn) { btn.disabled = false; btn.innerHTML = '&#10024; AI emphasize'; }
+    } catch (_) {
+      const statusEl = document.getElementById('ai-emphasis-status');
+      if (statusEl && manual) statusEl.textContent = 'Could not reach the backend';
+    }
+    if (btn) { btn.disabled = false; btn.innerHTML = '&#10024; Re-run AI emphasis'; }
   }
 
   function setCaptionShow(on) {
     editorCaptionStyle.show = !!on;
     updateCaptionOverlay(true);
     if (on) runAiEmphasis(false);
+  }
+  function setCaptionSizeScale(v) {
+    editorCaptionStyle.size_scale = Math.max(0.7, Math.min(1.6, parseInt(v) / 100));
+    const span = document.getElementById('caption-size-val');
+    if (span) span.textContent = Math.round(editorCaptionStyle.size_scale * 100);
+    updateCaptionOverlay(true);
+  }
+  function setEmphasisOption(key, on) {
+    editorCaptionStyle[key] = !!on;
+    updateCaptionOverlay(true);
+  }
+  function capEditCurrentGroup() {
+    const overlay = document.getElementById('caption-overlay');
+    if (!overlay || overlay.style.display === 'none') {
+      alert('Play or scrub to the caption you want to edit first.');
+      return;
+    }
+    overlay.dispatchEvent(new MouseEvent('dblclick', { bubbles: true }));
   }
   function setCaptionFont(font) {
     editorCaptionStyle.font = font;
@@ -8748,29 +8890,47 @@
 
     overlay.style.display = 'block';
     overlay.style.fontFamily = editorCaptionStyle.font + ', sans-serif';
-    const sizePct = mode === 'word' ? 0.06 : 0.034;
+    const scale = editorCaptionStyle.size_scale || 1;
+    const sizePct = (mode === 'word' ? 0.06 : 0.034) * scale;
     overlay.style.fontSize = Math.max(13, Math.round(vid.clientHeight * sizePct)) + 'px';
+    overlay.style.letterSpacing = '0.02em';
+    overlay.style.wordSpacing = '0.18em';
     overlay.style.bottom = Math.round((editorCaptionStyle.pos_bottom ?? 0.12) * 100) + '%';
     overlay.dataset.groupIndex = g.index;
     const emph = editorCaptionEmphasis[g.index] || [];
     const color = escHtml(editorCaptionStyle.emphasis_color);
 
+    function emphStyle(isEmph, isActive) {
+      const parts = [];
+      if ((isEmph || isActive) && editorCaptionStyle.emphasis_color_on) parts.push('color:' + color);
+      if (isEmph && editorCaptionStyle.emphasis_larger) parts.push('font-size:1.18em');
+      if (isActive && !editorCaptionStyle.emphasis_color_on) parts.push('font-size:1.12em');
+      if (parts.length) parts.push('display:inline-block');
+      return parts.join(';');
+    }
+    function emphClass(isEmph, isActive) {
+      const cls = ['cap-word'];
+      if (isEmph && editorCaptionStyle.emphasis_pulse) cls.push('cap-pop');
+      if (isActive && editorCaptionStyle.pop) cls.push('cap-pop');
+      return cls.join(' ');
+    }
+
     if (mode === 'word') {
-      const w = words[Math.max(0, active)];
-      const isEmph = emph.includes(Math.max(0, active));
-      overlay.innerHTML = '<span class="cap-word cap-pop" data-wi="' + Math.max(0, active) + '"' +
-        (isEmph ? ' style="color:' + color + ';"' : '') + '>' +
+      const wi = Math.max(0, active);
+      const w = words[wi];
+      const isEmph = emph.includes(wi);
+      overlay.innerHTML = '<span class="' + emphClass(isEmph, true) + '" data-wi="' + wi + '"' +
+        (emphStyle(isEmph, false) ? ' style="' + emphStyle(isEmph, false) + '"' : '') + '>' +
         escHtml(captionDisplayText(w, isEmph)) + '</span>';
       return;
     }
     overlay.innerHTML = words.map((w, i) => {
       const isEmph = emph.includes(i);
       const isActive = mode === 'karaoke' && i === active;
-      let style = '';
-      if (isActive) style = 'color:' + color + ';transform:scale(1.08);display:inline-block;';
-      else if (isEmph) style = 'color:' + color + ';';
-      return '<span class="cap-word' + (isActive && editorCaptionStyle.pop ? ' cap-pop' : '') + '" data-wi="' + i + '"' +
-        (style ? ' style="' + style + '"' : '') + '>' + escHtml(captionDisplayText(w, isEmph)) + '</span>';
+      const style = emphStyle(isEmph, isActive);
+      return '<span class="' + emphClass(isEmph, isActive) + '" data-wi="' + i + '"' +
+        (style ? ' style="' + style + '"' : '') + '>' + escHtml(captionDisplayText(w, isEmph)) + '</span>' +
+        (w.br ? '<br>' : '');
     }).join(' ');
   }
 
@@ -8852,7 +9012,8 @@
         overlay.removeEventListener('keydown', onKey);
         overlay.contentEditable = 'false';
         overlay.classList.remove('editing');
-        const txt = overlay.textContent.replace(/\s+/g, ' ').trim();
+        // innerText preserves the line breaks typed with Enter
+        const txt = overlay.innerText.replace(/[ \t]+/g, ' ').replace(/\n{2,}/g, '\n').trim();
         const orig = (g ? g.words.map(w => w.text).join(' ') : '');
         if (txt && txt !== orig) editorCaptionOverrides[gi] = txt;
         else delete editorCaptionOverrides[gi];
@@ -8861,7 +9022,9 @@
         updateCaptionOverlay(true);
       };
       const onKey = (ev) => {
-        if (ev.key === 'Enter') { ev.preventDefault(); overlay.blur(); }
+        // Enter inserts a line break (move words to a second line);
+        // Ctrl/Cmd+Enter or clicking away commits; Esc cancels.
+        if (ev.key === 'Enter' && (ev.ctrlKey || ev.metaKey)) { ev.preventDefault(); overlay.blur(); }
         if (ev.key === 'Escape') { ev.preventDefault(); overlay.textContent = (g ? groupDisplayWords(g).map(w => w.text).join(' ') : ''); overlay.blur(); }
       };
       overlay.addEventListener('blur', commit);
@@ -9002,12 +9165,16 @@
           mode: editorCaptionStyle.mode,
           all_caps: !!editorCaptionStyle.all_caps,
           emphasis_caps: !!editorCaptionStyle.emphasis_caps,
+          emphasis_color_on: editorCaptionStyle.emphasis_color_on !== false,
+          emphasis_larger: !!editorCaptionStyle.emphasis_larger,
+          emphasis_pulse: !!editorCaptionStyle.emphasis_pulse,
+          size_scale: editorCaptionStyle.size_scale || 1,
           pop: !!editorCaptionStyle.pop,
           pos_bottom: editorCaptionStyle.pos_bottom ?? 0.12,
           groups: groups.map(g => ({
             start: r3(g.outStart),
             end: r3(g.outEnd),
-            words: groupDisplayWords(g).map(w => ({ t: w.text, s: r3(w.outStart), e: r3(w.outEnd) })),
+            words: groupDisplayWords(g).map(w => ({ t: w.text, s: r3(w.outStart), e: r3(w.outEnd), br: w.br ? 1 : 0 })),
             emphasis: editorCaptionEmphasis[g.index] || [],
           })),
         }));

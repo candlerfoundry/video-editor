@@ -1071,3 +1071,70 @@ edited clip (clip_selected payload; backend stores bounded copies) and
 restore in restoreSavedClipEdits().
 
 Regression risk: High.
+
+---
+
+## 31. Caption wave 2 (June 12, 2026): spacing, emphasis styles, line breaks, split/merge
+
+Spacing: overlay uses letter-spacing 0.02em + word-spacing 0.18em; the burn
+sets ASS Style Spacing = 2% of font size and joins words with TWO spaces
+(ASS has no word-spacing property). Keep overlay and burn in step.
+
+Emphasis style options (any combination; editorCaptionStyle flags):
+- emphasis_color_on (default on) — accent color
+- emphasis_caps (default on) — ALL CAPS
+- emphasis_larger — 118% inline scale ({\fscx118\fscy118})
+- emphasis_pulse — one-shot grow-in (\t scale tags) each time shown
+When color is OFF, the karaoke active word falls back to a 112% scale cue.
+Backend `styled_run()` is the single place inline tags are built.
+
+Font size: caption-size-slider 70-160% (size_scale) multiplies the base
+orientation percentage in both overlay and spec_to_ass.
+
+Editing: Enter inserts a LINE BREAK (plaintext newline); Ctrl/Cmd+Enter or
+click-away commits; Esc cancels. Overrides keep newlines; groupDisplayWords
+tokenizes lines into word objects with `br` flags; overlay renders <br>,
+burn renders \N. The ✎ Edit text button opens editing for the on-screen
+caption (synthesizes dblclick).
+
+Split/merge groups: editorCaptionBreaks (array of global word start indices;
+null = automatic by group_size). First split/merge materializes the current
+boundaries, then "÷ Split here" adds a break at the highlighted word and
+"+ Merge next" removes the next boundary. Changing words/screen resets to
+automatic. Breaks persist with the edited clip (caption_breaks) and restore.
+
+AI emphasis UX: it AUTO-RUNS when a clip opens (this confused Emily — the
+button seemed dead because the work was already done). The button is now
+"Re-run AI emphasis" and #ai-emphasis-status shows "✓ N words emphasized".
+
+Verified by render: two-line break, double word gaps, letter spacing,
+caps+larger emphasis with color off, 120% size.
+
+Wave 3 backlog (agreed with Emily): per-group retiming (drag caption edges),
+per-group position overrides, active-word background pill, caption background
+box opacity, karaoke fill-style (words stay colored after spoken),
+auto-emojis (experimental).
+
+Regression risk: High.
+
+---
+
+## 32. Frontend/backend version handshake (June 12, 2026)
+
+Netlify auto-deploys the frontend on every push, but the backend only
+updates when Emily restarts the launcher. Version skew once burned Python
+dict reprs into captions (new frontend sent word OBJECTS; the old backend's
+spec_to_ass v1 str()-ed them into the text).
+
+- `BACKEND_BUILD` in server.py and `EXPECTED_BACKEND_BUILD` in index.html
+  MUST be bumped TOGETHER (same commit) whenever the frontend/backend
+  contract changes (new routes, new form fields, changed spec shapes).
+- `/health` returns `build`; `pollHealth()` compares and shows a fixed amber
+  top banner telling the user to restart the launcher. Missing `build`
+  (pre-handshake backends) counts as stale.
+- The health poll contract from section 12 is unchanged (no early-return
+  guard; 2.5s timeout; 3s interval).
+- Current build id: 2026-06-12-wave2.
+
+Regression risk: Medium — forgetting to bump BOTH constants makes every
+user see the stale banner (or worse, silences a real mismatch).

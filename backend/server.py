@@ -60,6 +60,10 @@ else:
 app = Flask(__name__)
 CORS(app)
 
+# Bump this whenever the frontend/backend contract changes (the frontend
+# carries a matching EXPECTED_BACKEND_BUILD and warns when they differ).
+BACKEND_BUILD = "2026-06-12-wave2"
+
 CREATE_NO_WINDOW = 0x08000000 if platform.system() == 'Windows' else 0
 
 STYLE_STR = "Fontname=Arial,Outline=1,Shadow=0,BorderStyle=1,Spacing=1"
@@ -276,13 +280,26 @@ def spec_to_ass(spec, width, height):
     margin_v = int(height * pos_bottom)
     margin_h = int(width * 0.05)
 
+    # Size scale (70-160% from the editor slider)
+    try:
+        size_scale = float(spec.get("size_scale") or 1)
+    except (TypeError, ValueError):
+        size_scale = 1.0
+    font_size = max(16, int(font_size * max(0.7, min(1.6, size_scale))))
+
     font = spec.get("font") or "Arial"
     if font not in ASS_CAPTION_FONTS:
         font = "Arial"
     emph_color = hex_to_ass_color(spec.get("emphasis_color") or "#F5A623")
     all_caps = bool(spec.get("all_caps"))
     emphasis_caps = bool(spec.get("emphasis_caps", True))
+    emphasis_color_on = spec.get("emphasis_color_on", True) is not False
+    emphasis_larger = bool(spec.get("emphasis_larger"))
+    emphasis_pulse = bool(spec.get("emphasis_pulse"))
     pop = bool(spec.get("pop"))
+    # Slight letter spacing (Emily: push letters out a touch); word gaps are
+    # widened by joining words with two spaces in the event text.
+    letter_spacing = max(1, round(font_size * 0.02))
 
     def t2ass(t):
         t = max(0.0, float(t))
@@ -297,7 +314,7 @@ def spec_to_ass(spec, width, height):
         for i, w in enumerate(g.get("words") or []):
             if isinstance(w, dict):
                 out.append({"t": str(w.get("t", "")), "s": float(w.get("s", g.get("start", 0))),
-                            "e": float(w.get("e", g.get("end", 0)))})
+                            "e": float(w.get("e", g.get("end", 0))), "br": bool(w.get("br"))})
             else:
                 # legacy plain strings: spread evenly across the group window
                 gs, ge = float(g.get("start", 0)), float(g.get("end", 0))
@@ -324,11 +341,32 @@ def spec_to_ass(spec, width, height):
         "ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, "
         "Alignment, MarginL, MarginR, MarginV, Encoding\n"
         f"Style: Default,{font},{font_size},&H00FFFFFF,&H00FFFFFF,&H00000000,"
-        f"&H7F000000,-1,0,0,0,100,100,0,0,1,3,0,2,{margin_h},{margin_h},{margin_v},1\n\n"
+        f"&H7F000000,-1,0,0,0,100,100,{letter_spacing},0,1,3,0,2,{margin_h},{margin_h},{margin_v},1\n\n"
         "[Events]\n"
         "Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text\n"
     )
     pop_tag = "{\\t(0,90,\\fscx112\\fscy112)\\t(90,180,\\fscx100\\fscy100)}" if pop else ""
+    pulse_tag = "{\\t(0,180,\\fscx118\\fscy118)\\t(180,360,\\fscx100\\fscy100)}"
+
+    def styled_run(txt, emphasized, active):
+        """Inline ASS tags for one word per the emphasis options."""
+        open_tags = []
+        close_tags = []
+        if (emphasized or active) and emphasis_color_on:
+            open_tags.append("\\1c" + emph_color)
+            close_tags.append("\\1c&H00FFFFFF&")
+        if emphasized and emphasis_larger:
+            open_tags.append("\\fscx118\\fscy118")
+            close_tags.append("\\fscx100\\fscy100")
+        if active and not emphasis_color_on:
+            open_tags.append("\\fscx112\\fscy112")
+            close_tags.append("\\fscx100\\fscy100")
+        prefix = ("{" + "".join(open_tags) + "}") if open_tags else ""
+        suffix = ("{" + "".join(close_tags) + "}") if close_tags else ""
+        if emphasized and emphasis_pulse:
+            prefix = pulse_tag + prefix
+        return prefix + txt + suffix
+
     events = []
     for g in spec.get("groups") or []:
         words = norm_words(g)
@@ -337,12 +375,20 @@ def spec_to_ass(spec, width, height):
         emphasis = set(int(i) for i in (g.get("emphasis") or []) if isinstance(i, (int, float)))
         g_start, g_end = float(g.get("start", 0)), float(g.get("end", 0))
 
+        def join_runs(runs_with_words):
+            # Two spaces between words (wider word gaps); \\N at line breaks
+            out = []
+            for run, w in runs_with_words:
+                out.append(run)
+                out.append("\\N" if w.get("br") else "  ")
+            return "".join(out[:-1]) if out else ""
+
         if mode == "word":
             for i, w in enumerate(words):
                 txt = disp(w["t"], i in emphasis)
-                color_run = ("{\\1c" + emph_color + "}") if i in emphasis else ""
+                run = styled_run(txt, i in emphasis, False)
                 end_t = words[i + 1]["s"] if i + 1 < len(words) else g_end
-                events.append(f"Dialogue: 0,{t2ass(w['s'])},{t2ass(max(w['s'] + 0.08, end_t))},Default,,0,0,0,,{pop_tag}{color_run}{txt}")
+                events.append(f"Dialogue: 0,{t2ass(w['s'])},{t2ass(max(w['s'] + 0.08, end_t))},Default,,0,0,0,,{pop_tag}{run}")
             continue
 
         if mode == "karaoke":
@@ -350,28 +396,20 @@ def spec_to_ass(spec, width, height):
                 runs = []
                 for j, w in enumerate(words):
                     txt = disp(w["t"], j in emphasis)
-                    if j == i:
-                        runs.append("{\\1c" + emph_color + "}" + txt + "{\\1c&H00FFFFFF&}")
-                    elif j in emphasis:
-                        runs.append("{\\1c" + emph_color + "}" + txt + "{\\1c&H00FFFFFF&}")
-                    else:
-                        runs.append(txt)
+                    runs.append((styled_run(txt, j in emphasis, j == i), w))
                 start_t = words[i]["s"] if i > 0 else g_start
                 end_t = words[i + 1]["s"] if i + 1 < len(words) else g_end
                 if end_t - start_t < 0.04:
                     end_t = start_t + 0.04
-                events.append(f"Dialogue: 0,{t2ass(start_t)},{t2ass(end_t)},Default,,0,0,0,," + " ".join(runs))
+                events.append(f"Dialogue: 0,{t2ass(start_t)},{t2ass(end_t)},Default,,0,0,0,," + join_runs(runs))
             continue
 
         # mode == 'group'
         runs = []
         for j, w in enumerate(words):
             txt = disp(w["t"], j in emphasis)
-            if j in emphasis:
-                runs.append("{\\1c" + emph_color + "}" + txt + "{\\1c&H00FFFFFF&}")
-            else:
-                runs.append(txt)
-        events.append(f"Dialogue: 0,{t2ass(g_start)},{t2ass(g_end)},Default,,0,0,0,," + " ".join(runs))
+            runs.append((styled_run(txt, j in emphasis, False), w))
+        events.append(f"Dialogue: 0,{t2ass(g_start)},{t2ass(g_end)},Default,,0,0,0,," + join_runs(runs))
     return header + "\n".join(events) + "\n"
 
 # ── Adaptive caption sizing ──
@@ -517,7 +555,10 @@ def get_caption_style(width, height):
 # ── Health ──
 @app.route("/health", methods=["GET"])
 def health():
-    return jsonify({"status": "ok", "version": "1.0.0"})
+    # BACKEND_BUILD lets the frontend detect a stale backend (running code
+    # from before the latest deploy) and tell the user to restart the
+    # launcher — version skew once burned Python dict reprs into captions.
+    return jsonify({"status": "ok", "version": "1.0.0", "build": BACKEND_BUILD})
 
 
 # ── Caption Videos ──
@@ -1381,6 +1422,7 @@ def update_project():
                     'caption_style': payload.get('caption_style') if isinstance(payload.get('caption_style'), dict) else None,
                     'caption_overrides': dict(list((payload.get('caption_overrides') or {}).items())[:60]),
                     'caption_emphasis': dict(list((payload.get('caption_emphasis') or {}).items())[:60]),
+                    'caption_breaks': [int(b) for b in (payload.get('caption_breaks') or [])[:200] if isinstance(b, (int, float))],
                     'updated_at': iso_now(),
                 }
                 # Key by hook_line so re-editing the same clip UPDATES the entry
