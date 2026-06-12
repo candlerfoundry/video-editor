@@ -1510,6 +1510,26 @@
     .tx-mode-rail .tx-mode-btn {
       border-radius: 10px; padding: 8px 4px; line-height: 1.45; font-size: 11px;
     }
+    .edit-video-wrap { position: relative; max-width: 640px; }
+    #caption-overlay {
+      position: absolute; left: 4%; right: 4%; bottom: 12%;
+      text-align: center; color: #FFFFFF; font-weight: 700;
+      line-height: 1.3; pointer-events: auto; cursor: pointer;
+      user-select: none; z-index: 5;
+      text-shadow: -2px -2px 0 #000, 2px -2px 0 #000, -2px 2px 0 #000, 2px 2px 0 #000, 0 3px 6px rgba(0,0,0,0.6);
+    }
+    #caption-overlay.editing {
+      outline: 2px dashed rgba(255,255,255,0.7); border-radius: 6px;
+      cursor: text; user-select: text;
+    }
+    #caption-overlay .cap-word { cursor: pointer; }
+    #caption-overlay .cap-word:hover { text-decoration: underline; }
+    #dlg-canvas-wrap.pan-mode { cursor: grab; }
+    #dlg-canvas-wrap.pan-mode:active { cursor: grabbing; }
+    #dlg-canvas-wrap.pan-mode .dlg-overlay-text,
+    #dlg-canvas-wrap.pan-mode .dlg-logo-overlay,
+    #dlg-canvas-wrap.pan-mode .dlg-design-elem-overlay,
+    #dlg-canvas-wrap.pan-mode .dlg-resize-handle { pointer-events: none !important; }
     .tx-mode-btn {
       font-size: 11px; font-weight: 600; padding: 3px 10px; border-radius: 14px;
       border: 1px solid var(--border-2); background: var(--surface); color: var(--muted);
@@ -2183,7 +2203,7 @@
                 <div class="clc-icon">🎬</div>
                 <div class="clc-body">
                   <div class="clc-value muted" id="clc-video-value">Browse for video</div>
-                  <div style="font-size:11px;color:var(--muted);margin-top:2px;">Select your MP4 or MOV. The transcript will load automatically when it is available.</div>
+                  <div style="font-size:11px;color:var(--muted);margin-top:2px;">Use the <strong>UNCAPTIONED</strong> master &#8212; the app burns phone-sized captions at save. The transcript loads automatically.</div>
                 </div>
                 <input type="file" accept=".mp4,.MP4,.mov,.MOV,video/mp4,video/quicktime" id="clips-file" style="display:none;" />
               </div>
@@ -2290,7 +2310,10 @@
 
             <!-- LEFT: video + draggable timeline -->
             <div class="editor-left-zone">
-              <video id="edit-video" controls></video>
+              <div class="edit-video-wrap" id="edit-video-wrap">
+                <video id="edit-video" controls></video>
+                <div id="caption-overlay" style="display:none;"></div>
+              </div>
 
               <!-- Custom draggable timeline bar -->
               <div class="clip-timeline-wrap">
@@ -2329,6 +2352,34 @@
                   <svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"/></svg>
                   Play Selection
                 </button>
+              </div>
+
+              <!-- In-frame captions: preview + style exactly what will burn -->
+              <div class="card" style="padding:10px 14px;margin-bottom:12px;" id="caption-editor-card">
+                <div class="thumb-inline-row" style="align-items:center;gap:10px;">
+                  <label class="thumb-inline-row" style="font-size:12px;font-weight:700;letter-spacing:0.05em;text-transform:uppercase;color:var(--muted);cursor:pointer;gap:6px;">
+                    <input type="checkbox" id="caption-show-toggle" checked style="accent-color:var(--orange);width:15px;height:15px;cursor:pointer;" onchange="setCaptionShow(this.checked)">
+                    Captions
+                  </label>
+                  <select id="caption-font-select" class="thumb-editor-select" style="width:auto;padding:3px 8px;font-size:12px;" onchange="setCaptionFont(this.value)">
+                    <option value="Arial">Arial</option>
+                    <option value="Arial Black">Arial Black</option>
+                    <option value="Impact">Impact</option>
+                    <option value="Verdana">Verdana</option>
+                    <option value="Tahoma">Tahoma</option>
+                    <option value="Trebuchet MS">Trebuchet MS</option>
+                    <option value="Georgia">Georgia</option>
+                  </select>
+                  <span class="thumb-inline-row" style="gap:5px;">
+                    <span style="font-size:10px;font-weight:700;letter-spacing:0.06em;text-transform:uppercase;color:var(--muted);">Emphasis</span>
+                    <button class="color-swatch" style="background:#F5A623;" onclick="setCaptionEmphasisColor('#F5A623')" title="CF Amber"></button>
+                    <button class="color-swatch" style="background:#E8541A;" onclick="setCaptionEmphasisColor('#E8541A')" title="CF Orange"></button>
+                    <button class="color-swatch" style="background:#41B6E6;" onclick="setCaptionEmphasisColor('#41B6E6')" title="TheoEd Light Blue"></button>
+                    <button class="color-swatch" style="background:#103EDF;" onclick="setCaptionEmphasisColor('#103EDF')" title="TheoEd Blue"></button>
+                    <button class="color-swatch" style="background:#2D6A4F;" onclick="setCaptionEmphasisColor('#2D6A4F')" title="CF Green"></button>
+                  </span>
+                </div>
+                <p style="font-size:11px;color:var(--muted);margin:6px 0 0;">These captions burn into the clip exactly as shown (enable &#8220;Burn captions&#8221; at save). <strong>Click a word</strong> to emphasize it &#183; <strong>double-click a caption</strong> to correct the text.</p>
               </div>
             </div><!-- /.editor-left-zone -->
 
@@ -3734,6 +3785,10 @@
     const file = e.target.files[0];
     if (!file) return;
 
+    if (/captioned/i.test(file.name) && !/uncaptioned/i.test(file.name)) {
+      alert('Heads up: this looks like a CAPTIONED master. Baked-in captions get sliced by the 9:16 crop and cannot be resized.\n\nFor clips, use the UNCAPTIONED version \u2014 the app burns correctly-sized captions at save (check \u201CBurn captions onto the clip\u201D in the save window).');
+    }
+
     // Load video
     releaseStoredObjectUrl('clips');
     _clipFile = file;
@@ -4261,6 +4316,7 @@
     origOutTime   = editorOutTime;
     editorCutRanges = [];
     editorBleepRanges = [];
+    resetCaptionEdits();
 
     const vid = document.getElementById('edit-video');
     vid.src = getPlayableVideoUrl('clips');
@@ -4341,9 +4397,24 @@
   }
 
   // ── Select & Edit → Stage 3 ──
+  function restoreSavedClipEdits(hookLine) {
+    // If this clip was edited before (same hook line), restore trims + word
+    // edits from the project store.
+    const saved = (activeProject?.edited_clips || []).find(c =>
+      hookLine && c.hook_line === hookLine);
+    if (!saved) return false;
+    if (saved.start_time != null) editorInTime  = saved.start_time;
+    if (saved.end_time   != null) editorOutTime = saved.end_time;
+    editorCutRanges   = (saved.cut_ranges   || []).map(r => ({ start: r.start, end: r.end }));
+    editorBleepRanges = (saved.bleep_ranges || []).map(r => ({ start: r.start, end: r.end }));
+    return !!(editorCutRanges.length || editorBleepRanges.length ||
+              saved.start_time != null);
+  }
+
   function selectAndEdit(idx) {
     editorCutRanges = [];
     editorBleepRanges = [];
+    resetCaptionEdits();
     const mc = document.querySelector('.main-content');
     savedScrollY = mc ? mc.scrollTop : 0;
 
@@ -4352,6 +4423,7 @@
     editorOutTime = _editCandidate.end_time   ?? 0;
     origInTime    = editorInTime;   // stored once — never overwritten
     origOutTime   = editorOutTime;
+    restoreSavedClipEdits(_editCandidate.hook_line);
 
     const vid = document.getElementById('edit-video');
     vid.src = getPlayableVideoUrl('clips');
@@ -4629,6 +4701,7 @@
     updateTimeFields();
     renderTimelineBar();
     renderTranscriptAlways(false);
+    updateCaptionOverlay(true);
   }
 
   // Shims for time-field change handlers that call these names
@@ -6996,6 +7069,16 @@
   }
 
   function openDoneEditingModal() {
+    // Persist the edited clip (trims + cuts + bleeps) so it survives
+    // project switching / resume.
+    updateProject('clip_selected', {
+      start_time: editorInTime,
+      end_time: editorOutTime,
+      hook_line: _editCandidate?.hook_line || '',
+      mode: _editCandidate?.part != null ? 'split' : 'viral',
+      cut_ranges: editorCutRanges,
+      bleep_ranges: editorBleepRanges,
+    }).catch?.(() => {});
     openExportFormDialog();
   }
 
@@ -7235,6 +7318,38 @@
     dlgOpenFramePicker();
   }
 
+  // Item 4 (June 12): use an uploaded image as the thumbnail base frame.
+  function dlgUploadImageAsFrame(input) {
+    const file = input.files && input.files[0];
+    input.value = '';
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      const img = new Image();
+      img.onload = () => {
+        const scale = Math.min(1, 1600 / Math.max(img.naturalWidth, img.naturalHeight));
+        const cv = document.createElement('canvas');
+        cv.width = Math.round(img.naturalWidth * scale);
+        cv.height = Math.round(img.naturalHeight * scale);
+        cv.getContext('2d').drawImage(img, 0, 0, cv.width, cv.height);
+        const b64 = cv.toDataURL('image/jpeg', 0.92).split(',')[1];
+        pushDlgUndo('upload-image');
+        _dlgFrames = [b64, ..._dlgFrames].slice(0, 12);
+        _dlgSelectedFrame = 0;
+        _efThumbFrames = _dlgFrames;
+        if (_sharedThumbnailDraft) {
+          _sharedThumbnailDraft.available_frames = _dlgFrames;
+          _sharedThumbnailDraft.selected_frame_index = 0;
+        }
+        dlgBuildHeroState();
+        dlgDrawCanvas();
+      };
+      img.onerror = () => alert('Could not read that image file.');
+      img.src = reader.result;
+    };
+    reader.readAsDataURL(file);
+  }
+
   function dlgSelectStyle(style) {
     _dlgStyle = normalizeThumbnailLayout(style);
     (_sharedThumbnailDraft?.text_boxes || []).forEach((box, index) => {
@@ -7390,7 +7505,17 @@
     dlgDrawCanvas();
   }
 
+  let _dlgPanTool = false;
+  function toggleDlgPanTool(force) {
+    _dlgPanTool = force !== undefined ? !!force : !_dlgPanTool;
+    const btn = document.getElementById('dlg-pan-tool');
+    if (btn) btn.classList.toggle('active', _dlgPanTool);
+    const wrap = document.getElementById('dlg-canvas-wrap');
+    if (wrap) wrap.classList.toggle('pan-mode', _dlgPanTool);
+  }
+
   function resetDlgZoom() {
+    toggleDlgPanTool(false);
     if (!_sharedThumbnailDraft) return;
     pushDlgUndo('zoom-reset');
     _sharedThumbnailDraft.frame_zoom = 1;
@@ -7451,9 +7576,9 @@
     document.addEventListener('mousedown', function (e) {
       const wrap = document.getElementById('dlg-canvas-wrap');
       if (!wrap || !wrap.contains(e.target)) return;
-      // Shift+drag pans from ANYWHERE on the canvas (even over text/elements);
-      // a plain drag pans only from empty areas.
-      if (!e.shiftKey && e.target.closest('.dlg-overlay-text, .dlg-logo-overlay, .dlg-design-elem-overlay, .dlg-resize-handle')) return;
+      // The hand tool or Shift+drag pans from ANYWHERE on the canvas (even
+      // over text/elements); a plain drag pans only from empty areas.
+      if (!_dlgPanTool && !e.shiftKey && e.target.closest('.dlg-overlay-text, .dlg-logo-overlay, .dlg-design-elem-overlay, .dlg-resize-handle')) return;
       if (!_sharedThumbnailDraft || (_sharedThumbnailDraft.frame_zoom || 1) <= 1) return;
       if (e.shiftKey) { e.stopPropagation(); }
       pushDlgUndo('pan');
@@ -8317,6 +8442,8 @@
     const endFmt   = editorOutTime.toFixed(1);
     document.getElementById('flow-export-filename').value = baseName + ' - Clip (' + startFmt + '-' + endFmt + ').mp4';
     document.getElementById('flow-export-type').value = detectClipType(_clipFile ? _clipFile.name : '');
+    const burnChk = document.getElementById('export-burn-captions');
+    if (burnChk) burnChk.checked = !!editorCaptionStyle.show;
     document.getElementById('export-flow-status').style.display = 'none';
     document.getElementById('export-folder-result').innerHTML = '';
     document.getElementById('export-folder-selected').style.display = 'none';
@@ -8373,6 +8500,184 @@
     }
     return '';
   }
+
+  // ── In-frame caption editor (June 12) — preview/style exactly what burns ──
+  let editorCaptionStyle = { font: 'Arial', emphasis_color: '#F5A623', show: true };
+  let editorCaptionOverrides = {};  // group index -> corrected text
+  let editorCaptionEmphasis  = {};  // group index -> [word indices]
+  let _capEditingGroup = null;
+
+  function resetCaptionEdits() {
+    editorCaptionOverrides = {};
+    editorCaptionEmphasis = {};
+    _capEditingGroup = null;
+  }
+
+  // Groups of <=10 kept words with BOTH source-time windows (editor sync)
+  // and output-time windows (burn). Single source of truth for both surfaces.
+  function buildClipCaptionGroups() {
+    if (!_wordsData || !_wordsData.length) return [];
+    const cuts = editorCutRanges
+      .map(r => [Math.max(r.start, editorInTime), Math.min(r.end, editorOutTime)])
+      .filter(r => r[1] - r[0] > 0.05)
+      .sort((a, b) => a[0] - b[0]);
+    const kept = [];
+    let cursor = editorInTime;
+    for (const [cs, ce] of cuts) {
+      if (cs - cursor > 0.05) kept.push([cursor, cs]);
+      cursor = Math.max(cursor, ce);
+    }
+    if (editorOutTime - cursor > 0.05) kept.push([cursor, editorOutTime]);
+    if (!kept.length) kept.push([editorInTime, editorOutTime]);
+
+    let offset = 0;
+    const words = [];
+    for (const [s, e] of kept) {
+      for (const w of _wordsData) {
+        const ws = w.start ?? 0, we = w.end ?? ws;
+        if (ws < e && we > s) {
+          let text = (w.word ?? '').trim();
+          if (!text) continue;
+          if (isWordBleeped(w)) text = '****';
+          words.push({
+            text,
+            srcStart: ws, srcEnd: Math.max(ws + 0.05, we),
+            outStart: Math.max(0, ws - s) + offset,
+            outEnd: Math.max(0.1, Math.min(e, we) - s) + offset,
+          });
+        }
+      }
+      offset += e - s;
+    }
+    const groups = [];
+    for (let i = 0; i < words.length; i += 10) {
+      const grp = words.slice(i, i + 10);
+      groups.push({
+        index: groups.length,
+        srcStart: grp[0].srcStart, srcEnd: grp[grp.length - 1].srcEnd,
+        outStart: grp[0].outStart, outEnd: grp[grp.length - 1].outEnd,
+        words: grp.map(w => w.text),
+      });
+    }
+    return groups;
+  }
+
+  function groupDisplayWords(group) {
+    const override = editorCaptionOverrides[group.index];
+    return override != null ? override.split(/\s+/).filter(Boolean) : group.words;
+  }
+
+  function setCaptionShow(on) {
+    editorCaptionStyle.show = !!on;
+    updateCaptionOverlay(true);
+  }
+  function setCaptionFont(font) {
+    editorCaptionStyle.font = font;
+    updateCaptionOverlay(true);
+  }
+  function setCaptionEmphasisColor(color) {
+    editorCaptionStyle.emphasis_color = color;
+    updateCaptionOverlay(true);
+  }
+  function toggleCaptionWordEmphasis(groupIndex, wordIndex) {
+    const list = editorCaptionEmphasis[groupIndex] || [];
+    const pos = list.indexOf(wordIndex);
+    if (pos >= 0) list.splice(pos, 1); else list.push(wordIndex);
+    editorCaptionEmphasis[groupIndex] = list;
+    updateCaptionOverlay(true);
+  }
+
+  let _capLastGroupIndex = -2;
+  function updateCaptionOverlay(force) {
+    const overlay = document.getElementById('caption-overlay');
+    const vid = document.getElementById('edit-video');
+    if (!overlay || !vid) return;
+    if (!editorCaptionStyle.show || !_wordsData || _currentStage !== 3) {
+      overlay.style.display = 'none';
+      _capLastGroupIndex = -2;
+      return;
+    }
+    if (_capEditingGroup != null && !force) return;  // don't redraw under the editor
+    const t = vid.currentTime;
+    const groups = buildClipCaptionGroups();
+    const g = groups.find(x => t >= x.srcStart && t < x.srcEnd) || null;
+    const gi = g ? g.index : -1;
+    if (!force && gi === _capLastGroupIndex) return;
+    _capLastGroupIndex = gi;
+    if (!g) { overlay.style.display = 'none'; return; }
+    overlay.style.display = 'block';
+    overlay.style.fontFamily = editorCaptionStyle.font + ', sans-serif';
+    overlay.style.fontSize = Math.max(13, Math.round(vid.clientHeight * 0.034)) + 'px';
+    overlay.dataset.groupIndex = g.index;
+    const emph = editorCaptionEmphasis[g.index] || [];
+    overlay.innerHTML = groupDisplayWords(g).map((w, i) =>
+      '<span class="cap-word" data-wi="' + i + '"' +
+      (emph.includes(i) ? ' style="color:' + escHtml(editorCaptionStyle.emphasis_color) + ';"' : '') +
+      '>' + escHtml(w) + '</span>'
+    ).join(' ');
+  }
+
+  // Sync with playback + scrubbing
+  (function () {
+    const vid = document.getElementById('edit-video');
+    if (!vid) return;
+    vid.addEventListener('timeupdate', () => updateCaptionOverlay(false));
+    vid.addEventListener('seeked', () => updateCaptionOverlay(true));
+  })();
+
+  // Click a word = toggle emphasis · double-click = edit the text
+  (function () {
+    const overlay = document.getElementById('caption-overlay');
+    if (!overlay) return;
+    let clickTimer = null;
+    overlay.addEventListener('click', function (e) {
+      if (overlay.classList.contains('editing')) return;
+      const wordEl = e.target.closest('.cap-word');
+      if (!wordEl) return;
+      const gi = parseInt(overlay.dataset.groupIndex);
+      const wi = parseInt(wordEl.dataset.wi);
+      clearTimeout(clickTimer);
+      clickTimer = setTimeout(() => toggleCaptionWordEmphasis(gi, wi), 220);
+    });
+    overlay.addEventListener('dblclick', function (e) {
+      clearTimeout(clickTimer);
+      if (overlay.classList.contains('editing')) return;
+      const vid = document.getElementById('edit-video');
+      if (vid) vid.pause();
+      const gi = parseInt(overlay.dataset.groupIndex);
+      _capEditingGroup = gi;
+      overlay.classList.add('editing');
+      const groups = buildClipCaptionGroups();
+      const g = groups.find(x => x.index === gi);
+      overlay.textContent = groupDisplayWords(g || { index: gi, words: [] }).join(' ');
+      overlay.contentEditable = 'plaintext-only';
+      overlay.focus();
+      const range = document.createRange();
+      range.selectNodeContents(overlay);
+      const sel = window.getSelection();
+      sel.removeAllRanges(); sel.addRange(range);
+      const commit = () => {
+        overlay.removeEventListener('blur', commit);
+        overlay.removeEventListener('keydown', onKey);
+        overlay.contentEditable = 'false';
+        overlay.classList.remove('editing');
+        const txt = overlay.textContent.replace(/\s+/g, ' ').trim();
+        const orig = (g ? g.words.join(' ') : '');
+        if (txt && txt !== orig) editorCaptionOverrides[gi] = txt;
+        else delete editorCaptionOverrides[gi];
+        delete editorCaptionEmphasis[gi];  // indices no longer line up
+        _capEditingGroup = null;
+        updateCaptionOverlay(true);
+      };
+      const onKey = (ev) => {
+        if (ev.key === 'Enter') { ev.preventDefault(); overlay.blur(); }
+        if (ev.key === 'Escape') { ev.preventDefault(); overlay.textContent = (g ? groupDisplayWords(g).join(' ') : ''); overlay.blur(); }
+      };
+      overlay.addEventListener('blur', commit);
+      overlay.addEventListener('keydown', onKey);
+      e.preventDefault();
+    });
+  })();
 
   // Build an SRT for the edited clip from the Words JSON: times remapped onto
   // the output timeline (cuts removed), bleeped words masked. Used by the
@@ -8497,8 +8802,19 @@
     }
     const burnCapChk = document.getElementById('export-burn-captions');
     if (burnCapChk && burnCapChk.checked) {
-      const srt = buildClipCaptionsSrt();
-      if (srt) form.append('captions_srt', srt);
+      const groups = buildClipCaptionGroups();
+      if (groups.length) {
+        form.append('captions_spec', JSON.stringify({
+          font: editorCaptionStyle.font,
+          emphasis_color: editorCaptionStyle.emphasis_color,
+          groups: groups.map(g => ({
+            start: Math.round(g.outStart * 1000) / 1000,
+            end: Math.round(g.outEnd * 1000) / 1000,
+            words: groupDisplayWords(g),
+            emphasis: editorCaptionEmphasis[g.index] || [],
+          })),
+        }));
+      }
     }
     if (_editCandidate && _editCandidate.hook_line)
       form.append('hook_line', _editCandidate.hook_line);
@@ -8817,7 +9133,10 @@
             <input type="range" id="dlg-brightness-slider" min="30" max="200" value="100" style="width:100%;accent-color:var(--orange);margin-top:2px;" oninput="setDlgBrightness(this.value)">
             <div class="thumb-inline-row" style="justify-content:space-between;align-items:center;margin:10px 0 4px;">
               <div class="thumb-editor-label" style="margin-bottom:0;">Photo Zoom <span id="dlg-zoom-val">100</span>%</div>
-              <button class="btn-ghost btn-sm" type="button" style="padding:1px 8px;font-size:10px;" onclick="resetDlgZoom()">Reset</button>
+              <span class="thumb-inline-row">
+                <button class="tx-mode-btn" type="button" id="dlg-pan-tool" onclick="toggleDlgPanTool()" title="When on, dragging anywhere on the canvas moves the photo (text and shapes are ignored until you turn it off)">&#9995; Move photo</button>
+                <button class="btn-ghost btn-sm" type="button" style="padding:1px 8px;font-size:10px;" onclick="resetDlgZoom()">Reset</button>
+              </span>
             </div>
             <input type="range" id="dlg-zoom-slider" min="100" max="300" value="100" style="width:100%;accent-color:var(--orange);margin-top:2px;" oninput="setDlgZoom(this.value)">
             <p style="font-size:11px;color:var(--muted);margin:6px 0 0;">When zoomed, drag an empty part of the photo to reposition it &#8212; or hold <strong>Shift</strong> and drag anywhere (even over text).</p>
@@ -8827,6 +9146,11 @@
             <div class="thumb-editor-label">Source Frames</div>
             <div id="dlg-frame-grid" class="frame-grid"></div>
             <div class="thumb-inline-row">
+              <button class="btn-ghost btn-sm" type="button" onclick="document.getElementById('dlg-upload-image').click()" title="Use your own image as the thumbnail base">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+                Upload image&hellip;
+              </button>
+              <input type="file" id="dlg-upload-image" accept="image/png,image/jpeg,image/webp" style="display:none;" onchange="dlgUploadImageAsFrame(this)">
               <button class="btn btn-sm" id="dlg-btn-pick-frame" onclick="dlgOpenFramePicker()">
                 <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="16"/><line x1="8" y1="12" x2="16" y2="12"/></svg>
                 Pick Frame

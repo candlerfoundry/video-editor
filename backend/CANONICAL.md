@@ -957,3 +957,58 @@ Also fixed:
   playback, used by Instagram as the cover).
 
 Regression risk: Medium.
+
+---
+
+## 28. In-frame caption editor + morning items (June 12, 2026)
+
+In-frame caption editor (Stage 3):
+- `#caption-overlay` sits on the editor video (inside `.edit-video-wrap`,
+  position relative) and mirrors the burn: bottom 12%, width 92%, font size
+  3.4% of the rendered video height, white bold with 4-way text-shadow
+  outline. Synced via timeupdate/seeked; hidden during cut ranges and when
+  the Captions toggle is off.
+- `buildClipCaptionGroups()` is the SINGLE source of truth: groups of <=10
+  kept words carrying BOTH source-time windows (overlay sync) and remapped
+  output-time windows (burn). Cut words removed; bleeped words masked ****.
+- Interactions: click a word = toggle emphasis (color from the Emphasis
+  swatches; stored as word indices in `editorCaptionEmphasis[group]`);
+  double-click = edit the group's text (stored in
+  `editorCaptionOverrides[group]`; editing clears that group's emphasis
+  since indices shift). Esc cancels, Enter commits.
+- Style state `editorCaptionStyle = {font, emphasis_color, show}`. Fonts are
+  system-safe for libass on Windows: Arial, Arial Black, Impact, Verdana,
+  Tahoma, Trebuchet MS, Georgia (whitelisted backend-side in
+  ASS_CAPTION_FONTS; unknown -> Arial).
+- Caption edits reset on clip selection; overlay refreshes inside
+  `updateAllEditorUI()` so trims/cuts re-group live.
+- Burn: `doExport` sends `captions_spec` JSON {font, emphasis_color,
+  groups:[{start,end,words,emphasis}]} (output timeline).
+  Backend `spec_to_ass()` renders it with true-pixel sizing and
+  `{\1c&HBBGGRR&}word{\1c&H00FFFFFF&}` inline emphasis runs
+  (`hex_to_ass_color` converts RGB->BGR). Legacy `captions_srt` remains as
+  fallback. The save modal's "Burn captions" checkbox pre-checks to match
+  the editor's Captions toggle.
+- VERIFIED by rendered frame: amber emphasized word inside white Arial Black
+  caption at 1080x1920.
+
+Morning items also shipped:
+- Clips picker says use the UNCAPTIONED master; choosing a "(Captioned)"
+  file warns (alert) before proceeding.
+- Composer "Upload image…" (`dlgUploadImageAsFrame`): uploaded PNG/JPEG/WebP
+  becomes a frame (downscaled to 1600, injected first, mirrored to the save
+  modal). Flows through draft, PNG export, Airtable, cover burn.
+- "Move photo" hand tool (`_dlgPanTool`, `.pan-mode` on the canvas wrap):
+  when on, ALL canvas drags pan the photo and element overlays ignore
+  pointer events; auto-off on zoom Reset. Shift+drag still works without it.
+- Cut/bleep persistence: `openDoneEditingModal` upserts the edited clip with
+  `cut_ranges`/`bleep_ranges`; backend `clip_selected` sanitizes (cap 40)
+  and keys the upsert by hook_line+mode (keying by times created duplicates
+  whenever trims changed). `restoreSavedClipEdits()` re-applies saved trims
+  and word edits when the same clip (by hook line) is reopened.
+- Launcher: `launcher/foundry.ico` (multi-size, from brand/foundry-f-orange),
+  build.bat passes `--icon foundry.ico`, launcher.py sets the Tk window icon.
+  EMILY MUST RUN `launcher/build.bat` ON HER MACHINE and replace the exe next
+  to server.py (PyInstaller is Windows-side).
+
+Regression risk: High.

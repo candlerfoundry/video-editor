@@ -10,7 +10,7 @@ if errorlevel 1 (
 )
 
 echo Building launcher...
-python -m PyInstaller --onefile --windowed --name "Foundry Video Editor" launcher.py
+python -m PyInstaller --onefile --windowed --icon foundry.ico --name "Foundry Video Editor" launcher.py
 if errorlevel 1 (
   echo.
   echo Build failed.

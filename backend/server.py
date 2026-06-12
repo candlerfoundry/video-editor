@@ -234,6 +234,82 @@ def srt_to_ass(srt_text, width, height):
     return header + '\n'.join(events) + '\n'
 
 
+ASS_CAPTION_FONTS = {"Arial", "Arial Black", "Impact", "Verdana", "Tahoma",
+                     "Trebuchet MS", "Georgia"}
+
+
+def hex_to_ass_color(hex_color):
+    """#RRGGBB -> &H00BBGGRR& (ASS is BGR)."""
+    h = (hex_color or "").lstrip("#")
+    if len(h) != 6:
+        return "&H0000A5F5&"  # amber fallback
+    r, g, b = h[0:2], h[2:4], h[4:6]
+    return f"&H00{b}{g}{r}&".upper()
+
+
+def spec_to_ass(spec, width, height):
+    """
+    Styled caption spec from the in-frame editor -> full ASS script.
+    spec = { font, emphasis_color, groups: [{start, end, words, emphasis}] }
+    Times are on the OUTPUT clip timeline. True-pixel sizing like srt_to_ass.
+    """
+    aspect = width / height if height else 1.78
+    if aspect < 0.75:
+        font_size = max(28, int(height * 0.034)); margin_v = int(height * 0.12)
+    elif aspect > 1.4:
+        font_size = max(24, int(height * 0.055)); margin_v = int(height * 0.06)
+    else:
+        font_size = max(26, int(height * 0.045)); margin_v = int(height * 0.08)
+    margin_h = int(width * 0.05)
+
+    font = spec.get("font") or "Arial"
+    if font not in ASS_CAPTION_FONTS:
+        font = "Arial"
+    emph_color = hex_to_ass_color(spec.get("emphasis_color") or "#F5A623")
+
+    def t2ass(t):
+        t = max(0.0, float(t))
+        h = int(t // 3600); m = int(t // 60) % 60; s = int(t % 60)
+        cs = int(round((t % 1) * 100))
+        if cs >= 100: cs = 99
+        return f"{h}:{m:02d}:{s:02d}.{cs:02d}"
+
+    header = (
+        "[Script Info]\n"
+        "ScriptType: v4.00+\n"
+        f"PlayResX: {width}\n"
+        f"PlayResY: {height}\n"
+        "ScaledBorderAndShadow: yes\n"
+        "WrapStyle: 0\n\n"
+        "[V4+ Styles]\n"
+        "Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, "
+        "OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, "
+        "ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, "
+        "Alignment, MarginL, MarginR, MarginV, Encoding\n"
+        f"Style: Default,{font},{font_size},&H00FFFFFF,&H00FFFFFF,&H00000000,"
+        f"&H7F000000,-1,0,0,0,100,100,0,0,1,3,0,2,{margin_h},{margin_h},{margin_v},1\n\n"
+        "[Events]\n"
+        "Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text\n"
+    )
+    events = []
+    for g in spec.get("groups") or []:
+        words = [str(w) for w in (g.get("words") or []) if str(w).strip()]
+        if not words:
+            continue
+        emphasis = set(int(i) for i in (g.get("emphasis") or []) if isinstance(i, (int, float)))
+        runs = []
+        for i, w in enumerate(words):
+            w_safe = w.replace("{", "(").replace("}", ")")
+            if i in emphasis:
+                runs.append("{\\1c" + emph_color + "}" + w_safe + "{\\1c&H00FFFFFF&}")
+            else:
+                runs.append(w_safe)
+        events.append(
+            f"Dialogue: 0,{t2ass(g.get('start', 0))},{t2ass(g.get('end', 0))},Default,,0,0,0,," + " ".join(runs)
+        )
+    return header + "\n".join(events) + "\n"
+
+
 # ── Adaptive caption sizing ──
 def get_video_dimensions(video_path, ffmpeg_exe):
     """Returns (width, height) using ffprobe. Returns (1920, 1080) as safe default on failure."""
@@ -1220,17 +1296,29 @@ def update_project():
                     for candidate in candidates[:20]
                 ]
             elif event_type == 'clip_selected':
+                def _clean_ranges(items):
+                    out = []
+                    for item in (items or [])[:40]:
+                        try:
+                            out.append({'start': float(item['start']), 'end': float(item['end'])})
+                        except Exception:
+                            continue
+                    return out
                 clip_entry = {
                     'start_time': payload.get('start_time'),
                     'end_time': payload.get('end_time'),
                     'hook_line': payload.get('hook_line'),
                     'mode': payload.get('mode') or project['meta'].get('last_clip_mode') or 'viral',
+                    'cut_ranges': _clean_ranges(payload.get('cut_ranges')),
+                    'bleep_ranges': _clean_ranges(payload.get('bleep_ranges')),
                     'updated_at': iso_now(),
                 }
+                # Key by hook_line so re-editing the same clip UPDATES the entry
+                # (keying by times created duplicates whenever trims changed).
                 upsert_project_list_item(
                     project.setdefault('edited_clips', []),
                     clip_entry,
-                    ['start_time', 'end_time', 'hook_line'],
+                    ['hook_line', 'mode'] if clip_entry['hook_line'] else ['start_time', 'end_time'],
                 )
             elif event_type in {'thumbnail_saved', 'thumbnail_draft_saved'}:
                 thumb_entry = normalize_thumbnail_draft(payload)
@@ -2197,6 +2285,7 @@ def export_clip():
         cut_ranges_raw  = request.form.get("cut_ranges",      "").strip()
         bleep_ranges_raw = request.form.get("bleep_ranges",   "").strip()
         captions_srt    = request.form.get("captions_srt",    "")
+        captions_spec_raw = request.form.get("captions_spec",  "").strip()
         cover_frame     = request.form.get("cover_frame",     "").strip() in {"1", "true", "yes"}
     except (ValueError, TypeError) as e:
         return jsonify({"error": f"Invalid parameters: {e}"}), 400
@@ -2231,15 +2320,24 @@ def export_clip():
         # Frontend remaps caption times onto the output timeline (cuts removed,
         # bleeped words masked), so the SRT applies AFTER trim/stitch.
         caption_filter = ""
-        if captions_srt.strip():
-            # Full ASS with PlayRes=output size, so sizes are true pixels
-            # (see srt_to_ass — fixes the giant-caption scaling bug).
+        ass_text = None
+        if captions_spec_raw:
+            # Styled spec from the in-frame caption editor (fonts + emphasis).
+            try:
+                ass_text = spec_to_ass(json.loads(captions_spec_raw), 1080, 1920)
+                logger.info("[export] Burning styled captions (%s groups)",
+                            len(json.loads(captions_spec_raw).get('groups') or []))
+            except Exception as exc:
+                logger.warning("[export] Invalid captions_spec; falling back: %s", exc)
+                ass_text = None
+        if ass_text is None and captions_srt.strip():
+            ass_text = srt_to_ass(captions_srt, 1080, 1920)
+            logger.info("[export] Burning clip captions (%s chars of SRT)", len(captions_srt))
+        if ass_text:
             ass_path = os.path.join(tmp_dir, "captions.ass")
             with open(ass_path, "w", encoding="utf-8") as f:
-                f.write(srt_to_ass(captions_srt, 1080, 1920))
+                f.write(ass_text)
             caption_filter = ",subtitles=captions.ass"
-            logger.info("[export] Burning clip captions (%s chars of SRT, ASS true-pixel sizing)",
-                        len(captions_srt))
 
         # ── Step A: 9:16 vertical reframe ──
         kept_segments = compute_kept_segments(starttime, endtime, cut_ranges_raw)

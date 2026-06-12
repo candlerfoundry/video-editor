@@ -49,6 +49,12 @@ class LauncherApp:
 
     def _build_window(self):
         self.root.title('Foundry Video Editor')
+        try:
+            _icon = os.path.join(os.path.dirname(os.path.abspath(sys.executable if getattr(sys, 'frozen', False) else __file__)), 'foundry.ico')
+            if os.path.isfile(_icon):
+                self.root.iconbitmap(_icon)
+        except Exception:
+            pass
         self.root.geometry('360x500')
         self.root.resizable(False, False)
         self.root.configure(bg=BG)
