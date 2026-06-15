@@ -1277,3 +1277,24 @@ Audible bleep preview (index.html):
 Handshake bumped to 2026-06-15-bleepfix (BACKEND_BUILD + EXPECTED_BACKEND_BUILD).
 
 Regression risk: Medium-High (export filter graph + audio).
+
+## 37. macOS support (June 15, 2026)
+
+The launcher `.exe` is Windows-only (PyInstaller); macOS refuses to run it.
+The editor itself is portable — the UI is the Netlify site and `server.py` is
+plain Python. Mac runs the backend directly (no exe) via a `.command` double-
+click launcher in `Start Here to use Editor`; deps install with pip, ffmpeg
+comes from Homebrew (find_ffmpeg already falls back to bare `ffmpeg`/`ffprobe`
+on PATH, and CREATE_NO_WINDOW is 0 off Windows).
+
+- `resolve_dropbox_root()` replaces the hardcoded `~/Dropbox`. Windows and a
+  single personal Dropbox still resolve `~/Dropbox` (the marker
+  `Scripts/Foundry Video Editor` lives there). On a Mac where a Business/Team
+  account syncs to `~/Dropbox (Team Name)` — or a second personal account
+  occupies `~/Dropbox` — it picks whichever `~/Dropbox*` folder actually holds
+  the Foundry marker. Everything derived from `dropbox_root` (api keys,
+  video search, clip output) follows automatically. Do NOT revert to a
+  hardcoded `~/Dropbox`.
+- No frontend/backend contract change, so the build handshake is NOT bumped.
+
+Regression risk: Low (Windows path is byte-identical to before).

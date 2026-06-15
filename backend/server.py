@@ -69,7 +69,30 @@ CREATE_NO_WINDOW = 0x08000000 if platform.system() == 'Windows' else 0
 STYLE_STR = "Fontname=Arial,Outline=1,Shadow=0,BorderStyle=1,Spacing=1"
 
 # ── Dropbox portable paths ──
-dropbox_root = os.path.join(os.path.expanduser('~'), 'Dropbox')
+def resolve_dropbox_root():
+    """Locate the Foundry Dropbox root.
+
+    Standard case (Windows / a personal Dropbox): ~/Dropbox. On macOS a
+    Business/Team account can sync to "~/Dropbox (Team Name)" instead - and a
+    second personal account may occupy ~/Dropbox - so prefer whichever
+    ~/Dropbox* folder actually contains the Foundry files
+    (Scripts/Foundry Video Editor). Falls back to ~/Dropbox. Windows is
+    unaffected: ~/Dropbox already holds the marker, so it is returned first.
+    """
+    import glob
+    home = os.path.expanduser('~')
+    marker = os.path.join('Scripts', 'Foundry Video Editor')
+    seen = set()
+    candidates = [os.path.join(home, 'Dropbox')] + sorted(glob.glob(os.path.join(home, 'Dropbox*')))
+    for cand in candidates:
+        if cand in seen:
+            continue
+        seen.add(cand)
+        if os.path.isdir(os.path.join(cand, marker)):
+            return cand
+    return os.path.join(home, 'Dropbox')
+
+dropbox_root = resolve_dropbox_root()
 API_KEY_PATH = os.path.join(dropbox_root, 'Scripts', 'api_key.txt')
 
 
