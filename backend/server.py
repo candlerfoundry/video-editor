@@ -62,7 +62,7 @@ CORS(app)
 
 # Bump this whenever the frontend/backend contract changes (the frontend
 # carries a matching EXPECTED_BACKEND_BUILD and warns when they differ).
-BACKEND_BUILD = "2026-06-12-wave2d"
+BACKEND_BUILD = "2026-06-15-bleepfix"
 
 CREATE_NO_WINDOW = 0x08000000 if platform.system() == 'Windows' else 0
 
@@ -2568,19 +2568,15 @@ def export_clip():
                 err = r2.stderr.decode("utf-8", errors="replace")[-800:]
                 return jsonify({"error": "ffmpeg stitched export failed: " + err}), 500
         else:
-            # Legacy single-segment path (unchanged)
-            # Pass 1: extract the in/out segment (stream copy, fast)
-            r1 = subprocess.run(
-                [FFMPEG_EXE, "-y",
-                 "-ss", str(starttime), "-to", str(endtime),
-                 "-i", input_path, "-c", "copy", temp_clip],
-                capture_output=True, creationflags=CREATE_NO_WINDOW,
-            )
-            if r1.returncode != 0:
-                err = r1.stderr.decode("utf-8", errors="replace")[-800:]
-                return jsonify({"error": "ffmpeg extract failed: " + err}), 500
-
-            # Pass 2: crop centre 9:16 and scale to 1080×1920
+            # Single-segment export (no cuts). ONE frame-accurate pass straight
+            # from the original input via an input-seek (-ss/-t) re-encode. The
+            # old path stream-copied the segment first (-ss -to -c copy), which
+            # can only cut on a keyframe, so the clip started a fraction of a
+            # second early and every bleep / caption landed early (CANONICAL §36).
+            # Input-seek while re-encoding is sample-accurate and resets PTS to 0,
+            # so the clip starts exactly at starttime; bleep/tone use
+            # offset=starttime (local clip time = absolute - starttime).
+            seg_dur = endtime - starttime
             bleep_chain = build_bleep_audio_chain(bleep_ranges, time_offset=starttime)
             tone_expr   = build_bleep_tone_expr(bleep_ranges, time_offset=starttime)
             if bleep_chain and tone_expr:
@@ -2592,7 +2588,7 @@ def export_clip():
                     f"[mute][tone]amix=inputs=2:duration=first:dropout_transition=0:normalize=0[aout]"
                 )
                 pass2_cmd = [FFMPEG_EXE, "-y",
-                             "-i", temp_clip,
+                             "-ss", f"{starttime:.3f}", "-t", f"{seg_dur:.3f}", "-i", input_path,
                              "-f", "lavfi", "-i", "sine=frequency=1000:sample_rate=48000",
                              "-filter_complex", fc,
                              "-map", "[vout]", "-map", "[aout]",
@@ -2601,7 +2597,7 @@ def export_clip():
                              output_path]
             else:
                 pass2_cmd = [FFMPEG_EXE, "-y",
-                             "-i", temp_clip,
+                             "-ss", f"{starttime:.3f}", "-t", f"{seg_dur:.3f}", "-i", input_path,
                              "-vf", f"crop=ih*9/16:ih,scale=1080:1920{caption_filter}",
                              "-c:v", "libx264", "-crf", "18", "-preset", "veryfast",
                              "-c:a", "aac",

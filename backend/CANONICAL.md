@@ -1,7 +1,7 @@
 # CANONICAL.md - Foundry Video Editor Backend
 # Source of truth for critical backend and thumbnail behavior.
 # Every editing session must compare server.py to this file before changing fragile paths.
-# Last updated: June 10, 2026 (transcript trimming & word cut-outs session)
+# Last updated: June 15, 2026 (bleep accuracy + audible preview — §36)
 #
 # HOW TO USE THIS FILE:
 # 1. Read it before editing server.py or launcher/launcher.py.
@@ -601,8 +601,10 @@ Canonical backend requirements in `server.py`:
 - With > 1 kept segment, export runs ONE ffmpeg pass:
   `-filter_complex "[0:v]trim=..,setpts=PTS-STARTPTS[vN];[0:a]atrim=..,asetpts=PTS-STARTPTS[aN];..concat=n=N:v=1:a=1[vcat][acat];[vcat]crop=ih*9/16:ih,scale=1080:1920[vout]"`
   with `-map [vout] -map [acat]`, same codec settings as the legacy path.
-- With 1 kept segment (no cuts), the legacy two-pass extract+reframe path runs
-  UNCHANGED — do not merge the two paths.
+- With 1 kept segment (no cuts), export runs ONE frame-accurate input-seek
+  pass from the original input (UPDATED June 15 — see §36; the old two-pass
+  stream-copy pre-extract snapped to keyframes and shifted bleeps/captions
+  early). The >1-segment (cuts) path stays separate and is unchanged.
 
 Word bleeping (added June 11, 2026):
 - `editorBleepRanges` parallels `editorCutRanges`: ranges whose AUDIO is muted
@@ -623,7 +625,8 @@ Known limitations:
 - Cut/bleep ranges are not yet persisted to the local project store
   (`/projects/update`); they live only in the editor session until export.
 - Stitches are hard cuts (standard jump-cut style); no audio crossfade.
-- Bleeps are silence, not a censor tone.
+- Bleeps were silence originally; an audible 1 kHz censor tone was added
+  (§35) and made frame-accurate on the no-cuts path (§36).
 
 Regression risk: High.
 
@@ -1134,7 +1137,7 @@ spec_to_ass v1 str()-ed them into the text).
   (pre-handshake backends) counts as stale.
 - The health poll contract from section 12 is unchanged (no early-return
   guard; 2.5s timeout; 3s interval).
-- Current build id: 2026-06-12-wave2.
+- Current build id: 2026-06-15-bleepfix.
 
 Regression risk: Medium — forgetting to bump BOTH constants makes every
 user see the stale banner (or worse, silences a real mismatch).
@@ -1238,3 +1241,39 @@ play/pause events) + live playhead readout (#playhead-time, M:SS.cc).
 Handshake: 2026-06-12-wave2d.
 
 Regression risk: High.
+
+## 36. Bleep accuracy + audible preview (June 15, 2026)
+
+Two fixes after Emily reported the bleep "not working" in saved files.
+
+Export accuracy (server.py, /export_clip no-cuts branch):
+- ROOT CAUSE: the single-segment path pre-extracted the clip with a
+  stream-copy seek (`-ss START -to END -i input -c copy`), which can only cut
+  on a keyframe. The temp clip therefore started a fraction of a second before
+  `starttime`, so every bleep window (and burned caption) landed early — enough
+  to slide the censor tone off a short word. Demonstrated: an 8.000s request
+  produced an 8.167s stream-copy clip.
+- FIX: the no-cuts branch now does ONE pass straight from the original input
+  with an input-seek re-encode (`-ss starttime -t (end-start) -i input`), which
+  is sample-accurate and resets PTS to 0. Bleep/tone keep offset=starttime; no
+  `temp_clip` pre-extract. Verified on a synthetic source: tone energy falls
+  exactly inside the intended window and output duration is exact. Also fixes
+  slight caption drift on the same path. The >1-segment (cuts) path was already
+  accurate and is unchanged.
+- Intentionally supersedes the §19 rule "no-cuts two-pass runs UNCHANGED — do
+  not merge." Stitched (cuts) path stays separate.
+
+Audible bleep preview (index.html):
+- ROOT CAUSE: the WebAudio preview oscillator (`startBleepTone`) never resumed
+  the AudioContext, which browsers create SUSPENDED until a user gesture — so
+  the Play Selection tone was usually silent, making users think bleeping was
+  broken.
+- FIX: `startBleepTone()` now calls `_bleepCtx.resume()`. New
+  `previewBleepBlip()` plays a ~400ms 1 kHz tone (short attack/release) the
+  instant a bleep is applied — on single-word apply (line ~4093) and drag-apply
+  (line ~5048) — so the user hears what the export will sound like. Applying a
+  bleep is the user gesture that unlocks audio for the rest of the session.
+
+Handshake bumped to 2026-06-15-bleepfix (BACKEND_BUILD + EXPECTED_BACKEND_BUILD).
+
+Regression risk: Medium-High (export filter graph + audio).

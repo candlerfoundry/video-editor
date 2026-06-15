@@ -2904,7 +2904,7 @@
   // Must match BACKEND_BUILD in server.py — bumped together whenever the
   // frontend/backend contract changes. A mismatch means the user is running
   // an old backend (launcher not restarted after a deploy).
-  const EXPECTED_BACKEND_BUILD = '2026-06-12-wave2d';
+  const EXPECTED_BACKEND_BUILD = '2026-06-15-bleepfix';
   let _staleBackendWarned = false;
   function showStaleBackendBanner(stale) {
     let el = document.getElementById('stale-backend-banner');
@@ -4090,7 +4090,7 @@
       pushEditorUndo(_txEditMode + '-word');
       const wEnd = isNaN(tEnd) ? t + 0.3 : tEnd;
       if (_txEditMode === 'cut') addCutRange(t, wEnd);
-      else addBleepRange(t, wEnd);
+      else { addBleepRange(t, wEnd); previewBleepBlip(); }
       updateAllEditorUI();
       return;
     }
@@ -4635,6 +4635,7 @@
     if (_bleepOsc) return;
     try {
       if (!_bleepCtx) _bleepCtx = new (window.AudioContext || window.webkitAudioContext)();
+      if (_bleepCtx.state === 'suspended') _bleepCtx.resume();
       _bleepOsc = _bleepCtx.createOscillator();
       _bleepGain = _bleepCtx.createGain();
       _bleepOsc.frequency.value = 1000;
@@ -4646,6 +4647,27 @@
   function stopBleepTone() {
     try { if (_bleepOsc) { _bleepOsc.stop(); _bleepOsc.disconnect(); } } catch (_) {}
     _bleepOsc = null;
+  }
+  // One-shot censor-tone "blip" so the user immediately hears what a bleep
+  // sounds like the moment they apply one. The Play Selection tone needs the
+  // AudioContext resumed by a user gesture; applying a bleep IS that gesture.
+  function previewBleepBlip(durationMs = 400) {
+    try {
+      if (!_bleepCtx) _bleepCtx = new (window.AudioContext || window.webkitAudioContext)();
+      if (_bleepCtx.state === 'suspended') _bleepCtx.resume();
+      const osc = _bleepCtx.createOscillator();
+      const gain = _bleepCtx.createGain();
+      osc.frequency.value = 1000;
+      const now = _bleepCtx.currentTime;
+      const end = now + durationMs / 1000;
+      gain.gain.setValueAtTime(0.0001, now);
+      gain.gain.exponentialRampToValueAtTime(0.14, now + 0.02);
+      gain.gain.setValueAtTime(0.14, Math.max(now + 0.03, end - 0.04));
+      gain.gain.exponentialRampToValueAtTime(0.0001, end);
+      osc.connect(gain).connect(_bleepCtx.destination);
+      osc.start(now);
+      osc.stop(end + 0.02);
+    } catch (_) {}
   }
   function isWordBleeped(w) {
     const mid = ((w.start ?? 0) + (w.end ?? w.start ?? 0)) / 2;
@@ -5045,7 +5067,7 @@
           const lo = Math.min(_cutAnchor.s, _cutCurrent.s);
           const hi = Math.max(_cutAnchor.e, _cutCurrent.e);
           pushEditorUndo(_txEditMode + '-drag');
-          if (_txEditMode === 'bleep') addBleepRange(lo, hi);
+          if (_txEditMode === 'bleep') { addBleepRange(lo, hi); previewBleepBlip(); }
           else addCutRange(lo, hi);
           _txSuppressClick = true;
           updateAllEditorUI();
