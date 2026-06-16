@@ -2043,7 +2043,7 @@
     .frame-cell:hover { border-color: var(--orange); }
     .frame-cell.selected { border: 3px solid #E8541A; box-shadow: 0 0 0 2px rgba(232,84,26,0.25); }
     #dlg-frame-grid.frame-grid { grid-template-columns: repeat(2, 1fr); width: 100%; gap: 8px; }
-    .frame-enlarge-btn { position: absolute; top: 5px; right: 5px; z-index: 3; width: 24px; height: 24px; border-radius: 6px; border: none; background: rgba(0,0,0,0.55); color: #fff; cursor: pointer; display: flex; align-items: center; justify-content: center; opacity: 0; transition: opacity 120ms; padding: 0; }
+    .frame-enlarge-btn { position: absolute; top: 5px; right: 5px; z-index: 3; width: 24px; height: 24px; border-radius: 6px; border: none; background: rgba(0,0,0,0.55); color: #fff; cursor: pointer; display: flex; align-items: center; justify-content: center; opacity: 0.85; transition: opacity 120ms; padding: 0; }
     .frame-cell:hover .frame-enlarge-btn { opacity: 1; }
     .frame-enlarge-btn:hover { background: var(--orange); }
 
@@ -6403,7 +6403,9 @@
           var _bw = _ge.width || 200, _bh = _ge.height || 200;
           var _s = Math.min(_bw / _bi.naturalWidth, _bh / _bi.naturalHeight);
           var _rw = _bi.naturalWidth * _s, _rh = _bi.naturalHeight * _s;
+          var _pa2 = ctx.globalAlpha; ctx.globalAlpha = (_ge.opacity ?? 100) / 100;
           ctx.drawImage(_bi, (_ge.x || 0) + (_bw - _rw) / 2, (_ge.y || 0) + (_bh - _rh) / 2, _rw, _rh);
+          ctx.globalAlpha = _pa2;
         } catch (_) {}
       }
     }
@@ -7690,7 +7692,7 @@
     ov.style.cssText = 'position:fixed;inset:0;z-index:99999;background:rgba(0,0,0,0.82);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px;padding:24px;';
     const img = document.createElement('img');
     img.src = 'data:image/jpeg;base64,' + b64;
-    img.style.cssText = 'max-width:92vw;max-height:78vh;border-radius:10px;box-shadow:0 12px 48px rgba(0,0,0,0.6);object-fit:contain;background:#000;';
+    img.style.cssText = 'width:92vw;height:80vh;object-fit:contain;border-radius:10px;box-shadow:0 12px 48px rgba(0,0,0,0.6);';
     const row = document.createElement('div'); row.style.cssText = 'display:flex;gap:12px;';
     const useBtn = document.createElement('button'); useBtn.className = 'btn'; useBtn.textContent = 'Use this frame';
     useBtn.addEventListener('click', function(){ dlgSelectFrame(i); ov.remove(); });
@@ -7917,10 +7919,18 @@
   }
 
   function setDlgLogoOpacity(val) {
-    if (!_sharedThumbnailDraft?.logo) return;
-    _sharedThumbnailDraft.logo.opacity = parseInt(val);
-    const v = document.getElementById('dlg-logo-opacity-val'); if (v) v.textContent = parseInt(val);
+    const op = parseInt(val);
+    const v = document.getElementById('dlg-logo-opacity-val'); if (v) v.textContent = op;
+    if (!_sharedThumbnailDraft) return;
+    let targets = (_sharedThumbnailDraft.graphic_elements || []).filter(function(e){ return e.type === 'image'; });
+    if (_dlgSelectedElemId) {
+      const sel = (_sharedThumbnailDraft.graphic_elements || []).find(function(e){ return e.id === _dlgSelectedElemId; });
+      if (sel && sel.type === 'image') targets = [sel];
+    }
+    targets.forEach(function(e){ e.opacity = op; });
+    if (_sharedThumbnailDraft.logo) _sharedThumbnailDraft.logo.opacity = op;
     renderDialogOverlayLayer();
+    dlgDrawCanvas();
   }
 
   function setDlgColor(hex, btn) {
@@ -8711,6 +8721,7 @@
       wrap.style.top    = Math.round(elem.y / _sy) + 'px';
       wrap.style.width  = dw + 'px';
       wrap.style.height = dh + 'px';
+      wrap.style.opacity = ((elem.opacity ?? 100) / 100);
       if (elem.type === 'image') {
         wrap.innerHTML = '<img src="' + escHtml(elem.asset || '') + '" alt="" draggable="false" style="width:100%;height:100%;object-fit:contain;display:block;pointer-events:none;">';
       } else {

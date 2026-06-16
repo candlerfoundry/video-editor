@@ -1488,3 +1488,19 @@ backdrop click or Esc). Clicking the cell still selects directly. Legacy
 thumb-frame-grid unchanged.
 
 Regression risk: Low (additive).
+
+## 47. Logo opacity (element-based) + frame popout upscale (June 16, 2026)
+
+Frontend-only.
+- LOGO OPACITY BUG: logos added via "Add a logo" are graphic_elements
+  (type:'image'), NOT _sharedThumbnailDraft.logo, so the first slider did
+  nothing. setDlgLogoOpacity now sets opacity on the selected image element (or
+  all image elements if none selected, plus draft.logo). Applied in BOTH the
+  editor overlay (.dlg-design-elem-overlay wrap opacity) and the export canvas
+  (globalAlpha around the image drawImage).
+- FRAME POPOUT: the enlarge popout used max-width/height, which never upscales a
+  small (low-res) frame, so it looked tiny in a big black overlay. Now
+  width:92vw / height:80vh + object-fit:contain so the frame scales UP to fill.
+  The magnifier button is always visible (opacity .85) for discoverability.
+
+Regression risk: Low.
