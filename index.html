@@ -7,7 +7,7 @@
   <link rel="icon" type="image/png" href="brand/foundry-f-orange.png">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600;700&family=Bebas+Neue&family=Cormorant+Garamond:wght@400;500;600;700&family=DM+Sans:wght@400;500;600;700&family=Inter:wght@400;500;600;700&family=Lora:wght@400;500;600;700&family=Montserrat:wght@400;500;600;700&family=Oswald:wght@400;500;600;700&family=Playfair+Display:wght@600;700&family=Spectral:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600;700&family=Bebas+Neue&family=Cormorant+Garamond:wght@400;500;600;700&family=DM+Sans:wght@400;500;600;700&family=Inter:wght@400;500;600;700&family=Lora:wght@400;500;600;700&family=Montserrat:wght@400;500;600;700&family=Oswald:wght@400;500;600;700&family=Playfair+Display:wght@600;700&family=Spectral:wght@400;500;600;700&family=Poppins:wght@400;500;600;700;800;900&family=Boogaloo&family=Just+Another+Hand&family=Patrick+Hand+SC&display=swap" rel="stylesheet">
   <script src="https://unpkg.com/wavesurfer.js@7/dist/wavesurfer.min.js"></script>
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
@@ -2692,13 +2692,10 @@
                   <div>
                     <div class="thumb-control-label">Font</div>
                     <select class="thumb-font-select" id="thumb-font-select" onchange="updateThumbText();renderThumbCanvas()">
-                      <option value="Montserrat" style="font-family:'Montserrat'">Montserrat</option>
-                      <option value="Barlow" style="font-family:'Barlow'">Barlow</option>
-                      <option value="Spectral" style="font-family:'Spectral'">Spectral</option>
-                      <option value="Inter" style="font-family:'Inter'">Inter</option>
-                      <option value="'Cormorant Garamond'" style="font-family:'Cormorant Garamond'">Cormorant Garamond</option>
-                      <option value="Lora" style="font-family:'Lora'">Lora</option>
-                      <option value="'DM Sans'" style="font-family:'DM Sans'">DM Sans</option>
+                      <option value="Poppins" style="font-family:'Poppins'">Poppins</option>
+                      <option value="Boogaloo" style="font-family:'Boogaloo'">Boogaloo</option>
+                      <option value="'Just Another Hand'" style="font-family:'Just Another Hand'">Just Another Hand</option>
+                      <option value="'Patrick Hand SC'" style="font-family:'Patrick Hand SC'">Patrick Hand SC</option>
                     </select>
                   </div>
 
@@ -5336,7 +5333,7 @@
 
   let _thumbStyle          = 'lower_third';
   let _thumbTitle          = '';
-  let _thumbFontFamily     = 'Montserrat';
+  let _thumbFontFamily     = 'Poppins';
   let _thumbFontSize       = 64;     // canvas-resolution px (1280-wide canvas)
   let _thumbCanvasTX       = 640;    // text center X in canvas-space (0-1280)
   let _thumbCanvasTY       = 590;    // text center Y in canvas-space (0-720)
@@ -5370,7 +5367,7 @@
       color: overrides.color || '#ffffff',
       background_color: overrides.background_color || '#111111',
       background_opacity: overrides.background_opacity ?? 70,
-      font_family: overrides.font_family || 'Montserrat',
+      font_family: overrides.font_family || 'Poppins',
       font_size: overrides.font_size ?? 64,
       x: overrides.x ?? null,
       y: overrides.y ?? null,
@@ -5431,7 +5428,7 @@
         color: options.textColor || '#ffffff',
         background_color: options.backgroundColor || '#111111',
         background_opacity: options.backgroundOpacity ?? 70,
-        font_family: options.fontFamily || 'Montserrat',
+        font_family: options.fontFamily || 'Poppins',
         font_size: options.fontSize ?? 64,
         shadow: options.shadowOn ?? true,
       });
@@ -5514,7 +5511,7 @@
     _dlgTargetFormat = _sharedThumbnailDraft.target_format || 'instagram';
     _dlgVideoInfo = _sharedThumbnailDraft.video_info || null;
     _dlgTitle = box?.text || '';
-    _dlgFontFamily = box?.font_family || 'Montserrat';
+    _dlgFontFamily = box?.font_family || 'Poppins';
     _dlgFontSize = box?.font_size || 64;
     _dlgTextColor = box?.color || '#ffffff';
     _dlgBackgroundColor = box?.background_color || '#111111';
@@ -5903,14 +5900,14 @@
 
   function openThumbEditor() {
     // Reset controls to defaults
-    _thumbFontFamily     = 'Montserrat';
+    _thumbFontFamily     = 'Poppins';
     _thumbFontSize       = 64;
     _thumbTextColor      = '#ffffff';
     _thumbShadowOn       = true;
     _thumbOverlayOpacity = 0;
 
     const fontSel = document.getElementById('thumb-font-select');
-    if (fontSel) fontSel.value = 'Montserrat';
+    if (fontSel) fontSel.value = 'Poppins';
     const sizeSlider = document.getElementById('thumb-size-slider');
     if (sizeSlider) sizeSlider.value = 64;
     const shadowChk = document.getElementById('thumb-shadow-toggle');
@@ -6116,7 +6113,7 @@
           width: W * 0.8,
         };
     const resolvedFontSize = box.font_size || 64;
-    const resolvedFontFamily = box.font_family || 'Montserrat';
+    const resolvedFontFamily = box.font_family || 'Poppins';
     const resolvedX = box.x ?? (W * 0.5);
     const resolvedY = box.y ?? 0;
     const resolvedAlign = box.align || 'center';
@@ -6622,7 +6619,7 @@
   let _savedClipExport = null;
   let _dlgStyle          = 'lower_third';
   let _dlgTitle          = '';
-  let _dlgFontFamily     = 'Montserrat';
+  let _dlgFontFamily     = 'Poppins';
   let _dlgFontSize       = 64;
   let _dlgCanvasTX       = 640;
   let _dlgCanvasTY       = 590;
@@ -7663,7 +7660,7 @@
 
   function dlgOpenEditor() {
     const box = getActiveThumbnailTextBox();
-    _dlgFontFamily = box?.font_family || 'Montserrat';
+    _dlgFontFamily = box?.font_family || 'Poppins';
     _dlgFontSize = box?.font_size || 64;
     _dlgTextColor = box?.color || '#ffffff';
     _dlgBackgroundColor = box?.background_color || '#111111';
@@ -8406,7 +8403,7 @@
       div.style.top        = (by / scaleY) + 'px';
       div.style.transform  = 'translate(-50%, -50%)';
       div.style.width      = (bw / scaleX) + 'px';
-      div.style.fontFamily = (box.font_family || 'Montserrat') + ', sans-serif';
+      div.style.fontFamily = (box.font_family || 'Poppins') + ', sans-serif';
       div.style.fontSize   = Math.round((box.font_size || 64) / Math.max(scaleX, scaleY)) + 'px';
       div.style.color      = box.color || '#ffffff';
       div.style.textAlign  = box.align || 'center';
@@ -9805,57 +9802,6 @@
               <div id="dlg-logo-dropdown" style="display:none;position:absolute;z-index:50;top:100%;left:0;right:0;margin-top:4px;background:var(--surface);border:1px solid var(--border-2);border-radius:10px;box-shadow:var(--shadow-md);max-height:260px;overflow-y:auto;padding:4px;"></div>
             </div>
 
-            <div style="font-size:10px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:var(--muted);margin-bottom:6px;">Shapes</div>
-            <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px;">
-              <button class="design-elem-btn" type="button" title="Oval highlight" onclick="dlgAddDesignElement({type:'shape',shape_type:'circle',color:'#c84826'})">
-                <svg width="22" height="22" viewBox="0 0 40 40" fill="none"><path d="M20,7 C28,6 35,12 35,20 C35,28 28,34 20,34 C12,34 5,28 5,20 C5,12 12,6 20,7 Z" stroke="#c84826" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/></svg>
-              </button>
-              <button class="design-elem-btn" type="button" title="Curved arrow" onclick="dlgAddDesignElement({type:'shape',shape_type:'arrow',color:'#1e2530'})">
-                <svg width="22" height="22" viewBox="0 0 40 40" fill="none"><path d="M7,26 C12,20 20,12 30,14 M30,14 L24,8 M30,14 L25,20" stroke="#1e2530" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/></svg>
-              </button>
-              <button class="design-elem-btn" type="button" title="Brush underline" onclick="dlgAddDesignElement({type:'shape',shape_type:'underline',color:'#c84826'})">
-                <svg width="22" height="22" viewBox="0 0 40 40" fill="none"><path d="M4,27 C11,22 18,30 20,26 C22,22 29,28 36,24" stroke="#c84826" stroke-width="4.5" stroke-linecap="round"/></svg>
-              </button>
-              <button class="design-elem-btn" type="button" title="Starburst" onclick="dlgAddDesignElement({type:'shape',shape_type:'star',color:'#1e2530'})">
-                <svg width="22" height="22" viewBox="0 0 40 40" fill="none"><path d="M20,4 L22,15 L31,9 L25,18 L36,18 L27,24 L32,34 L22,28 L22,37 L18,28 L10,34 L14,24 L5,18 L16,18 L11,9 L20,15 Z" stroke="#1e2530" stroke-width="2.2" stroke-linejoin="round" stroke-linecap="round"/></svg>
-              </button>
-              <button class="design-elem-btn" type="button" title="Focus brackets" onclick="dlgAddDesignElement({type:'shape',shape_type:'brackets',color:'#1e2530'})">
-                <svg width="22" height="22" viewBox="0 0 40 40" fill="none"><path d="M16,8 C12,10 10,14 10,20 C10,26 12,30 16,32" stroke="#1e2530" stroke-width="3.5" stroke-linecap="round"/><path d="M24,8 C28,10 30,14 30,20 C30,26 28,30 24,32" stroke="#1e2530" stroke-width="3.5" stroke-linecap="round"/></svg>
-              </button>
-              <button class="design-elem-btn" type="button" title="Bold check" onclick="dlgAddDesignElement({type:'shape',shape_type:'check',color:'#c84826'})">
-                <svg width="22" height="22" viewBox="0 0 40 40" fill="none"><path d="M5,22 C9,22 13,28 17,34 C22,26 29,16 35,8" stroke="#c84826" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/></svg>
-              </button>
-              <button class="design-elem-btn" type="button" title="Stylized quote mark" onclick="dlgAddDesignElement({type:'shape',shape_type:'quote',color:'#c84826'})">
-                <svg width="22" height="22" viewBox="0 0 40 40"><text x="20" y="34" font-family="Georgia, serif" font-weight="900" font-size="44" fill="#c84826" text-anchor="middle">&#8220;</text></svg>
-              </button>
-              <button class="design-elem-btn" type="button" title="Sketchy circle" onclick="dlgAddDesignElement({type:'shape',shape_type:'scribble_circle',color:'#c84826'})">
-                <svg width="22" height="22" viewBox="0 0 40 40" fill="none"><path d="M20,5 C30,4 37,11 36,20 C35,29 28,36 19,36 C10,36 4,29 4,19 C5,11 12,6 21,6" stroke="#c84826" stroke-width="2.4" stroke-linecap="round"/><path d="M22,3 C32,4 39,12 38,21 C37,31 28,38 18,37" stroke="#c84826" stroke-width="1.7" stroke-linecap="round"/></svg>
-              </button>
-              <button class="design-elem-btn" type="button" title="Scribble highlight" onclick="dlgAddDesignElement({type:'shape',shape_type:'highlight',color:'#F5A623'})">
-                <svg width="22" height="22" viewBox="0 0 40 40" fill="none"><path d="M3,12 L37,9 L4,18 L36,15 L3,25 L37,22 L5,31 L35,29" stroke="#F5A623" stroke-width="3.6" stroke-linecap="round"/></svg>
-              </button>
-              <button class="design-elem-btn" type="button" title="Bold straight arrow" onclick="dlgAddDesignElement({type:'shape',shape_type:'arrow_straight',color:'#1e2530'})">
-                <svg width="22" height="22" viewBox="0 0 40 40" fill="none"><path d="M4,20 L31,20 M31,20 L23,12 M31,20 L23,28" stroke="#1e2530" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/></svg>
-              </button>
-              <button class="design-elem-btn" type="button" title="Sparkle" onclick="dlgAddDesignElement({type:'shape',shape_type:'sparkle',color:'#F5A623'})">
-                <svg width="22" height="22" viewBox="0 0 40 40"><path d="M 20 2 C 22 14, 26 18, 38 20 C 26 22, 22 26, 20 38 C 18 26, 14 22, 2 20 C 14 18, 18 14, 20 2 Z" fill="#F5A623"/></svg>
-              </button>
-              <button class="design-elem-btn" type="button" title="Double underline" onclick="dlgAddDesignElement({type:'shape',shape_type:'underline_double',color:'#c84826'})">
-                <svg width="22" height="22" viewBox="0 0 40 40" fill="none"><path d="M3,23 C12,20 24,25 37,21" stroke="#c84826" stroke-width="2.8" stroke-linecap="round"/><path d="M5,30 C14,27 25,31 35,28" stroke="#c84826" stroke-width="2.2" stroke-linecap="round"/></svg>
-              </button>
-            </div>
-
-            <div class="thumb-inline-row" style="margin-top:4px;">
-              <span style="font-size:10px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:var(--muted);">Shape color</span>
-              <button class="color-swatch" style="background:#C84826;" onclick="setSelectedElemBrandColor('#C84826')" title="Brand Orange"></button>
-              <button class="color-swatch" style="background:#E8541A;" onclick="setSelectedElemBrandColor('#E8541A')" title="CF Orange"></button>
-              <button class="color-swatch" style="background:#F5A623;" onclick="setSelectedElemBrandColor('#F5A623')" title="CF Amber"></button>
-              <button class="color-swatch" style="background:#1E2530;" onclick="setSelectedElemBrandColor('#1E2530')" title="Brand Navy"></button>
-              <button class="color-swatch" style="background:#2D6A4F;" onclick="setSelectedElemBrandColor('#2D6A4F')" title="CF Green"></button>
-              <button class="color-swatch" style="background:#FFFFFF;border-color:#ccc;" onclick="setSelectedElemBrandColor('#FFFFFF')" title="White"></button>
-              <button class="color-swatch" style="background:#103EDF;" onclick="setSelectedElemBrandColor('#103EDF')" title="TheoEd Blue"></button>
-              <button class="color-swatch" style="background:#41B6E6;" onclick="setSelectedElemBrandColor('#41B6E6')" title="TheoEd Light Blue"></button>
-            </div>
             <div id="dlg-elem-list"></div>
           </div>
 
@@ -9874,13 +9820,10 @@
               <div>
                 <div class="thumb-editor-label">Font</div>
                 <select class="thumb-editor-select" id="dlg-font-select" onchange="dlgUpdateText()">
-                  <option value="Montserrat" style="font-family:'Montserrat'">Montserrat</option>
-                  <option value="Barlow" style="font-family:'Barlow'">Barlow</option>
-                  <option value="Spectral" style="font-family:'Spectral'">Spectral</option>
-                  <option value="Inter" style="font-family:'Inter'">Inter</option>
-                  <option value="'Cormorant Garamond'" style="font-family:'Cormorant Garamond'">Cormorant Garamond</option>
-                  <option value="Lora" style="font-family:'Lora'">Lora</option>
-                  <option value="'DM Sans'" style="font-family:'DM Sans'">DM Sans</option>
+                  <option value="Poppins" style="font-family:'Poppins'">Poppins</option>
+                  <option value="Boogaloo" style="font-family:'Boogaloo'">Boogaloo</option>
+                  <option value="'Just Another Hand'" style="font-family:'Just Another Hand'">Just Another Hand</option>
+                  <option value="'Patrick Hand SC'" style="font-family:'Patrick Hand SC'">Patrick Hand SC</option>
                 </select>
               </div>
               <div>
@@ -9912,7 +9855,7 @@
               </div>
               <div>
                 <div class="thumb-editor-label">Background Color</div>
-                <div class="thumb-inline-row" style="margin-bottom:6px;">
+                <div class="thumb-inline-row">
                   <button class="color-swatch" style="background:#111111;" onclick="setDlgBackgroundColor('#111111')" title="Dark"></button>
                   <button class="color-swatch" style="background:#E8541A;" onclick="setDlgBackgroundColor('#E8541A')" title="CF Orange"></button>
                   <button class="color-swatch" style="background:#C84826;" onclick="setDlgBackgroundColor('#C84826')" title="Brand Orange"></button>
@@ -9921,8 +9864,8 @@
                   <button class="color-swatch" style="background:#FAFAF2;border-color:#ccc;" onclick="setDlgBackgroundColor('#FAFAF2')" title="Brand Cream"></button>
                   <button class="color-swatch" style="background:#103EDF;" onclick="setDlgBackgroundColor('#103EDF')" title="TheoEd Blue"></button>
                   <button class="color-swatch" style="background:#41B6E6;" onclick="setDlgBackgroundColor('#41B6E6')" title="TheoEd Light Blue"></button>
+                  <input type="color" id="dlg-bg-color-custom" value="#111111" style="width:28px;height:28px;border:1px solid var(--border);border-radius:50%;cursor:pointer;padding:0;flex-shrink:0;" oninput="setDlgBackgroundColor(this.value)">
                 </div>
-                <input type="color" id="dlg-bg-color-custom" value="#111111" style="width:100%;height:30px;border:1px solid var(--border);border-radius:8px;cursor:pointer;padding:0;" oninput="setDlgBackgroundColor(this.value)">
               </div>
             </div>
             <div class="thumb-inline-row" style="margin-top:14px;">

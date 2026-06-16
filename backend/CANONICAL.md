@@ -1298,3 +1298,31 @@ on PATH, and CREATE_NO_WINDOW is 0 off Windows).
 - No frontend/backend contract change, so the build handshake is NOT bumped.
 
 Regression risk: Low (Windows path is byte-identical to before).
+
+## 38. Thumbnail editor - Canva refresh, Stage 1 (June 16, 2026)
+
+Frontend-only (index.html); no backend contract change, handshake NOT bumped.
+- FONTS: the thumbnail font pickers (#thumb-font-select and #dlg-font-select)
+  now offer only Poppins / Boogaloo / Just Another Hand / Patrick Hand SC
+  (open-license, loaded from Google Fonts). Default thumbnail font is Poppins
+  (was Montserrat). The old families stay in the <link> (UI/legacy paths may
+  use them). Caption fonts are SYSTEM fonts (Arial/Impact/...) and were
+  untouched - the thumbnail font swap does not affect captions.
+- SHAPES REMOVED: the Design Elements "Shapes" grid and "Shape color" row were
+  deleted from the dlg composer (Emily: not useful; a curated hand-drawn
+  graphics pack will replace them later). The logo dropdown and dlg-elem-list
+  stay. setSelectedElemBrandColor()/dlgAddDesignElement() remain DEFINED (used
+  by logos / inline element color) - do not delete. The shape render code in
+  CANONICAL section 24 persists for saved drafts that still carry shape
+  graphic_elements; only the picker UI was removed.
+- COLOR: the text-background custom color is now a hex circle inline with the
+  brand swatches (matches the text-color picker).
+- Legacy thumb-* standalone editor (style cards Caption Bar/Bold Corner/
+  Kinetic Slash) was LEFT INTACT (still wired via openThumbEditor); only its
+  font list was swapped. Retiring it is deferred.
+
+NEXT (Stage 2): inline on-canvas text editing (remove the side "Selected Text"
+textarea), layout reorg to use the empty space, snapping/guides, drag-resize
+handles, layer order/duplicate/nudge, text align + rounded text-bg.
+
+Regression risk: Medium (font swap + DOM removal in a fragile composer).
