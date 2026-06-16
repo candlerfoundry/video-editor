@@ -384,6 +384,12 @@
       color: var(--muted);
       white-space: nowrap;
     }
+    .recent-project-delete {
+      flex: 0 0 auto; margin-left: 6px; width: 18px; height: 18px; border-radius: 4px;
+      display: inline-flex; align-items: center; justify-content: center; color: var(--muted);
+      font-size: 15px; line-height: 1; cursor: pointer; opacity: 0.55;
+    }
+    .recent-project-delete:hover { background: rgba(204,34,0,0.12); color: #cc2200; opacity: 1; }
     .sidebar-projects {
       margin: 8px 16px 14px;
       border: 1px solid var(--border);
@@ -2918,7 +2924,7 @@
   // Must match BACKEND_BUILD in server.py — bumped together whenever the
   // frontend/backend contract changes. A mismatch means the user is running
   // an old backend (launcher not restarted after a deploy).
-  const EXPECTED_BACKEND_BUILD = '2026-06-15-bleepfix';
+  const EXPECTED_BACKEND_BUILD = '2026-06-16-projdelete';
   if (document.fonts && document.fonts.load) { document.fonts.load("700 64px 'Handmade Sans'").catch(function(){}); }
   let _staleBackendWarned = false;
   function showStaleBackendBanner(stale) {
@@ -3085,6 +3091,23 @@
         '</button>'
       );
     }).join('');
+  }
+
+  async function deleteRecentProject(projectId, ev) {
+    if (ev) { ev.stopPropagation(); ev.preventDefault(); }
+    if (!projectId) return;
+    if (!confirm('Remove this project from Recent Projects?\n\nThis deletes its saved clip/thumbnail markers only — your original video and any exported clips are NOT touched.')) return;
+    try {
+      const res = await fetch(BACKEND + '/projects/delete', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ project_id: projectId }) });
+      const data = await res.json().catch(function(){ return {}; });
+      if (res.ok && data.success) {
+        recentProjects = recentProjects.filter(function(p){ return p.id !== projectId; });
+        renderRecentProjects();
+        renderProjectShells();
+      } else {
+        alert('Could not delete the project. If you just updated, restart the launcher so the backend has the delete feature.');
+      }
+    } catch (_) { alert('Could not reach the backend to delete the project.'); }
   }
 
   async function loadRecentProjects() {
@@ -3541,6 +3564,7 @@
                 '<div class="sidebar-project-item-head">' +
                   '<div class="recent-project-name" title="' + escHtml(getProjectLabel(project)) + '">' + escHtml(getProjectLabel(project)) + '</div>' +
                   '<div class="recent-project-date">' + escHtml(formatProjectDate(project.last_modified || project.updated_at)) + '</div>' +
+                  '<span class="recent-project-delete" title="Delete this project" onclick="deleteRecentProject(\'' + escHtml(project.id) + '\', event)">&times;</span>' +
                 '</div>' +
                 '<div class="sidebar-project-summary">' + escHtml(summary) + '</div>' +
                 (hasSavedPath ? '' : '<div class="sidebar-project-row"><span class="sidebar-project-dot"></span><span class="sidebar-project-status">Choose the original video once</span></div>') +

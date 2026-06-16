@@ -62,7 +62,7 @@ CORS(app)
 
 # Bump this whenever the frontend/backend contract changes (the frontend
 # carries a matching EXPECTED_BACKEND_BUILD and warns when they differ).
-BACKEND_BUILD = "2026-06-15-bleepfix"
+BACKEND_BUILD = "2026-06-16-projdelete"
 
 CREATE_NO_WINDOW = 0x08000000 if platform.system() == 'Windows' else 0
 
@@ -1292,6 +1292,24 @@ def recent_projects():
     except Exception as exc:
         logger.exception('[projects] Failed to list recent projects')
         return jsonify({'error': str(exc), 'projects': []}), 500
+
+
+@app.route('/projects/delete', methods=['POST'])
+def delete_project():
+    try:
+        data = request.get_json(force=True) or {}
+        pid = (data.get('project_id') or '').strip()
+        if not pid or not re.match(r'^[A-Za-z0-9_\-]+$', pid):
+            return jsonify({'error': 'invalid project_id'}), 400
+        path = get_project_path(pid)
+        with project_store_lock:
+            if os.path.isfile(path):
+                os.remove(path)
+        logger.info('[projects] Deleted project %s', pid)
+        return jsonify({'success': True})
+    except Exception as exc:
+        logger.exception('[projects] delete failed')
+        return jsonify({'error': str(exc)}), 500
 
 
 @app.route('/projects/open_source', methods=['POST'])

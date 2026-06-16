@@ -1504,3 +1504,22 @@ Frontend-only.
   The magnifier button is always visible (opacity .85) for discoverability.
 
 Regression risk: Low.
+
+## 48. Recent Projects: delete (June 16, 2026)
+
+Backend + frontend; handshake bumped to 2026-06-16-projdelete (new route).
+- server.py: POST /projects/delete {project_id} removes <id>.json from
+  project_store_dir under project_store_lock. project_id is validated against
+  ^[A-Za-z0-9_-]+$ (no path traversal). Original video + exported clips are
+  untouched.
+- index.html: each Recent Projects item shows a x delete control
+  (.recent-project-delete) -> deleteRecentProject(id) -> confirm -> POST ->
+  drop from recentProjects -> re-render. stopPropagation so it does not also
+  open the project.
+- Names already come from getProjectLabel (project_name / bare_stem /
+  filename).
+
+Deploy: overwrite server.py next to the exe + restart launcher (the handshake
+banner prompts it), then hard-refresh.
+
+Regression risk: Low.
