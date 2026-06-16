@@ -8198,6 +8198,7 @@
   let _dlgSelectedElemId = null;
   let _dlgLogoSelected = false;
   let _dlgEditingTextId = null;
+  let _dlgLastTextClick = null;
 
   function _addResizeHandles(el, handles) {
     handles.forEach(function(h) {
@@ -8594,6 +8595,42 @@
     gh.style.display = h ? 'block' : 'none';
   }
 
+  function _dlgBeginTextEdit(bid) {
+    const textEl = document.querySelector('.dlg-overlay-text[data-box-id="' + bid + '"]');
+    const box = (_sharedThumbnailDraft?.text_boxes || []).find(function(b) { return b.id === bid; });
+    if (!textEl || !box) return;
+    _dlgEditingTextId = bid;
+    textEl.contentEditable = 'plaintext-only';
+    textEl.classList.add('editing');
+    textEl.style.userSelect = 'text';
+    textEl.focus();
+    const range = document.createRange();
+    range.selectNodeContents(textEl);
+    const sel = window.getSelection();
+    sel.removeAllRanges();
+    sel.addRange(range);
+    function onInput() {
+      box.text = textEl.textContent;
+      _dlgTitle = box.text;
+      dlgDrawCanvas();
+    }
+    function onBlur() {
+      textEl.removeEventListener('input', onInput);
+      textEl.removeEventListener('blur', onBlur);
+      box.text = textEl.textContent;
+      _dlgTitle = box.text;
+      textEl.contentEditable = 'false';
+      textEl.classList.remove('editing');
+      textEl.style.userSelect = '';
+      _dlgEditingTextId = null;
+      syncDraftFromDialogState();
+      dlgDrawCanvas();
+      renderDialogOverlayLayer();
+    }
+    textEl.addEventListener('input', onInput);
+    textEl.addEventListener('blur', onBlur);
+  }
+
   // Drag / Resize / Inline-edit for dialog overlay elements
   (function () {
     let dragging = null;
@@ -8602,41 +8639,8 @@
     document.addEventListener('dblclick', function(e) {
       const textEl = e.target.closest('.dlg-overlay-text');
       if (!textEl || !textEl.dataset.boxId) return;
-      const bid = textEl.dataset.boxId;
-      const box = (_sharedThumbnailDraft?.text_boxes || []).find(function(b) { return b.id === bid; });
-      if (!box) return;
-      _dlgEditingTextId = bid;
-      textEl.contentEditable = 'plaintext-only';
-      textEl.classList.add('editing');
-      textEl.style.userSelect = 'text';
-      textEl.focus();
-      // Select all text
-      const range = document.createRange();
-      range.selectNodeContents(textEl);
-      const sel = window.getSelection();
-      sel.removeAllRanges();
-      sel.addRange(range);
-      textEl.addEventListener('input', function onInput() {
-        box.text = textEl.textContent;
-        _dlgTitle = box.text;
-        const ta = document.getElementById('dlg-title-input');
-        if (ta) ta.value = box.text;
-        dlgDrawCanvas();
-      });
-      textEl.addEventListener('blur', function onBlur() {
-        textEl.removeEventListener('input', onInput);
-        textEl.removeEventListener('blur', onBlur);
-        box.text = textEl.textContent;
-        _dlgTitle = box.text;
-        textEl.contentEditable = 'false';
-        textEl.classList.remove('editing');
-        textEl.style.userSelect = '';
-        _dlgEditingTextId = null;
-        syncDraftFromDialogState();
-        dlgDrawCanvas();
-        renderDialogOverlayLayer();
-      });
       e.preventDefault();
+      _dlgBeginTextEdit(textEl.dataset.boxId);
     });
 
     // ── Mousedown: drag or resize ──
@@ -8683,7 +8687,17 @@
       // ── Move ──
       if (textEl && textEl.dataset.boxId) {
         if (textEl.classList.contains('editing')) return;
-        dlgSelectTextBox(textEl.dataset.boxId);
+        const bid = textEl.dataset.boxId;
+        const now = Date.now();
+        if (_dlgLastTextClick && _dlgLastTextClick.id === bid && (now - _dlgLastTextClick.t) < 350) {
+          _dlgLastTextClick = null;
+          e.preventDefault();
+          if (_sharedThumbnailDraft) _sharedThumbnailDraft.selected_text_box_id = bid;
+          _dlgBeginTextEdit(bid);
+          return;
+        }
+        _dlgLastTextClick = { id: bid, t: now };
+        dlgSelectTextBox(bid);
         const box = getActiveThumbnailTextBox();
         dragging = { type: 'text', startX: e.clientX, startY: e.clientY, origX: box?.x ?? _dlgCanvasTX, origY: box?.y ?? _dlgCanvasTY };
       } else if (logoEl) {

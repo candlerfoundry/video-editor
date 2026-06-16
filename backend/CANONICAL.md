@@ -1392,3 +1392,14 @@ Frontend-only (index.html); no backend contract change; handshake NOT bumped.
   by default (adjustable via the Letter Spacing slider).
 
 Regression risk: Low-Medium (drag math + preview sizing).
+
+## 42. Thumbnail inline-edit reliability fix (June 16, 2026)
+
+Removing the side textarea (section 40) exposed a latent bug: double-click
+editing was unreliable because selecting a text box rebuilds the overlay divs,
+so the browser dblclick often did not register on a stable element. Fix: the
+edit logic is extracted into _dlgBeginTextEdit(bid), which re-queries the
+current .dlg-overlay-text[data-box-id] element; it is entered via (a) the
+dblclick handler and (b) MANUAL double-click detection in the text mousedown
+branch (_dlgLastTextClick, two clicks <350ms on the same box id) so editing
+survives the click->rebuild. Frontend only.
