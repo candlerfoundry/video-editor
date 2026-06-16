@@ -5386,6 +5386,7 @@
       letter_spacing: overrides.letter_spacing ?? 0,
       line_spacing: overrides.line_spacing ?? 1.25,
       bg_pill: overrides.bg_pill ?? false,
+      runs: overrides.runs ?? null,
       x: overrides.x ?? null,
       y: overrides.y ?? null,
       shadow: overrides.shadow ?? true,
@@ -6188,16 +6189,92 @@
       ctx.shadowOffsetX = 2;
       ctx.shadowOffsetY = 2;
     }
-    ctx.fillStyle = box.color || '#ffffff';
     ctx.font = `700 ${resolvedFontSize}px ${resolvedFontFamily}, sans-serif`;
     let lineY = resolvedY - (safeLines.length - 1) * lineH / 2;
-    for (const line of safeLines) {
-      ctx.fillText(line, textX, lineY);
-      lineY += lineH;
+    if (box.runs && box.runs.length) {
+      const cc = []; for (const r of box.runs) for (const ch of r.text) cc.push(r.color || box.color || '#ffffff');
+      while (cc.length < (box.text || '').length) cc.push(box.color || '#ffffff');
+      let si = 0;
+      for (const line of safeLines) {
+        _drawColoredLine(ctx, line, cc.slice(si, si + line.length), resolvedAlign, resolvedX, left, blockW, paddingX, lineY, box.color || '#ffffff');
+        si += line.length + 1;
+        lineY += lineH;
+      }
+    } else {
+      ctx.fillStyle = box.color || '#ffffff';
+      for (const line of safeLines) { ctx.fillText(line, textX, lineY); lineY += lineH; }
     }
     ctx.restore();
     ctx.letterSpacing = '0px';
   }
+
+  function _drawColoredLine(ctx, line, lineColors, align, resolvedX, left, blockW, paddingX, lineY, fallback) {
+    const segs = [];
+    for (let i = 0; i < line.length; i++) {
+      const c = lineColors[i] || fallback;
+      if (segs.length && segs[segs.length - 1].color === c) segs[segs.length - 1].text += line[i];
+      else segs.push({ text: line[i], color: c });
+    }
+    const totalW = ctx.measureText(line).width;
+    let x = align === 'left' ? left + paddingX : (align === 'right' ? left + blockW - paddingX - totalW : resolvedX - totalW / 2);
+    const prevAlign = ctx.textAlign;
+    ctx.textAlign = 'left';
+    for (const sg of segs) {
+      ctx.fillStyle = sg.color;
+      ctx.fillText(sg.text, x, lineY);
+      x += ctx.measureText(sg.text).width;
+    }
+    ctx.textAlign = prevAlign;
+  }
+
+  function _toHex(c) {
+    if (!c) return c; c = String(c).trim();
+    if (c[0] === '#') return c.length === 4 ? '#' + c[1] + c[1] + c[2] + c[2] + c[3] + c[3] : c;
+    const m = c.match(/rgba?\((\d+),\s*(\d+),\s*(\d+)/i);
+    if (m) { const h = function(n){ return (+n).toString(16).padStart(2, '0'); }; return '#' + h(m[1]) + h(m[2]) + h(m[3]); }
+    return c;
+  }
+
+  function _dlgParseRunsFromEl(el, box) {
+    const runs = [];
+    function colorOf(node) {
+      let nn = node.parentElement;
+      while (nn && nn !== el) {
+        const col = (nn.style && nn.style.color) ? nn.style.color : (nn.getAttribute ? nn.getAttribute('color') : null);
+        if (col) return _toHex(col);
+        nn = nn.parentElement;
+      }
+      return box.color || '#ffffff';
+    }
+    const walker = document.createTreeWalker(el, NodeFilter.SHOW_TEXT, null);
+    let node;
+    while ((node = walker.nextNode())) {
+      const t = node.textContent; if (!t) continue;
+      const c = colorOf(node);
+      if (runs.length && runs[runs.length - 1].color === c) runs[runs.length - 1].text += t;
+      else runs.push({ text: t, color: c });
+    }
+    box.text = runs.map(function(r){ return r.text; }).join('');
+    const distinct = new Set(runs.map(function(r){ return r.color; }));
+    if (distinct.size <= 1) { box.runs = null; if (runs[0]) box.color = runs[0].color; }
+    else { box.runs = runs; }
+  }
+
+  function _dlgApplyColorToSelection(hex) {
+    const sel = window.getSelection();
+    if (!sel || sel.isCollapsed || sel.rangeCount === 0) return false;
+    const el = document.querySelector('.dlg-overlay-text.editing');
+    if (!el || !el.contains(sel.anchorNode) || !el.contains(sel.focusNode)) return false;
+    try { document.execCommand('styleWithCSS', false, true); } catch (_) {}
+    document.execCommand('foreColor', false, hex);
+    const box = (_sharedThumbnailDraft?.text_boxes || []).find(function(b){ return b.id === _dlgEditingTextId; });
+    if (box) { _dlgParseRunsFromEl(el, box); }
+    return true;
+  }
+
+  document.addEventListener('mousedown', function(e){
+    if (_dlgEditingTextId && e.target.closest('#dlg-state-editor .color-swatch')) e.preventDefault();
+  });
 
   function hexToRgb(hex) {
     const safe = (hex || '#111111').replace('#', '');
@@ -7817,7 +7894,12 @@
   }
 
   function setDlgColor(hex, btn) {
+    if (_dlgEditingTextId && _dlgApplyColorToSelection(hex)) {
+      const cst = document.getElementById('dlg-color-custom'); if (cst) cst.value = hex;
+      return;
+    }
     _dlgTextColor = hex;
+    const box = getActiveThumbnailTextBox(); if (box) { box.color = hex; box.runs = null; }
     document.querySelectorAll('#dlg-state-editor .color-swatch').forEach(b => b.classList.remove('selected'));
     if (btn) btn.classList.add('selected');
     const custom = document.getElementById('dlg-color-custom');
@@ -7826,7 +7908,9 @@
   }
 
   function setDlgColorFree(hex) {
+    if (_dlgEditingTextId && _dlgApplyColorToSelection(hex)) return;
     _dlgTextColor = hex;
+    const box = getActiveThumbnailTextBox(); if (box) { box.color = hex; box.runs = null; }
     document.querySelectorAll('#dlg-state-editor .color-swatch').forEach(b => b.classList.remove('selected'));
     dlgUpdateText();
   }
@@ -8531,7 +8615,11 @@
       const div = document.createElement('div');
       div.className = 'dlg-overlay-text' + (isSelected ? ' selected' : '');
       div.dataset.boxId = box.id;
-      div.textContent = box.text || `Text Box ${index + 1}`;
+      if (box.runs && box.runs.length) {
+        div.innerHTML = box.runs.map(function(r){ return '<span style="color:' + (r.color || (box.color || '#ffffff')) + '">' + escHtml(r.text) + '</span>'; }).join('') || escHtml(box.text || ('Text Box ' + (index + 1)));
+      } else {
+        div.textContent = box.text || `Text Box ${index + 1}`;
+      }
       const bx = box.x ?? getDefaultThumbTextPosition(_dlgStyle, _dlgTargetFormat, index).x;
       const by = box.y ?? getDefaultThumbTextPosition(_dlgStyle, _dlgTargetFormat, index).y;
       const bw = box.width || getDefaultThumbTextPosition(_dlgStyle, _dlgTargetFormat, index).width || 400;
@@ -8624,7 +8712,7 @@
     const box = (_sharedThumbnailDraft?.text_boxes || []).find(function(b) { return b.id === bid; });
     if (!textEl || !box) return;
     _dlgEditingTextId = bid;
-    textEl.contentEditable = 'plaintext-only';
+    textEl.contentEditable = 'true';
     textEl.classList.add('editing');
     textEl.style.userSelect = 'text';
     textEl.focus();
@@ -8641,7 +8729,7 @@
     function onBlur() {
       textEl.removeEventListener('input', onInput);
       textEl.removeEventListener('blur', onBlur);
-      box.text = textEl.textContent;
+      _dlgParseRunsFromEl(textEl, box);
       _dlgTitle = box.text;
       textEl.contentEditable = 'false';
       textEl.classList.remove('editing');

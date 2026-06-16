@@ -1451,3 +1451,28 @@ recolour). Needs a rich-text run model + per-run canvas drawing - a dedicated
 change.
 
 Regression risk: Medium (drag math + render).
+
+## 45. Per-character / word text colour (June 16, 2026)
+
+Frontend-only. Text boxes gained optional box.runs = [{text, color}]; box.text
+stays the plain concatenation. Single-colour text keeps box.runs=null and the
+original render path (zero change).
+- Editing: contentEditable switched plaintext-only -> true so selections can be
+  recoloured. While a box is being edited, clicking a text-colour swatch
+  recolours ONLY the selection (execCommand foreColor, styleWithCSS on); a
+  delegated mousedown preventDefault on "#dlg-state-editor .color-swatch" keeps
+  the selection from blurring. With no selection / not editing, a swatch sets
+  the whole-box colour and clears runs.
+- On blur, _dlgParseRunsFromEl walks text nodes, reads each node's effective
+  colour (nearest ancestor style.color / color attr via _toHex rgb->hex),
+  rebuilds runs + box.text; collapses to runs=null when a single colour.
+- Canvas: drawThumbTextBlock branches when box.runs present -> _drawColoredLine
+  draws each wrapped line as same-colour segments (char colours mapped from
+  runs; line start advances by line.length+1, assuming single spaces). Block
+  size still derived from the plain wrap.
+- Overlay preview shows coloured <span> runs (escHtml) when runs present.
+- KNOWN LIMITS: hard Enter line breaks are not preserved (rich CE) and the
+  char->line mapping assumes single spaces; auto-wrap covers the common case.
+
+Regression risk: Medium-High (rich contentEditable + canvas run rendering) -
+needs in-browser testing.
