@@ -1476,3 +1476,15 @@ original render path (zero change).
 
 Regression risk: Medium-High (rich contentEditable + canvas run rendering) -
 needs in-browser testing.
+
+## 46. Frame picker - bigger grid + enlarge popout (June 16, 2026)
+
+Frontend-only. The Source Frames grid was 4-up at 320px (~74px cells, too small
+to judge). Now #dlg-frame-grid is 2-up at full width (~2x bigger). Each cell
+shows a magnifier button on hover (.frame-enlarge-btn) that opens
+dlgOpenFramePopout(i): a fixed full-screen overlay with the frame large
+(max 92vw / 78vh), "Use this frame" (selects + closes) and Close (also closes on
+backdrop click or Esc). Clicking the cell still selects directly. Legacy
+thumb-frame-grid unchanged.
+
+Regression risk: Low (additive).

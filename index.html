@@ -2042,6 +2042,10 @@
     }
     .frame-cell:hover { border-color: var(--orange); }
     .frame-cell.selected { border: 3px solid #E8541A; box-shadow: 0 0 0 2px rgba(232,84,26,0.25); }
+    #dlg-frame-grid.frame-grid { grid-template-columns: repeat(2, 1fr); width: 100%; gap: 8px; }
+    .frame-enlarge-btn { position: absolute; top: 5px; right: 5px; z-index: 3; width: 24px; height: 24px; border-radius: 6px; border: none; background: rgba(0,0,0,0.55); color: #fff; cursor: pointer; display: flex; align-items: center; justify-content: center; opacity: 0; transition: opacity 120ms; padding: 0; }
+    .frame-cell:hover .frame-enlarge-btn { opacity: 1; }
+    .frame-enlarge-btn:hover { background: var(--orange); }
 
     /* ─── COLOR SWATCH ─── */
     .color-swatch {
@@ -7619,6 +7623,11 @@
         img.src = 'data:image/jpeg;base64,' + b64;
         img.style.cssText = 'width:100%;height:100%;object-fit:cover;display:block;';
         cell.appendChild(img);
+        const mag = document.createElement('button');
+        mag.type = 'button'; mag.className = 'frame-enlarge-btn'; mag.title = 'Enlarge to see detail';
+        mag.innerHTML = '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><line x1="16.5" y1="16.5" x2="21" y2="21"/></svg>';
+        mag.addEventListener('click', (ev) => { ev.stopPropagation(); dlgOpenFramePopout(i); });
+        cell.appendChild(mag);
         cell.addEventListener('click', () => dlgSelectFrame(i));
         fg.appendChild(cell);
       });
@@ -7671,6 +7680,27 @@
     updateStyleCardPreviews(_dlgFrames, idx, 'dlg-style-canvas-');
     syncDraftFromDialogState();
     if (document.getElementById('dlg-state-editor').style.display !== 'none') dlgDrawCanvas();
+  }
+
+  function dlgOpenFramePopout(i) {
+    const b64 = _dlgFrames[i]; if (!b64) return;
+    const existing = document.getElementById('dlg-frame-popout'); if (existing) existing.remove();
+    const ov = document.createElement('div');
+    ov.id = 'dlg-frame-popout';
+    ov.style.cssText = 'position:fixed;inset:0;z-index:99999;background:rgba(0,0,0,0.82);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px;padding:24px;';
+    const img = document.createElement('img');
+    img.src = 'data:image/jpeg;base64,' + b64;
+    img.style.cssText = 'max-width:92vw;max-height:78vh;border-radius:10px;box-shadow:0 12px 48px rgba(0,0,0,0.6);object-fit:contain;background:#000;';
+    const row = document.createElement('div'); row.style.cssText = 'display:flex;gap:12px;';
+    const useBtn = document.createElement('button'); useBtn.className = 'btn'; useBtn.textContent = 'Use this frame';
+    useBtn.addEventListener('click', function(){ dlgSelectFrame(i); ov.remove(); });
+    const closeBtn = document.createElement('button'); closeBtn.className = 'btn-ghost'; closeBtn.textContent = 'Close';
+    closeBtn.addEventListener('click', function(){ ov.remove(); });
+    row.appendChild(useBtn); row.appendChild(closeBtn);
+    ov.appendChild(img); ov.appendChild(row);
+    ov.addEventListener('click', function(e){ if (e.target === ov) ov.remove(); });
+    document.addEventListener('keydown', function esc(ev){ if (ev.key === 'Escape') { ov.remove(); document.removeEventListener('keydown', esc); } });
+    document.body.appendChild(ov);
   }
 
   function setDlgTargetFormat(format) {
