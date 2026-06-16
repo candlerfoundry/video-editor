@@ -1352,3 +1352,25 @@ NEXT (Stage 2b): inline on-canvas text editing (remove the side textarea),
 layout reorg, snapping/guides, layer order/duplicate/nudge.
 
 Regression risk: Medium (touches both text render paths).
+
+## 40. Thumbnail editor Stage 2b part 1 - editing UX (June 16, 2026)
+
+Frontend-only (index.html); no backend contract change; handshake NOT bumped.
+- Inline on-canvas text editing ALREADY existed (double-click a
+  .dlg-overlay-text div -> contentEditable; _dlgEditingTextId guards
+  renderDialogOverlayLayer from rebuilding mid-edit). The redundant side
+  "Selected Text" textarea (#dlg-title-input) was REMOVED; all its references
+  are null-guarded so nothing breaks, and a hint line replaces it.
+  setDlgTitleText remains defined (harmless).
+- Keyboard (only when #dialog-thumb is open, not editing text, focus not in a
+  field): arrows nudge the active text box (Shift = 10px); Delete/Backspace
+  removes it (guarded to keep >=1 box; Ctrl+Z restores).
+- dlgDuplicateActiveTextBox() clones the active box (all props via
+  makeThumbnailTextBox spread) offset +30,+30. dlgMoveTextBoxLayer('forward'|
+  'backward') swaps array order = z-order (later index draws on top in both the
+  overlay DOM and the canvas). Buttons added to the Text Boxes header.
+
+NEXT (Stage 2b part 2): drag snapping + alignment guides; conservative canvas
+enlargement to use the empty space (full layout reorg only if wanted after).
+
+Regression risk: Low-Medium (additive; textarea removal is null-safe).

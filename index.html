@@ -7902,6 +7902,34 @@
     } catch (_) {}
   });
 
+  // ── Keyboard: nudge with arrows, remove with Delete (selected text box) ──
+  document.addEventListener('keydown', function (e) {
+    const dlg = document.getElementById('dialog-thumb');
+    if (!dlg || !dlg.open) return;
+    if (_dlgEditingTextId) return;
+    if (e.target.matches('input, textarea, select, [contenteditable], [contenteditable="plaintext-only"]')) return;
+    const box = getActiveThumbnailTextBox();
+    if (!box) return;
+    const step = e.shiftKey ? 10 : 1;
+    if (e.key === 'ArrowLeft' || e.key === 'ArrowRight' || e.key === 'ArrowUp' || e.key === 'ArrowDown') {
+      if (!e.repeat) pushDlgUndo('nudge');
+      if (e.key === 'ArrowLeft')  box.x = (box.x || 0) - step;
+      if (e.key === 'ArrowRight') box.x = (box.x || 0) + step;
+      if (e.key === 'ArrowUp')    box.y = (box.y || 0) - step;
+      if (e.key === 'ArrowDown')  box.y = (box.y || 0) + step;
+      _dlgCanvasTX = box.x; _dlgCanvasTY = box.y;
+      e.preventDefault();
+      renderDialogOverlayLayer();
+      dlgDrawCanvas();
+    } else if (e.key === 'Delete' || e.key === 'Backspace') {
+      if ((_sharedThumbnailDraft?.text_boxes || []).length > 1) {
+        pushDlgUndo('delete');
+        dlgRemoveActiveTextBox();
+        e.preventDefault();
+      }
+    }
+  });
+
   // ── Pan: drag the photo itself (empty canvas area) to reposition when zoomed ──
   (function () {
     let panning = null;
@@ -8366,6 +8394,31 @@
     if (!_sharedThumbnailDraft || (_sharedThumbnailDraft.text_boxes || []).length <= 1) return;
     _sharedThumbnailDraft.text_boxes = _sharedThumbnailDraft.text_boxes.filter(box => box.id !== _sharedThumbnailDraft.selected_text_box_id);
     _sharedThumbnailDraft.selected_text_box_id = _sharedThumbnailDraft.text_boxes[0]?.id || 'text-1';
+    applyDraftToDialogState();
+    dlgOpenEditor();
+  }
+
+  function dlgDuplicateActiveTextBox() {
+    if (!_sharedThumbnailDraft) return;
+    const src = getActiveThumbnailTextBox();
+    if (!src) return;
+    pushDlgUndo('duplicate');
+    const copy = makeThumbnailTextBox(src.text, { ...src, id: 'text-' + Date.now(), x: (src.x || 0) + 30, y: (src.y || 0) + 30 });
+    _sharedThumbnailDraft.text_boxes.push(copy);
+    _sharedThumbnailDraft.selected_text_box_id = copy.id;
+    applyDraftToDialogState();
+    dlgOpenEditor();
+  }
+
+  function dlgMoveTextBoxLayer(dir) {
+    if (!_sharedThumbnailDraft) return;
+    const arr = _sharedThumbnailDraft.text_boxes || [];
+    const i = arr.findIndex(function(b){ return b.id === _sharedThumbnailDraft.selected_text_box_id; });
+    if (i < 0) return;
+    const j = dir === 'forward' ? i + 1 : i - 1;
+    if (j < 0 || j >= arr.length) return;
+    pushDlgUndo('layer');
+    const tmp = arr[i]; arr[i] = arr[j]; arr[j] = tmp;
     applyDraftToDialogState();
     dlgOpenEditor();
   }
@@ -9871,11 +9924,13 @@
               <div class="thumb-inline-row">
                 <button class="btn-ghost btn-sm" type="button" onclick="dlgAddTextBox()">Add Text Box</button>
                 <button class="btn-ghost btn-sm" type="button" onclick="dlgRemoveActiveTextBox()">Remove</button>
+                <button class="btn-ghost btn-sm" type="button" onclick="dlgDuplicateActiveTextBox()" title="Duplicate this text box">Duplicate</button>
+                <button class="btn-ghost btn-sm" type="button" onclick="dlgMoveTextBoxLayer('forward')" title="Bring forward">&#9650;</button>
+                <button class="btn-ghost btn-sm" type="button" onclick="dlgMoveTextBoxLayer('backward')" title="Send back">&#9660;</button>
               </div>
             </div>
             <div id="dlg-textbox-list" class="thumb-chip-row" style="margin-top:10px;"></div>
-            <label class="thumb-editor-label" for="dlg-title-input" style="margin-top:16px;">Selected Text</label>
-            <textarea id="dlg-title-input" class="thumb-editor-textarea" oninput="setDlgTitleText(this.value)"></textarea>
+            <div class="thumb-editor-label" style="margin-top:14px;color:var(--muted);font-weight:400;">Double-click the text on the thumbnail to edit it. Use the chips above to switch boxes; arrow keys nudge, Delete removes.</div>
             <div class="thumb-editor-grid" style="margin-top:14px;">
               <div>
                 <div class="thumb-editor-label">Font</div>
