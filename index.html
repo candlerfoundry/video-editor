@@ -1554,6 +1554,7 @@
       cursor: pointer;
     }
     .tx-mode-btn.active { background: var(--orange-tint); border-color: var(--orange); color: var(--orange); }
+    .tx-mode-btn.selected { background: var(--orange-tint); border-color: var(--orange); color: var(--orange); }
     .clip-tl-bleep {
       position: absolute; top: 0; bottom: 0; border-radius: 3px; pointer-events: none;
       background: repeating-linear-gradient(45deg,
@@ -5415,6 +5416,7 @@
       x: logo?.x ?? defaults.x,
       y: logo?.y ?? defaults.y,
       width: logo?.width ?? defaults.width,
+      opacity: logo?.opacity ?? 100,
     };
   }
 
@@ -6103,7 +6105,10 @@
     if (!logo?.enabled || !logo._img) return;
     const width = Math.max(80, logo.width || 180);
     const height = width * (logo._img.naturalHeight / Math.max(1, logo._img.naturalWidth));
+    const _pa = ctx.globalAlpha;
+    ctx.globalAlpha = (logo.opacity ?? 100) / 100;
     ctx.drawImage(logo._img, logo.x - width / 2, logo.y - height / 2, width, height);
+    ctx.globalAlpha = _pa;
   }
 
   function prepareStylePreviewCanvas(canvas, format) {
@@ -7708,7 +7713,7 @@
     const lsVal = document.getElementById('dlg-letter-val'); if (lsVal) lsVal.textContent = _dlgLetterSpacing;
     const lnSlider = document.getElementById('dlg-line-slider'); if (lnSlider) lnSlider.value = _dlgLineSpacing;
     const lnVal = document.getElementById('dlg-line-val'); if (lnVal) lnVal.textContent = Number(_dlgLineSpacing).toFixed(2);
-    const pillChk = document.getElementById('dlg-pill-toggle'); if (pillChk) pillChk.checked = _dlgBgPill;
+    const loSl = document.getElementById('dlg-logo-opacity-slider'); const loOp = _sharedThumbnailDraft?.logo?.opacity ?? 100; if (loSl) loSl.value = loOp; const loVal = document.getElementById('dlg-logo-opacity-val'); if (loVal) loVal.textContent = loOp;
     dlgSyncAlignButtons();
     const shadowChk = document.getElementById('dlg-shadow-toggle');
     if (shadowChk) shadowChk.checked = _dlgShadowOn;
@@ -7802,6 +7807,13 @@
   function setDlgBgPill(on) {
     _dlgBgPill = !!on;
     dlgUpdateText();
+  }
+
+  function setDlgLogoOpacity(val) {
+    if (!_sharedThumbnailDraft?.logo) return;
+    _sharedThumbnailDraft.logo.opacity = parseInt(val);
+    const v = document.getElementById('dlg-logo-opacity-val'); if (v) v.textContent = parseInt(val);
+    renderDialogOverlayLayer();
   }
 
   function setDlgColor(hex, btn) {
@@ -8552,6 +8564,7 @@
       img.style.display  = 'block';
       img.style.width    = '100%';
       img.style.height   = 'auto';
+      img.style.opacity  = ((logo.opacity ?? 100) / 100);
       const wrap = document.createElement('div');
       wrap.className = 'dlg-logo-overlay' + (_dlgLogoSelected ? ' selected' : '');
       wrap.dataset.logo  = 'true';
@@ -8595,14 +8608,15 @@
     });
   }
 
-  function _dlgSetGuides(v, h) {
+  function _dlgSetGuides(vx, hy) {
     const wrap = document.getElementById('dlg-canvas-wrap');
     if (!wrap) return;
     let gv = wrap.querySelector('.dlg-guide-v'), gh = wrap.querySelector('.dlg-guide-h');
     if (!gv) { gv = document.createElement('div'); gv.className = 'dlg-guide-v'; wrap.appendChild(gv); }
     if (!gh) { gh = document.createElement('div'); gh.className = 'dlg-guide-h'; wrap.appendChild(gh); }
-    gv.style.display = v ? 'block' : 'none';
-    gh.style.display = h ? 'block' : 'none';
+    const sc = getThumbCanvasScale('dlg-canvas', 'dlg-canvas-wrap');
+    if (vx == null) { gv.style.display = 'none'; } else { gv.style.display = 'block'; gv.style.left = (vx / sc.scaleX) + 'px'; }
+    if (hy == null) { gh.style.display = 'none'; } else { gh.style.display = 'block'; gh.style.top = (hy / sc.scaleY) + 'px'; }
   }
 
   function _dlgBeginTextEdit(bid) {
@@ -8677,7 +8691,7 @@
           const box = (_sharedThumbnailDraft?.text_boxes || []).find(function(b) { return b.id === bid; });
           if (!box) return;
           dragging = { type: 'resize-text', handle, startX: e.clientX, startY: e.clientY,
-                       origX: box.x, origY: box.y, origW: box.width || 400, boxId: bid };
+                       origX: box.x, origY: box.y, origW: box.width || 400, origFont: box.font_size || 64, boxId: bid };
         } else if (logoEl && _sharedThumbnailDraft?.logo) {
           const logo = _sharedThumbnailDraft.logo;
           dragging = { type: 'resize-logo', handle, startX: e.clientX, startY: e.clientY,
@@ -8750,11 +8764,14 @@
         const box = (_sharedThumbnailDraft?.text_boxes || []).find(function(b) { return b.id === bid; });
         if (!box) return;
         const hdx = hdxMap[dragging.handle] || 0;
-        const newW = Math.max(80, dragging.origW + hdx * dx * scaleX);
-        box.width = Math.round(newW);
-        // Shift center x so the edge the user is dragging moves with cursor
+        const ratio = Math.max(0.2, (dragging.origW + hdx * dx * scaleX) / Math.max(1, dragging.origW));
+        box.width = Math.max(80, Math.round(dragging.origW * ratio));
+        box.font_size = Math.max(12, Math.min(400, Math.round((dragging.origFont || 64) * ratio)));
         box.x = Math.round(dragging.origX + dx * scaleX / 2);
         _dlgCanvasTX = box.x;
+        _dlgFontSize = box.font_size;
+        const ss = document.getElementById('dlg-size-slider'); if (ss) ss.value = _dlgFontSize;
+        const sv = document.getElementById('dlg-size-val'); if (sv) sv.textContent = _dlgFontSize;
         syncDraftFromDialogState();
         renderDialogOverlayLayer();
         return;
@@ -8802,10 +8819,13 @@
         let nx = Math.max(60, Math.min(W - 60, dragging.origX + dx * scaleX));
         let ny = Math.max(40, Math.min(H - 40, dragging.origY + dy * scaleY));
         const thr = 16 * scaleX, thrY = 16 * scaleY;
-        let gV = false, gH = false;
-        if (Math.abs(nx - W / 2) < thr) { nx = W / 2; gV = true; }
-        if (Math.abs(ny - H / 2) < thrY) { ny = H / 2; gH = true; }
-        _dlgSetGuides(gV, gH);
+        const xs = [W / 2], ys = [H / 2];
+        (_sharedThumbnailDraft?.text_boxes || []).forEach(function(b) { if (b.id !== box.id) { if (b.x != null) xs.push(b.x); if (b.y != null) ys.push(b.y); } });
+        const lg = _sharedThumbnailDraft?.logo; if (lg?.enabled && lg.x != null) { xs.push(lg.x); ys.push(lg.y); }
+        let gvx = null, ghy = null;
+        for (const t of xs) { if (Math.abs(nx - t) < thr) { nx = t; gvx = t; break; } }
+        for (const t of ys) { if (Math.abs(ny - t) < thrY) { ny = t; ghy = t; break; } }
+        _dlgSetGuides(gvx, ghy);
         _dlgCanvasTX = nx; _dlgCanvasTY = ny;
         box.x = _dlgCanvasTX;
         box.y = _dlgCanvasTY;
@@ -8813,10 +8833,13 @@
         const W = canvas?.width || 1080, H = canvas?.height || 1350;
         let lx = Math.max(50, Math.min(W - 50, dragging.origX + dx * scaleX));
         let ly = Math.max(50, Math.min(H - 50, dragging.origY + dy * scaleY));
-        const thr = 16 * scaleX, thrY = 16 * scaleY; let gV = false, gH = false;
-        if (Math.abs(lx - W / 2) < thr) { lx = W / 2; gV = true; }
-        if (Math.abs(ly - H / 2) < thrY) { ly = H / 2; gH = true; }
-        _dlgSetGuides(gV, gH);
+        const thr = 16 * scaleX, thrY = 16 * scaleY;
+        const xs = [W / 2], ys = [H / 2];
+        (_sharedThumbnailDraft?.text_boxes || []).forEach(function(b) { if (b.x != null) xs.push(b.x); if (b.y != null) ys.push(b.y); });
+        let gvx = null, ghy = null;
+        for (const t of xs) { if (Math.abs(lx - t) < thr) { lx = t; gvx = t; break; } }
+        for (const t of ys) { if (Math.abs(ly - t) < thrY) { ly = t; ghy = t; break; } }
+        _dlgSetGuides(gvx, ghy);
         _sharedThumbnailDraft.logo.x = lx;
         _sharedThumbnailDraft.logo.y = ly;
       } else if (dragging.type === 'elem') {
@@ -8832,7 +8855,7 @@
       renderDialogOverlayLayer();
     });
 
-    document.addEventListener('mouseup', function() { if (dragging) _dlgSetGuides(false, false); dragging = null; });
+    document.addEventListener('mouseup', function() { if (dragging) _dlgSetGuides(null, null); dragging = null; });
   })();
 
   // "Done — Use This Thumbnail" → render canvas → capture blob
@@ -9967,6 +9990,10 @@
               <div id="dlg-logo-dropdown" style="display:none;position:absolute;z-index:50;top:100%;left:0;right:0;margin-top:4px;background:var(--surface);border:1px solid var(--border-2);border-radius:10px;box-shadow:var(--shadow-md);max-height:260px;overflow-y:auto;padding:4px;"></div>
             </div>
 
+            <div style="margin-bottom:10px;">
+              <div class="thumb-editor-label">Logo Opacity <span id="dlg-logo-opacity-val">100</span>%</div>
+              <input type="range" id="dlg-logo-opacity-slider" min="10" max="100" step="1" value="100" style="width:100%;accent-color:var(--orange);margin-top:4px;" oninput="setDlgLogoOpacity(this.value)">
+            </div>
             <div id="dlg-elem-list"></div>
           </div>
 
@@ -10056,10 +10083,6 @@
               <label class="thumb-inline-row" style="font-size:13px;color:var(--text-2);cursor:pointer;">
                 <input type="checkbox" id="dlg-shadow-toggle" checked style="accent-color:var(--orange);width:16px;height:16px;cursor:pointer;" onchange="dlgUpdateText()">
                 Text Shadow
-              </label>
-              <label class="thumb-inline-row" style="font-size:13px;color:var(--text-2);cursor:pointer;margin-left:14px;">
-                <input type="checkbox" id="dlg-pill-toggle" style="accent-color:var(--orange);width:16px;height:16px;cursor:pointer;" onchange="setDlgBgPill(this.checked)">
-                Rounded box
               </label>
             </div>
           </div>

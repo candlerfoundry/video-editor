@@ -1425,3 +1425,29 @@ Pattern for the next font: drop the file in /fonts/, add an @font-face block and
 a picker <option>, done.
 
 Regression risk: Low (additive; existing fonts untouched).
+
+## 44. Thumbnail editor refinements (June 16, 2026)
+
+Frontend-only (index.html); no backend contract change; handshake NOT bumped.
+- Align buttons (L/C/R) already worked but had no selected-state CSS, so they
+  looked inert. Added .tx-mode-btn.selected styling. Alignment was never broken
+  - just missing visual feedback.
+- Removed the "Rounded box" toggle (looked weird). bg_pill model field +
+  setDlgBgPill remain but unused; render falls to the default rounded-12 radius.
+- Logo transparency: logo.opacity (0-100, default 100) in
+  normalizeThumbnailLogo; applied in drawThumbnailLogo (canvas globalAlpha for
+  export) AND the .dlg-logo-overlay img (editor preview). New "Logo Opacity"
+  slider + setDlgLogoOpacity, synced in dlgOpenEditor.
+- Text box scaling: corner resize handles now scale font_size AND width by the
+  same ratio (Canva-style uniform scale) instead of width only; the size
+  slider/readout update live. resize-text dragging captures origFont.
+- Alignment guides: _dlgSetGuides(vx, hy) positions guide lines at a canvas x/y
+  (not a fixed centre); dragging a text box or logo snaps to the canvas centre
+  AND any other box/logo centre, drawing a guide at the matched position - makes
+  box-to-box alignment obvious.
+
+DEFERRED (next): per-character / per-word text colour (highlight a selection and
+recolour). Needs a rich-text run model + per-run canvas drawing - a dedicated
+change.
+
+Regression risk: Medium (drag math + render).
