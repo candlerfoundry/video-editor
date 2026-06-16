@@ -1537,6 +1537,9 @@
     #dlg-canvas-wrap.pan-mode .dlg-logo-overlay,
     #dlg-canvas-wrap.pan-mode .dlg-design-elem-overlay,
     #dlg-canvas-wrap.pan-mode .dlg-resize-handle { pointer-events: none !important; }
+    .dlg-guide-v, .dlg-guide-h { position: absolute; background: rgba(232,84,26,0.95); pointer-events: none; z-index: 60; display: none; }
+    .dlg-guide-v { left: 50%; top: 0; bottom: 0; width: 1px; transform: translateX(-0.5px); }
+    .dlg-guide-h { top: 50%; left: 0; right: 0; height: 1px; transform: translateY(-0.5px); }
     .tx-mode-btn {
       font-size: 11px; font-weight: 600; padding: 3px 10px; border-radius: 14px;
       border: 1px solid var(--border-2); background: var(--surface); color: var(--muted);
@@ -6655,16 +6658,16 @@
       ratioLabel: '4:5',
       width: 1080,
       height: 1350,
-      displayWidth: 360,
-      displayHeight: 450,
+      displayWidth: 440,
+      displayHeight: 550,
     },
     youtube_shorts: {
       label: 'YouTube Shorts',
       ratioLabel: '9:16',
       width: 1080,
       height: 1920,
-      displayWidth: 320,
-      displayHeight: 568,
+      displayWidth: 372,
+      displayHeight: 661,
     },
   };
 
@@ -8581,6 +8584,16 @@
     });
   }
 
+  function _dlgSetGuides(v, h) {
+    const wrap = document.getElementById('dlg-canvas-wrap');
+    if (!wrap) return;
+    let gv = wrap.querySelector('.dlg-guide-v'), gh = wrap.querySelector('.dlg-guide-h');
+    if (!gv) { gv = document.createElement('div'); gv.className = 'dlg-guide-v'; wrap.appendChild(gv); }
+    if (!gh) { gh = document.createElement('div'); gh.className = 'dlg-guide-h'; wrap.appendChild(gh); }
+    gv.style.display = v ? 'block' : 'none';
+    gh.style.display = h ? 'block' : 'none';
+  }
+
   // Drag / Resize / Inline-edit for dialog overlay elements
   (function () {
     let dragging = null;
@@ -8761,13 +8774,27 @@
       if (dragging.type === 'text') {
         const box = getActiveThumbnailTextBox();
         if (!box) return;
-        _dlgCanvasTX = Math.max(60, Math.min((canvas?.width || 1280) - 60, dragging.origX + dx * scaleX));
-        _dlgCanvasTY = Math.max(40, Math.min((canvas?.height || 720) - 40, dragging.origY + dy * scaleY));
+        const W = canvas?.width || 1080, H = canvas?.height || 1350;
+        let nx = Math.max(60, Math.min(W - 60, dragging.origX + dx * scaleX));
+        let ny = Math.max(40, Math.min(H - 40, dragging.origY + dy * scaleY));
+        const thr = 16 * scaleX, thrY = 16 * scaleY;
+        let gV = false, gH = false;
+        if (Math.abs(nx - W / 2) < thr) { nx = W / 2; gV = true; }
+        if (Math.abs(ny - H / 2) < thrY) { ny = H / 2; gH = true; }
+        _dlgSetGuides(gV, gH);
+        _dlgCanvasTX = nx; _dlgCanvasTY = ny;
         box.x = _dlgCanvasTX;
         box.y = _dlgCanvasTY;
       } else if (dragging.type === 'logo' && _sharedThumbnailDraft?.logo) {
-        _sharedThumbnailDraft.logo.x = Math.max(50, Math.min((canvas?.width || 1280) - 50, dragging.origX + dx * scaleX));
-        _sharedThumbnailDraft.logo.y = Math.max(50, Math.min((canvas?.height || 720) - 50, dragging.origY + dy * scaleY));
+        const W = canvas?.width || 1080, H = canvas?.height || 1350;
+        let lx = Math.max(50, Math.min(W - 50, dragging.origX + dx * scaleX));
+        let ly = Math.max(50, Math.min(H - 50, dragging.origY + dy * scaleY));
+        const thr = 16 * scaleX, thrY = 16 * scaleY; let gV = false, gH = false;
+        if (Math.abs(lx - W / 2) < thr) { lx = W / 2; gV = true; }
+        if (Math.abs(ly - H / 2) < thrY) { ly = H / 2; gH = true; }
+        _dlgSetGuides(gV, gH);
+        _sharedThumbnailDraft.logo.x = lx;
+        _sharedThumbnailDraft.logo.y = ly;
       } else if (dragging.type === 'elem') {
         const found2 = (_sharedThumbnailDraft?.graphic_elements || []).find(function(el) { return el.id === dragging.elemId; });
         if (!found2) return;
@@ -8781,7 +8808,7 @@
       renderDialogOverlayLayer();
     });
 
-    document.addEventListener('mouseup', function() { dragging = null; });
+    document.addEventListener('mouseup', function() { if (dragging) _dlgSetGuides(false, false); dragging = null; });
   })();
 
   // "Done — Use This Thumbnail" → render canvas → capture blob

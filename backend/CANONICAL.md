@@ -1374,3 +1374,21 @@ NEXT (Stage 2b part 2): drag snapping + alignment guides; conservative canvas
 enlargement to use the empty space (full layout reorg only if wanted after).
 
 Regression risk: Low-Medium (additive; textarea removal is null-safe).
+
+## 41. Thumbnail editor Stage 2b part 2 - snapping + larger preview (June 16, 2026)
+
+Frontend-only (index.html); no backend contract change; handshake NOT bumped.
+- SNAPPING: dragging a text box or logo snaps its center to the canvas centre
+  X / centre Y within ~16 screen px; _dlgSetGuides() shows thin orange centre
+  guide lines (.dlg-guide-v / .dlg-guide-h appended to #dlg-canvas-wrap, hidden
+  on mouseup). Threshold is canvas-space (16 * scaleX / scaleY).
+- LARGER PREVIEW: THUMB_TARGET_FORMATS display sizes raised to reduce the dead
+  space beside the canvas - instagram 360x450 -> 440x550, youtube_shorts
+  320x568 -> 372x661. Render dims (1080x1350 / 1080x1920) unchanged; overlay
+  positions stay correct because getThumbCanvasScale derives scale from the
+  live wrap size. Tune these display values if the modal scrolls too much.
+- Note: the "letters too close" default came from .dlg-overlay-text CSS
+  letter-spacing:-0.02em; Stage 2a inline letterSpacing now overrides it to 0
+  by default (adjustable via the Letter Spacing slider).
+
+Regression risk: Low-Medium (drag math + preview sizing).
