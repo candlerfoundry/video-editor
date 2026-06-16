@@ -1546,3 +1546,24 @@ is selected - likely a discoverability issue); a true expandable/resizable
 sidebar.
 
 Regression risk: Low-Medium.
+
+## 50. Thumbnail text-box + photo handling (June 16, 2026)
+
+Frontend-only.
+- RESIZE: corner handles now scale font_size ONLY (no longer box.width/x), so
+  resizing no longer leaves a tiny glyph inside a giant box.
+- BOX HUGS TEXT: the overlay text div is width:max-content with max-width =
+  box.width (wrap cap), matching the canvas (which already fit the text). The
+  selected box gets z-index 20 so it comes to the front and stays draggable
+  even when boxes overlap.
+- DELETE: each Text Boxes chip has an x (dlgRemoveTextBoxById) to delete that
+  specific box reliably (Remove button + Delete key still work; keeps >=1).
+- PHOTO: pan is no longer gated to zoom>1 - drag an empty area of the photo to
+  reposition the crop at any zoom (no "Move photo" needed for empty areas; the
+  button still helps when text covers the spot, and now works with text in
+  frame).
+
+STILL OPEN (bigger): full Canva-style photo - click the image to select, corner
+handles to scale, no mode button.
+
+Regression risk: Medium (drag/render).

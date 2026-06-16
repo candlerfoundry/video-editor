@@ -1911,6 +1911,8 @@
       background: var(--orange-tint);
       color: var(--orange);
     }
+    .thumb-chip-x { margin-left: 7px; color: var(--muted); font-size: 14px; line-height: 1; cursor: pointer; opacity: 0.7; }
+    .thumb-chip-x:hover { color: #cc2200; opacity: 1; }
     .thumb-editor-label {
       display: block;
       font-size: 11px;
@@ -7687,6 +7689,7 @@
       boxList.innerHTML = boxes.map((box, index) => (
         '<button type="button" class="thumb-chip' + (_sharedThumbnailDraft?.selected_text_box_id === box.id ? ' selected' : '') + '" onclick="dlgSelectTextBox(\'' + escHtml(box.id) + '\')">' +
         escHtml(box.text || ('Text Box ' + (index + 1))) +
+        (boxes.length > 1 ? '<span class="thumb-chip-x" title="Delete this text box" onclick="dlgRemoveTextBoxById(\'' + escHtml(box.id) + '\', event)">&times;</span>' : '') +
         '</button>'
       )).join('');
     }
@@ -8117,7 +8120,7 @@
       // The hand tool or Shift+drag pans from ANYWHERE on the canvas (even
       // over text/elements); a plain drag pans only from empty areas.
       if (!_dlgPanTool && !e.shiftKey && e.target.closest('.dlg-overlay-text, .dlg-logo-overlay, .dlg-design-elem-overlay, .dlg-resize-handle')) return;
-      if (!_sharedThumbnailDraft || (_sharedThumbnailDraft.frame_zoom || 1) <= 1) return;
+      if (!_sharedThumbnailDraft) return;
       if (e.shiftKey) { e.stopPropagation(); }
       pushDlgUndo('pan');
       panning = {
@@ -8576,6 +8579,17 @@
     dlgOpenEditor();
   }
 
+  function dlgRemoveTextBoxById(id, ev) {
+    if (ev) { ev.stopPropagation(); ev.preventDefault(); }
+    if (!_sharedThumbnailDraft) return;
+    const boxes = _sharedThumbnailDraft.text_boxes || [];
+    if (boxes.length <= 1) return;
+    _sharedThumbnailDraft.text_boxes = boxes.filter(function(b){ return b.id !== id; });
+    if (_sharedThumbnailDraft.selected_text_box_id === id) _sharedThumbnailDraft.selected_text_box_id = _sharedThumbnailDraft.text_boxes[0] ? _sharedThumbnailDraft.text_boxes[0].id : null;
+    applyDraftToDialogState();
+    dlgOpenEditor();
+  }
+
   function dlgDuplicateActiveTextBox() {
     if (!_sharedThumbnailDraft) return;
     const src = getActiveThumbnailTextBox();
@@ -8694,7 +8708,9 @@
       div.style.left       = (bx / scaleX) + 'px';
       div.style.top        = (by / scaleY) + 'px';
       div.style.transform  = 'translate(-50%, -50%)';
-      div.style.width      = (bw / scaleX) + 'px';
+      div.style.width      = 'max-content';
+      div.style.maxWidth   = (bw / scaleX) + 'px';
+      div.style.zIndex     = isSelected ? '20' : '1';
       div.style.fontFamily = (box.font_family || 'Poppins') + ', sans-serif';
       div.style.fontSize   = Math.round((box.font_size || 64) / Math.max(scaleX, scaleY)) + 'px';
       div.style.letterSpacing = ((box.letter_spacing || 0) / Math.max(scaleX, scaleY)) + 'px';
@@ -8922,10 +8938,7 @@
         if (!box) return;
         const hdx = hdxMap[dragging.handle] || 0;
         const ratio = Math.max(0.2, (dragging.origW + hdx * dx * scaleX) / Math.max(1, dragging.origW));
-        box.width = Math.max(80, Math.round(dragging.origW * ratio));
         box.font_size = Math.max(12, Math.min(400, Math.round((dragging.origFont || 64) * ratio)));
-        box.x = Math.round(dragging.origX + dx * scaleX / 2);
-        _dlgCanvasTX = box.x;
         _dlgFontSize = box.font_size;
         const ss = document.getElementById('dlg-size-slider'); if (ss) ss.value = _dlgFontSize;
         const sv = document.getElementById('dlg-size-val'); if (sv) sv.textContent = _dlgFontSize;
