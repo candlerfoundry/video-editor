@@ -5369,6 +5369,9 @@
       background_opacity: overrides.background_opacity ?? 70,
       font_family: overrides.font_family || 'Poppins',
       font_size: overrides.font_size ?? 64,
+      letter_spacing: overrides.letter_spacing ?? 0,
+      line_spacing: overrides.line_spacing ?? 1.25,
+      bg_pill: overrides.bg_pill ?? false,
       x: overrides.x ?? null,
       y: overrides.y ?? null,
       shadow: overrides.shadow ?? true,
@@ -5482,10 +5485,13 @@
     box.background_opacity = _dlgOverlayOpacity;
     box.font_family = _dlgFontFamily;
     box.font_size = _dlgFontSize;
+    box.letter_spacing = _dlgLetterSpacing;
+    box.line_spacing = _dlgLineSpacing;
+    box.bg_pill = _dlgBgPill;
     box.x = _dlgCanvasTX;
     box.y = _dlgCanvasTY;
     box.shadow = _dlgShadowOn;
-    box.align = box.align || 'center';
+    box.align = _dlgAlign || box.align || 'center';
     box.width = box.width ?? getDefaultThumbTextPosition(_dlgStyle, _dlgTargetFormat, 0).width;
     return _sharedThumbnailDraft;
   }
@@ -5517,6 +5523,10 @@
     _dlgBackgroundColor = box?.background_color || '#111111';
     _dlgOverlayOpacity = box?.background_opacity ?? 0;
     _dlgShadowOn = box?.shadow ?? true;
+    _dlgLetterSpacing = box?.letter_spacing ?? 0;
+    _dlgLineSpacing = box?.line_spacing ?? 1.25;
+    _dlgAlign = box?.align || 'center';
+    _dlgBgPill = box?.bg_pill ?? false;
     const pos = getDefaultThumbTextPosition(_dlgStyle, _dlgTargetFormat, 0);
     _dlgCanvasTX = box?.x ?? pos.x;
     _dlgCanvasTY = box?.y ?? pos.y;
@@ -6121,9 +6131,10 @@
     const paddingX = Math.max(16, resolvedFontSize * 0.22);
     const paddingY = Math.max(12, resolvedFontSize * 0.14);
     ctx.font = `700 ${resolvedFontSize}px ${resolvedFontFamily}, sans-serif`;
+    ctx.letterSpacing = (box.letter_spacing || 0) + 'px';
     const lines = wrapText(ctx, box.text || '', maxWidth - paddingX * 2);
     const safeLines = lines.length ? lines : [''];
-    const lineH = resolvedFontSize * 1.25;
+    const lineH = resolvedFontSize * (box.line_spacing || 1.25);
     const widestLine = Math.max(...safeLines.map(line => ctx.measureText(line).width), resolvedFontSize * 1.4);
     const blockW = Math.min(maxWidth, widestLine + paddingX * 2);
     const blockH = safeLines.length * lineH + paddingY * 2;
@@ -6143,7 +6154,7 @@
       ctx.fillStyle = `rgba(${r},${g},${b},${(box.background_opacity ?? 0) / 100})`;
       ctx.beginPath();
       if (ctx.roundRect) {
-        ctx.roundRect(left, resolvedY - blockH / 2, blockW, blockH, 12);
+        ctx.roundRect(left, resolvedY - blockH / 2, blockW, blockH, box.bg_pill ? Math.min(blockH/2, blockW/2) : 12);
       } else {
         ctx.rect(left, resolvedY - blockH / 2, blockW, blockH);
       }
@@ -6167,6 +6178,7 @@
       lineY += lineH;
     }
     ctx.restore();
+    ctx.letterSpacing = '0px';
   }
 
   function hexToRgb(hex) {
@@ -6620,6 +6632,10 @@
   let _dlgStyle          = 'lower_third';
   let _dlgTitle          = '';
   let _dlgFontFamily     = 'Poppins';
+  let _dlgLetterSpacing  = 0;
+  let _dlgLineSpacing    = 1.25;
+  let _dlgAlign          = 'center';
+  let _dlgBgPill         = false;
   let _dlgFontSize       = 64;
   let _dlgCanvasTX       = 640;
   let _dlgCanvasTY       = 590;
@@ -7666,11 +7682,21 @@
     _dlgBackgroundColor = box?.background_color || '#111111';
     _dlgShadowOn = box?.shadow ?? true;
     _dlgOverlayOpacity = box?.background_opacity ?? 0;
+    _dlgLetterSpacing = box?.letter_spacing ?? 0;
+    _dlgLineSpacing = box?.line_spacing ?? 1.25;
+    _dlgAlign = box?.align || 'center';
+    _dlgBgPill = box?.bg_pill ?? false;
 
     const fontSel = document.getElementById('dlg-font-select');
     if (fontSel) fontSel.value = _dlgFontFamily;
     const sizeSlider = document.getElementById('dlg-size-slider');
     if (sizeSlider) sizeSlider.value = _dlgFontSize;
+    const lsSlider = document.getElementById('dlg-letter-slider'); if (lsSlider) lsSlider.value = _dlgLetterSpacing;
+    const lsVal = document.getElementById('dlg-letter-val'); if (lsVal) lsVal.textContent = _dlgLetterSpacing;
+    const lnSlider = document.getElementById('dlg-line-slider'); if (lnSlider) lnSlider.value = _dlgLineSpacing;
+    const lnVal = document.getElementById('dlg-line-val'); if (lnVal) lnVal.textContent = Number(_dlgLineSpacing).toFixed(2);
+    const pillChk = document.getElementById('dlg-pill-toggle'); if (pillChk) pillChk.checked = _dlgBgPill;
+    dlgSyncAlignButtons();
     const shadowChk = document.getElementById('dlg-shadow-toggle');
     if (shadowChk) shadowChk.checked = _dlgShadowOn;
     const overlaySlider = document.getElementById('dlg-overlay-slider');
@@ -7728,9 +7754,40 @@
   }
 
   function setDlgFontSize(val) {
-    _dlgFontSize = Math.max(24, Math.min(120, parseInt(val)));
+    _dlgFontSize = Math.max(24, Math.min(400, parseInt(val)));
     const slider = document.getElementById('dlg-size-slider');
     if (slider) slider.value = _dlgFontSize;
+    dlgUpdateText();
+  }
+
+  function setDlgLetterSpacing(val) {
+    _dlgLetterSpacing = parseInt(val);
+    const v = document.getElementById('dlg-letter-val'); if (v) v.textContent = _dlgLetterSpacing;
+    dlgUpdateText();
+  }
+
+  function setDlgLineSpacing(val) {
+    _dlgLineSpacing = parseFloat(val);
+    const v = document.getElementById('dlg-line-val'); if (v) v.textContent = _dlgLineSpacing.toFixed(2);
+    dlgUpdateText();
+  }
+
+  function setDlgAlign(a) {
+    _dlgAlign = a;
+    const box = getActiveThumbnailTextBox(); if (box) box.align = a;
+    dlgSyncAlignButtons();
+    dlgUpdateText();
+  }
+
+  function dlgSyncAlignButtons() {
+    ['left','center','right'].forEach(a => {
+      const b = document.getElementById('dlg-align-' + a);
+      if (b) b.classList.toggle('selected', _dlgAlign === a);
+    });
+  }
+
+  function setDlgBgPill(on) {
+    _dlgBgPill = !!on;
     dlgUpdateText();
   }
 
@@ -8405,6 +8462,8 @@
       div.style.width      = (bw / scaleX) + 'px';
       div.style.fontFamily = (box.font_family || 'Poppins') + ', sans-serif';
       div.style.fontSize   = Math.round((box.font_size || 64) / Math.max(scaleX, scaleY)) + 'px';
+      div.style.letterSpacing = ((box.letter_spacing || 0) / Math.max(scaleX, scaleY)) + 'px';
+      div.style.lineHeight = (box.line_spacing || 1.25);
       div.style.color      = box.color || '#ffffff';
       div.style.textAlign  = box.align || 'center';
       div.style.textShadow = (box.shadow ?? true) ? '2px 2px 8px rgba(0,0,0,0.8)' : 'none';
@@ -8412,6 +8471,7 @@
       const bg = hexToRgb(box.background_color || '#111111');
       div.style.background = alpha > 0 ? `rgba(${bg.r},${bg.g},${bg.b},${alpha})` : 'transparent';
       div.style.padding    = alpha > 0 ? '10px 16px' : '4px 8px';
+      div.style.borderRadius = (alpha > 0 && box.bg_pill) ? '999px' : (alpha > 0 ? '10px' : '0');
       if (isSelected) _addResizeHandles(div, CORNER_HANDLES);
       layer.appendChild(div);
     });
@@ -9828,8 +9888,24 @@
               </div>
               <div>
                 <div class="thumb-editor-label">Size <span id="dlg-size-val">64</span>px</div>
-                <input type="range" id="dlg-size-slider" min="24" max="120" value="64" style="width:100%;accent-color:var(--orange);margin-top:4px;" oninput="setDlgFontSize(this.value)">
+                <input type="range" id="dlg-size-slider" min="24" max="400" value="64" style="width:100%;accent-color:var(--orange);margin-top:4px;" oninput="setDlgFontSize(this.value)">
               </div>
+            </div>
+            <div class="thumb-editor-grid" style="margin-top:14px;">
+              <div>
+                <div class="thumb-editor-label">Letter Spacing <span id="dlg-letter-val">0</span>px</div>
+                <input type="range" id="dlg-letter-slider" min="-10" max="60" step="1" value="0" style="width:100%;accent-color:var(--orange);margin-top:4px;" oninput="setDlgLetterSpacing(this.value)">
+              </div>
+              <div>
+                <div class="thumb-editor-label">Line Spacing <span id="dlg-line-val">1.25</span></div>
+                <input type="range" id="dlg-line-slider" min="0.8" max="2.5" step="0.05" value="1.25" style="width:100%;accent-color:var(--orange);margin-top:4px;" oninput="setDlgLineSpacing(this.value)">
+              </div>
+            </div>
+            <div class="thumb-inline-row" style="margin-top:14px;gap:6px;">
+              <span class="thumb-editor-label" style="margin-bottom:0;">Align</span>
+              <button type="button" class="tx-mode-btn" id="dlg-align-left" onclick="setDlgAlign('left')">Left</button>
+              <button type="button" class="tx-mode-btn selected" id="dlg-align-center" onclick="setDlgAlign('center')">Center</button>
+              <button type="button" class="tx-mode-btn" id="dlg-align-right" onclick="setDlgAlign('right')">Right</button>
             </div>
             <div style="margin-top:14px;">
               <div class="thumb-editor-label">Text Color</div>
@@ -9872,6 +9948,10 @@
               <label class="thumb-inline-row" style="font-size:13px;color:var(--text-2);cursor:pointer;">
                 <input type="checkbox" id="dlg-shadow-toggle" checked style="accent-color:var(--orange);width:16px;height:16px;cursor:pointer;" onchange="dlgUpdateText()">
                 Text Shadow
+              </label>
+              <label class="thumb-inline-row" style="font-size:13px;color:var(--text-2);cursor:pointer;margin-left:14px;">
+                <input type="checkbox" id="dlg-pill-toggle" style="accent-color:var(--orange);width:16px;height:16px;cursor:pointer;" onchange="setDlgBgPill(this.checked)">
+                Rounded box
               </label>
             </div>
           </div>

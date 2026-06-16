@@ -1326,3 +1326,29 @@ textarea), layout reorg to use the empty space, snapping/guides, drag-resize
 handles, layer order/duplicate/nudge, text align + rounded text-bg.
 
 Regression risk: Medium (font swap + DOM removal in a fragile composer).
+
+## 39. Thumbnail editor Stage 2a - typography (June 16, 2026)
+
+Frontend-only (index.html); no backend contract change, handshake NOT bumped.
+Applies to the dlg composer (the live editor). Text box model gained
+letter_spacing (px, default 0), line_spacing (multiplier, default 1.25),
+bg_pill (bool). Wired through BOTH render paths that must stay in sync:
+- Editor preview = DOM .dlg-overlay-text divs (renderDialogOverlayLayer):
+  letterSpacing and lineHeight scaled by 1/max(scaleX,scaleY); pill -> 999px
+  border-radius.
+- Export/canvas = drawThumbTextBlock: ctx.letterSpacing set BEFORE wrapText
+  (so wrapping/measuring honor it) and reset to '0px' at function end so it
+  does not leak to later draws; lineH = fontSize * line_spacing; pill ->
+  roundRect radius min(blockH/2, blockW/2).
+- Max font size raised 120 -> 400 (dlg-size-slider + setDlgFontSize clamp).
+- New controls in the Text Boxes card: Letter Spacing + Line Spacing sliders,
+  Align L/C/R (tx-mode-btn .selected), Rounded-box toggle. State mirrors:
+  _dlgLetterSpacing/_dlgLineSpacing/_dlgAlign/_dlgBgPill, persisted via
+  syncDraftFromDialogState and restored in applyDraftToDialogState +
+  dlgOpenEditor.
+- ctx.letterSpacing requires a modern Chromium (the target runtime) - fine.
+
+NEXT (Stage 2b): inline on-canvas text editing (remove the side textarea),
+layout reorg, snapping/guides, layer order/duplicate/nudge.
+
+Regression risk: Medium (touches both text render paths).
