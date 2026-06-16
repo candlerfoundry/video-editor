@@ -177,7 +177,7 @@
 
     /* ─── SIDEBAR ─── */
     .sidebar {
-      width: 240px; min-width: 240px;
+      width: 300px; min-width: 300px;
       height: 100vh;
       background: var(--sidebar-bg);
       border-right: 1px solid var(--border);
@@ -375,8 +375,8 @@
       white-space: nowrap;
       overflow: hidden;
       text-overflow: ellipsis;
-      max-width: 0;
-      flex: 1 1 0;
+      max-width: 100%;
+      flex: 1 1 100%;
       min-width: 0;
     }
     .recent-project-date {
@@ -547,9 +547,10 @@
     }
     .sidebar-project-item-head {
       display: flex;
+      flex-wrap: wrap;
       align-items: center;
       justify-content: space-between;
-      gap: 8px;
+      gap: 6px;
       min-width: 0;
     }
     .sidebar-project-item .recent-project-date {
@@ -3081,7 +3082,7 @@
       const lastView = project?.meta?.last_view === 'thumbnails' ? 'thumbnails' : 'clips';
 
       return (
-        '<button class="sidebar-project-item' + (isActive ? ' active' : '') + '" type="button" onclick="selectRecentProject(\'' + escHtml(project.id) + '\', \'' + lastView + '\')">' +
+        '<button class="sidebar-project-item' + (isActive ? ' active' : '') + '" type="button" oncontextmenu="deleteRecentProject(\'' + escHtml(project.id) + '\', event); return false;" onclick="selectRecentProject(\'' + escHtml(project.id) + '\', \'' + lastView + '\')">' +
           '<div class="sidebar-project-item-head">' +
             '<div class="recent-project-name" title="' + escHtml(getProjectLabel(project)) + '">' + escHtml(getProjectLabel(project)) + '</div>' +
             '<div class="recent-project-date">' + escHtml(formatProjectDate(project.last_modified)) + '</div>' +
@@ -3560,7 +3561,7 @@
             const lastView = project?.meta?.last_view === 'thumbnails' ? 'thumbnails' : 'clips';
             const hasSavedPath = !!(project?.source_path || project?.source_video?.path);
             return (
-              '<button class="sidebar-project-item' + (isActive ? ' active' : '') + '" type="button" onclick="selectRecentProject(\'' + escHtml(project.id) + '\', \'' + lastView + '\')">' +
+              '<button class="sidebar-project-item' + (isActive ? ' active' : '') + '" type="button" oncontextmenu="deleteRecentProject(\'' + escHtml(project.id) + '\', event); return false;" onclick="selectRecentProject(\'' + escHtml(project.id) + '\', \'' + lastView + '\')">' +
                 '<div class="sidebar-project-item-head">' +
                   '<div class="recent-project-name" title="' + escHtml(getProjectLabel(project)) + '">' + escHtml(getProjectLabel(project)) + '</div>' +
                   '<div class="recent-project-date">' + escHtml(formatProjectDate(project.last_modified || project.updated_at)) + '</div>' +
@@ -3792,11 +3793,16 @@
       if (activeVideo && activeVideo !== editVid) activeVideo.pause();
       activeVideo = editVid;
     });
-    editVid.addEventListener('pause', () => { if (activeVideo === editVid) activeVideo = null; });
+    editVid.addEventListener('pause', () => { if (activeVideo === editVid) activeVideo = null; editVid.muted = false; stopBleepTone(); });
     editVid.addEventListener('ended', () => { if (activeVideo === editVid) activeVideo = null; });
     // Sync playhead line with video currentTime
     editVid.addEventListener('timeupdate', () => {
       updatePlayhead();
+      if (!editVid.paused && editorBleepRanges && editorBleepRanges.length) {
+        const _bl = isTimeBleeped(editVid.currentTime);
+        editVid.muted = _bl;
+        if (_bl) startBleepTone(); else stopBleepTone();
+      }
     });
   })();
 
@@ -4451,7 +4457,6 @@
     vid.addEventListener('loadedmetadata', function () {
       vid.currentTime = editorInTime;
       renderTimelineBar();
-      vid.play().catch(() => {});
     }, { once: true });
 
     document.getElementById('editor-clip-label').textContent =
@@ -4583,7 +4588,6 @@
     vid.addEventListener('loadedmetadata', function () {
       vid.currentTime = editorInTime;
       renderTimelineBar();
-      vid.play().catch(() => {});
     }, { once: true });
 
     document.getElementById('editor-clip-label').textContent =
@@ -10096,7 +10100,7 @@
             </div>
             <!-- Frame picker scrub panel -->
             <div id="dlg-frame-picker" style="display:none;margin-top:12px;border-top:1px solid var(--border);padding-top:12px;">
-              <video id="dlg-pick-video" style="width:100%;border-radius:8px;background:#000;max-height:200px;" muted playsinline preload="metadata"></video>
+              <video id="dlg-pick-video" style="width:100%;border-radius:8px;background:#000;max-height:520px;" muted playsinline preload="metadata"></video>
               <div style="margin-top:8px;">
                 <input type="range" id="dlg-pick-scrub" min="0" max="100" value="0" step="0.1" style="width:100%;accent-color:var(--orange);" oninput="dlgPickVideoScrub(this.value)">
               </div>

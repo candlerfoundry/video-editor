@@ -1523,3 +1523,26 @@ Deploy: overwrite server.py next to the exe + restart launcher (the handshake
 banner prompts it), then hard-refresh.
 
 Regression risk: Low.
+
+## 49. Editor fixes round (June 16, 2026)
+
+Frontend-only.
+- NO AUTOPLAY: the two clip-edit loaders no longer call vid.play() in their
+  loadedmetadata handler (preview buttons + Play Selection still play on
+  demand).
+- Pick-frame scrub video (#dlg-pick-video) max-height 200 -> 520px (was tiny,
+  letterboxed in black).
+- BLEEP PREVIEW audible on ANY playback: the persistent #edit-video timeupdate
+  now mutes speech + plays the 1 kHz tone inside bleep ranges (previously only
+  Play Selection did); pause unmutes + stops the tone.
+- RECENT PROJECTS: name no longer collapses (.recent-project-name max-width
+  0 -> 100%, flex 1 1 100%; .sidebar-project-item-head flex-wrap) so the
+  project/video name shows like the current project. Right-click a recent
+  project to delete (oncontextmenu -> deleteRecentProject; the x button stays).
+  Sidebar widened 240 -> 300px.
+
+STILL OPEN: thumbnail text-box resize (corner handles only appear once the box
+is selected - likely a discoverability issue); a true expandable/resizable
+sidebar.
+
+Regression risk: Low-Medium.
