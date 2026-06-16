@@ -1403,3 +1403,25 @@ current .dlg-overlay-text[data-box-id] element; it is entered via (a) the
 dblclick handler and (b) MANUAL double-click detection in the text mousedown
 branch (_dlgLastTextClick, two clicks <350ms on the same box id) so editing
 survives the click->rebuild. Frontend only.
+
+## 43. Self-hosted custom font: Handmade Sans (June 16, 2026)
+
+Frontend-only. First purchased/self-hosted font wired into the thumbnail
+editor - proves the pattern for future Creative Market fonts.
+- Files committed at /fonts/HandmadeSans.woff2 (133KB) + .otf fallback (332KB).
+  Netlify serves repo root (publish="."); the /* SPA rewrite is non-forced so
+  real files win over it.
+- @font-face family 'Handmade Sans', font-weight 100 900 (single master; the
+  range avoids synthetic faux-bold when 700 is requested), font-display swap.
+- Added to BOTH thumbnail font pickers (#thumb-font-select, #dlg-font-select).
+- Preloaded at init (document.fonts.load) and the export path awaits
+  document.fonts.ready before rendering the PNG so the burned thumbnail uses
+  the real face.
+- LICENSING: self-hosting serves the font publicly (webfont embedding). Confirm
+  the Creative Market Webfont license covers this; a desktop-only license would
+  require server-side text rendering instead.
+
+Pattern for the next font: drop the file in /fonts/, add an @font-face block and
+a picker <option>, done.
+
+Regression risk: Low (additive; existing fonts untouched).

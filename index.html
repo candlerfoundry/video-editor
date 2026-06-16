@@ -8,6 +8,14 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600;700&family=Bebas+Neue&family=Cormorant+Garamond:wght@400;500;600;700&family=DM+Sans:wght@400;500;600;700&family=Inter:wght@400;500;600;700&family=Lora:wght@400;500;600;700&family=Montserrat:wght@400;500;600;700&family=Oswald:wght@400;500;600;700&family=Playfair+Display:wght@600;700&family=Spectral:wght@400;500;600;700&family=Poppins:wght@400;500;600;700;800;900&family=Boogaloo&family=Just+Another+Hand&family=Patrick+Hand+SC&display=swap" rel="stylesheet">
+  <style>
+    @font-face {
+      font-family: 'Handmade Sans';
+      src: url('fonts/HandmadeSans.woff2') format('woff2'), url('fonts/HandmadeSans.otf') format('opentype');
+      font-weight: 100 900;
+      font-display: swap;
+    }
+  </style>
   <script src="https://unpkg.com/wavesurfer.js@7/dist/wavesurfer.min.js"></script>
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
@@ -2699,6 +2707,7 @@
                       <option value="Boogaloo" style="font-family:'Boogaloo'">Boogaloo</option>
                       <option value="'Just Another Hand'" style="font-family:'Just Another Hand'">Just Another Hand</option>
                       <option value="'Patrick Hand SC'" style="font-family:'Patrick Hand SC'">Patrick Hand SC</option>
+                  <option value="'Handmade Sans'" style="font-family:'Handmade Sans'">Handmade Sans</option>
                     </select>
                   </div>
 
@@ -2905,6 +2914,7 @@
   // frontend/backend contract changes. A mismatch means the user is running
   // an old backend (launcher not restarted after a deploy).
   const EXPECTED_BACKEND_BUILD = '2026-06-15-bleepfix';
+  if (document.fonts && document.fonts.load) { document.fonts.load("700 64px 'Handmade Sans'").catch(function(){}); }
   let _staleBackendWarned = false;
   function showStaleBackendBanner(stale) {
     let el = document.getElementById('stale-backend-banner');
@@ -8835,6 +8845,7 @@
       return;
     }
     syncDraftFromDialogState();
+    try { await document.fonts.ready; } catch (_) {}
     await renderThumbnailDraftToCanvas(canvas, _sharedThumbnailDraft);
     canvas.toBlob(blob => {
       saveCurrentThumbnailDraft(false);
@@ -9980,6 +9991,7 @@
                   <option value="Boogaloo" style="font-family:'Boogaloo'">Boogaloo</option>
                   <option value="'Just Another Hand'" style="font-family:'Just Another Hand'">Just Another Hand</option>
                   <option value="'Patrick Hand SC'" style="font-family:'Patrick Hand SC'">Patrick Hand SC</option>
+                  <option value="'Handmade Sans'" style="font-family:'Handmade Sans'">Handmade Sans</option>
                 </select>
               </div>
               <div>
