@@ -1648,3 +1648,17 @@ Regression risk: Medium (drag/render).
   Oval/Square buttons (resizable; oval = stretched circle, rectangle = stretched square).
 - Composer can start from a saved draft: dlgOpenSavedThumbs / dlgUseSavedThumb
   (dialog-saved-thumbs) lists this project's saved thumbnails to re-open & edit.
+
+## Captions editor tweaks (June 17, 2026)
+- Removed the Split caption / Join with next controls (confusing) — functions
+  remain defined but unwired.
+- Caption font size: editor slider now 70-300%; backend size_scale clamp widened
+  to 0.5-3.0 (was 1.6 max), so captions can be much larger.
+- Letter outline: on/off + thickness slider (0-10 level). Burns via ASS Outline
+  (outline_px = font_size * level * 0.02) and previews via -webkit-text-stroke +
+  paint-order. spec field outline_width.
+- Letter spacing: slider 0-20 (% of font). Burns via ASS Spacing, previews via
+  CSS letter-spacing. spec field letter_spacing.
+- BACKEND_BUILD -> 2026-06-17-captions (server.py must be updated for these).
+- NOTE: line spacing for burned captions is not supported by libass (no
+  line-spacing style field), so it was not added.

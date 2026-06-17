@@ -62,7 +62,7 @@ CORS(app)
 
 # Bump this whenever the frontend/backend contract changes (the frontend
 # carries a matching EXPECTED_BACKEND_BUILD and warns when they differ).
-BACKEND_BUILD = "2026-06-16-thumbgallery"
+BACKEND_BUILD = "2026-06-17-captions"
 
 CREATE_NO_WINDOW = 0x08000000 if platform.system() == 'Windows' else 0
 
@@ -308,7 +308,7 @@ def spec_to_ass(spec, width, height):
         size_scale = float(spec.get("size_scale") or 1)
     except (TypeError, ValueError):
         size_scale = 1.0
-    font_size = max(16, int(font_size * max(0.7, min(1.6, size_scale))))
+    font_size = max(16, int(font_size * max(0.5, min(3.0, size_scale))))
 
     font = spec.get("font") or "Arial"
     if font not in ASS_CAPTION_FONTS:
@@ -320,9 +320,18 @@ def spec_to_ass(spec, width, height):
     emphasis_larger = bool(spec.get("emphasis_larger"))
     emphasis_pulse = bool(spec.get("emphasis_pulse"))
     pop = bool(spec.get("pop"))
-    # Slight letter spacing (Emily: push letters out a touch); word gaps are
-    # widened by joining words with two spaces in the event text.
-    letter_spacing = max(1, round(font_size * 0.01))
+    # Letter spacing (editor slider, 0-20 = % of font size).
+    try:
+        ls_pct = float(spec.get("letter_spacing")) if spec.get("letter_spacing") is not None else 1.0
+    except (TypeError, ValueError):
+        ls_pct = 1.0
+    letter_spacing = max(0, round(font_size * max(0.0, min(30.0, ls_pct)) / 100.0))
+    # Outline thickness (editor slider, 0-10 level; 0 = no outline).
+    try:
+        ow_level = float(spec.get("outline_width")) if spec.get("outline_width") is not None else 3.0
+    except (TypeError, ValueError):
+        ow_level = 3.0
+    outline_px = max(0, round(font_size * max(0.0, min(12.0, ow_level)) * 0.02))
 
     def t2ass(t):
         t = max(0.0, float(t))
@@ -364,7 +373,7 @@ def spec_to_ass(spec, width, height):
         "ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, "
         "Alignment, MarginL, MarginR, MarginV, Encoding\n"
         f"Style: Default,{font},{font_size},&H00FFFFFF,&H00FFFFFF,&H00000000,"
-        f"&H7F000000,-1,0,0,0,100,100,{letter_spacing},0,1,3,0,2,{margin_h},{margin_h},{margin_v},1\n\n"
+        f"&H7F000000,-1,0,0,0,100,100,{letter_spacing},0,1,{outline_px},0,2,{margin_h},{margin_h},{margin_v},1\n\n"
         "[Events]\n"
         "Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text\n"
     )

@@ -2477,20 +2477,21 @@
                 </div>
                 <div class="thumb-inline-row" style="align-items:center;gap:10px;margin-top:8px;">
                   <span style="font-size:10px;font-weight:700;letter-spacing:0.06em;text-transform:uppercase;color:var(--muted);">Size <span id="caption-size-val">100</span>%</span>
-                  <input type="range" id="caption-size-slider" min="70" max="160" value="100" style="width:110px;accent-color:var(--orange);" oninput="setCaptionSizeScale(this.value)">
+                  <input type="range" id="caption-size-slider" min="70" max="300" value="100" style="width:110px;accent-color:var(--orange);" oninput="setCaptionSizeScale(this.value)">
                   <span style="font-size:10px;font-weight:700;letter-spacing:0.06em;text-transform:uppercase;color:var(--muted);">Emphasis style</span>
                   <label class="thumb-inline-row" style="font-size:11px;cursor:pointer;gap:3px;"><input type="checkbox" id="emph-color" checked onchange="setEmphasisOption('emphasis_color_on', this.checked)" style="accent-color:var(--orange);">Color</label>
                   <label class="thumb-inline-row" style="font-size:11px;cursor:pointer;gap:3px;"><input type="checkbox" id="emph-caps" checked onchange="setEmphasisOption('emphasis_caps', this.checked)" style="accent-color:var(--orange);">CAPS</label>
                   <label class="thumb-inline-row" style="font-size:11px;cursor:pointer;gap:3px;"><input type="checkbox" id="emph-larger" onchange="setEmphasisOption('emphasis_larger', this.checked)" style="accent-color:var(--orange);">Larger</label>
                   <label class="thumb-inline-row" style="font-size:11px;cursor:pointer;gap:3px;"><input type="checkbox" id="emph-pulse" onchange="setEmphasisOption('emphasis_pulse', this.checked)" style="accent-color:var(--orange);">Grow-in</label>
                 </div>
-                <div class="thumb-inline-row" style="align-items:center;gap:8px;margin-top:8px;">
+                <div class="thumb-inline-row" style="align-items:center;gap:14px;margin-top:8px;flex-wrap:wrap;">
                   <button class="btn-ghost btn-sm" type="button" onclick="capEditCurrentGroup()" title="Edit the caption currently on screen (Enter = new line, Ctrl+Enter = done)">&#9998; Edit text</button>
-                  <span style="font-size:10px;font-weight:700;letter-spacing:0.06em;text-transform:uppercase;color:var(--muted);">Caption grouping</span>
-                  <button class="btn-ghost btn-sm" type="button" onclick="splitCaptionGroupAtActiveWord()" title="The caption currently on screen gets split in two: a new caption starts at the highlighted (active) word. Use this when too many words share the screen.">&#9986; Split caption</button>
-                  <button class="btn-ghost btn-sm" type="button" onclick="mergeCaptionGroupWithNext()" title="The caption on screen and the NEXT caption become one. Use this when a thought is split awkwardly across two captions.">&#10548; Join with next</button>
+                  <label class="thumb-inline-row" style="font-size:11px;cursor:pointer;gap:4px;"><input type="checkbox" id="cap-outline" checked onchange="setCaptionOutlineOn(this.checked)" style="accent-color:var(--orange);">Outline</label>
+                  <span style="font-size:10px;font-weight:700;letter-spacing:0.06em;text-transform:uppercase;color:var(--muted);">Thickness</span>
+                  <input type="range" id="cap-outline-slider" min="0" max="10" value="3" style="width:90px;accent-color:var(--orange);" oninput="setCaptionOutline(this.value)">
+                  <span style="font-size:10px;font-weight:700;letter-spacing:0.06em;text-transform:uppercase;color:var(--muted);">Letter spacing</span>
+                  <input type="range" id="cap-letter-slider" min="0" max="20" value="2" style="width:90px;accent-color:var(--orange);" oninput="setCaptionLetterSpacing(this.value)">
                 </div>
-                <p style="font-size:11px;color:var(--muted);margin:4px 0 0;">Split/Join control which words share the screen: pause on a caption, then split it at the highlighted word or join it with the next caption. Undo (&#8630; or Ctrl+Z) reverses any of this.</p>
                 <p style="font-size:11px;color:var(--muted);margin:6px 0 0;">Burns exactly as shown. <strong>Click a word</strong> to toggle emphasis &#183; <strong>double-click</strong> (or &#9998;) to edit text &#8212; <strong>Enter makes a second line</strong> &#183; <strong>drag</strong> the captions to reposition.</p>
               </div>
             </div><!-- /.editor-left-zone -->
@@ -2987,7 +2988,7 @@
   // Must match BACKEND_BUILD in server.py — bumped together whenever the
   // frontend/backend contract changes. A mismatch means the user is running
   // an old backend (launcher not restarted after a deploy).
-  const EXPECTED_BACKEND_BUILD = '2026-06-16-thumbgallery';
+  const EXPECTED_BACKEND_BUILD = '2026-06-17-captions';
   if (document.fonts && document.fonts.load) { document.fonts.load("700 64px 'Handmade Sans'").catch(function(){}); }
   let _staleBackendWarned = false;
   function showStaleBackendBanner(stale) {
@@ -10090,7 +10091,10 @@
     preset: 'bold_pop', font: 'Arial Black', emphasis_color: '#F5A623',
     mode: 'karaoke', all_caps: true, emphasis_caps: true, group_size: 4,
     pop: true, pos_bottom: 0.12, show: true,
-    size_scale: 1.0,           // 0.7-1.6 multiplier on the base caption size
+    size_scale: 1.0,           // 0.5-3.0 multiplier on the base caption size
+    outline_on: true,          // letter outline (burns + preview)
+    outline_width: 3,          // 0-10 thickness level
+    letter_spacing: 2,         // 0-20 (% of font size)
     emphasis_color_on: true,   // emphasis options — any combination
     emphasis_larger: false,
     emphasis_pulse: false,
@@ -10313,9 +10317,25 @@
     if (on) runAiEmphasis(false);
   }
   function setCaptionSizeScale(v) {
-    editorCaptionStyle.size_scale = Math.max(0.7, Math.min(1.6, parseInt(v) / 100));
+    editorCaptionStyle.size_scale = Math.max(0.5, Math.min(3.0, parseInt(v) / 100));
     const span = document.getElementById('caption-size-val');
     if (span) span.textContent = Math.round(editorCaptionStyle.size_scale * 100);
+    updateCaptionOverlay(true);
+  }
+  function setCaptionOutlineOn(on) {
+    editorCaptionStyle.outline_on = !!on;
+    updateCaptionOverlay(true);
+  }
+  function setCaptionOutline(v) {
+    editorCaptionStyle.outline_width = Math.max(0, Math.min(10, parseInt(v) || 0));
+    if (editorCaptionStyle.outline_width > 0) {
+      editorCaptionStyle.outline_on = true;
+      const cb = document.getElementById('cap-outline'); if (cb) cb.checked = true;
+    }
+    updateCaptionOverlay(true);
+  }
+  function setCaptionLetterSpacing(v) {
+    editorCaptionStyle.letter_spacing = Math.max(0, Math.min(20, parseInt(v) || 0));
     updateCaptionOverlay(true);
   }
   function setEmphasisOption(key, on) {
@@ -10393,9 +10413,18 @@
     overlay.style.fontFamily = editorCaptionStyle.font + ', sans-serif';
     const scale = editorCaptionStyle.size_scale || 1;
     const sizePct = (mode === 'word' ? 0.06 : 0.034) * scale;
-    overlay.style.fontSize = Math.max(13, Math.round(vid.clientHeight * sizePct)) + 'px';
-    overlay.style.letterSpacing = '0.01em';
+    const _capPx = Math.max(13, Math.round(vid.clientHeight * sizePct));
+    overlay.style.fontSize = _capPx + 'px';
+    overlay.style.letterSpacing = ((editorCaptionStyle.letter_spacing || 0) / 100) + 'em';
     overlay.style.wordSpacing = '0.10em';
+    const _olOn = editorCaptionStyle.outline_on !== false && (editorCaptionStyle.outline_width || 0) > 0;
+    if (_olOn) {
+      const _olPx = Math.max(1, Math.round(_capPx * (editorCaptionStyle.outline_width || 0) * 0.02));
+      overlay.style.webkitTextStroke = _olPx + 'px #000';
+      overlay.style.paintOrder = 'stroke fill';
+    } else {
+      overlay.style.webkitTextStroke = '0px transparent';
+    }
     overlay.style.bottom = Math.round((editorCaptionStyle.pos_bottom ?? 0.12) * 100) + '%';
     overlay.dataset.groupIndex = g.index;
     const emph = editorCaptionEmphasis[g.index] || [];
@@ -10683,6 +10712,8 @@
           emphasis_larger: !!editorCaptionStyle.emphasis_larger,
           emphasis_pulse: !!editorCaptionStyle.emphasis_pulse,
           size_scale: editorCaptionStyle.size_scale || 1,
+          outline_width: (editorCaptionStyle.outline_on !== false ? (editorCaptionStyle.outline_width || 0) : 0),
+          letter_spacing: editorCaptionStyle.letter_spacing || 0,
           pop: !!editorCaptionStyle.pop,
           pos_bottom: editorCaptionStyle.pos_bottom ?? 0.12,
           groups: groups.map(g => ({
