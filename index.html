@@ -5741,11 +5741,17 @@
 
   function ensureDraftTextBoxes(textBoxes, style, format, title = '') {
     const normalizedStyle = normalizeThumbnailLayout(style);
+    const _seen = new Set();
     const boxes = (textBoxes && textBoxes.length ? textBoxes : [makeThumbnailTextBox(title)]).map((box, index) => {
       const pos = getDefaultThumbTextPosition(normalizedStyle, format, index);
+      // Guarantee a UNIQUE id — older saved drafts can have missing/duplicate ids,
+      // which made clicking/selecting target the wrong box (apparent duplication/deletion).
+      let id = box?.id || `text-${index + 1}`;
+      while (_seen.has(id)) id = 'text-' + (index + 1) + '-' + Math.random().toString(36).slice(2, 7);
+      _seen.add(id);
       return makeThumbnailTextBox(box?.text || '', {
         ...box,
-        id: box?.id || `text-${index + 1}`,
+        id: id,
         x: box?.x ?? pos.x,
         y: box?.y ?? pos.y,
         width: box?.width ?? pos.width,
@@ -11213,7 +11219,7 @@
 
 <dialog id="dialog-thumb">
   <div class="dialog-header">
-    <h2>Create Thumbnail</h2>
+    <h2>Create Thumbnail <span style="font-size:10px;font-weight:500;color:var(--muted);vertical-align:middle;">build 6-18b</span></h2>
     <div class="dialog-header-actions">
       <button class="dialog-icon-btn" id="btn-thumb-expand" onclick="toggleThumbDialogExpand()">Expand &#x2197;</button>
       <button class="dialog-icon-btn" onclick="closeThumbDialog()">&#x2715; Close</button>
