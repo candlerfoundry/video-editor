@@ -18,6 +18,10 @@ if errorlevel 1 (
   exit /b 1
 )
 
+echo Placing launcher in the main folder...
+copy /Y "dist\App Launcher.exe" "..\App Launcher.exe" >nul
+
 echo.
-echo Build complete. Find your exe in the dist\ folder.
+echo Build complete. "App Launcher.exe" is now in the main Foundry Video Editor folder.
+echo You can delete the old "Foundry Video Editor.exe".
 pause
