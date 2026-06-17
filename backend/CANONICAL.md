@@ -1634,3 +1634,17 @@ Regression risk: Medium (drag/render).
   setDesignElemOpacity). Rotation applies in the overlay (CSS transform) and is
   baked into export (ctx rotate about the element centre) for shapes and images.
   (Resizing a rotated element is off-axis for now — rotate after sizing.)
+
+## Editor batch (June 17, 2026 pm)
+- Clip editor: live "Length" badge (updateClipDuration) = (out-in) minus edited-out
+  cut ranges within the selection; updates on time-field edits, handle drags, cuts.
+- Thumbnail: clicking empty canvas deselects text/elements/logo and hides selection
+  chrome (text-box dashed border now only on hover/selected/editing) for a clean
+  preview. Pack image elements resize freely (aspect unlocked; logos stay locked).
+- Design elements: flip H/V (setDesignElemFlip; overlay scale + export scale about
+  centre) and layer order back/forward (dlgMoveElemLayer) added to the element
+  controls, alongside opacity/rotation.
+- Basic filled shapes circle_fill + square_fill added to SHAPE_LIBRARY with Circle/
+  Oval/Square buttons (resizable; oval = stretched circle, rectangle = stretched square).
+- Composer can start from a saved draft: dlgOpenSavedThumbs / dlgUseSavedThumb
+  (dialog-saved-thumbs) lists this project's saved thumbnails to re-open & edit.

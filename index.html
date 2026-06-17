@@ -1866,7 +1866,7 @@
     }
     .dlg-overlay-text {
       user-select: none;
-      border: 1.5px dashed rgba(255,255,255,0.35);
+      border: 1.5px dashed transparent;
       border-radius: 8px;
       font-weight: 700;
       line-height: 1.15;
@@ -1880,6 +1880,8 @@
     .dlg-logo-overlay.selected {
       box-shadow: 0 0 0 2px rgba(232,84,26,0.9), 0 0 0 5px rgba(232,84,26,0.2);
     }
+    .dlg-overlay-text:hover { border-color: rgba(255,255,255,0.32); }
+    .dlg-overlay-text.editing { border-color: rgba(255,255,255,0.6); }
     .dlg-logo-overlay {
       border-radius: 4px;
       overflow: visible;
@@ -2419,6 +2421,10 @@
                 <div class="time-field-group">
                   <span class="time-field-label">End</span>
                   <input type="text" id="out-time-field" class="time-input" placeholder="0:30.00" />
+                </div>
+                <div class="time-field-group">
+                  <span class="time-field-label">Length</span>
+                  <span id="clip-length-val" class="time-input" style="display:inline-flex;align-items:center;justify-content:center;min-width:84px;background:var(--orange-tint);color:var(--orange);font-weight:600;" title="Clip length after edits">0.0s</span>
                 </div>
                 <button class="btn" id="btn-play-toggle" onclick="togglePlayPause()" style="padding:10px 22px;font-size:15px;" title="Play / pause (you can also click the video)">
                   <svg id="play-toggle-icon" width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"/></svg>
@@ -4911,9 +4917,11 @@
       }
     }
     editorCutRanges = merged;
+    updateClipDuration();
   }
   function removeCutRangeAt(t) {
     editorCutRanges = editorCutRanges.filter(r => !(t >= r.start && t < r.end));
+    updateClipDuration();
   }
   function clampCutRangesToClip() {
     editorCutRanges = editorCutRanges
@@ -4927,6 +4935,25 @@
   function updateTimeFields() {
     document.getElementById('in-time-field').value  = fmtPrecise(editorInTime);
     document.getElementById('out-time-field').value = fmtPrecise(editorOutTime);
+    updateClipDuration();
+  }
+
+  // Net clip length = (out - in) minus any edited-out (cut) ranges within it.
+  function updateClipDuration() {
+    const el = document.getElementById('clip-length-val');
+    if (!el) return;
+    if (typeof editorInTime !== 'number' || typeof editorOutTime !== 'number') return;
+    const span = Math.max(0, editorOutTime - editorInTime);
+    let cut = 0;
+    (editorCutRanges || []).forEach(function (r) {
+      const sStart = Math.max(r.start, editorInTime), sEnd = Math.min(r.end, editorOutTime);
+      if (sEnd > sStart) cut += (sEnd - sStart);
+    });
+    const net = Math.max(0, span - cut);
+    el.textContent = net.toFixed(1) + 's';
+    el.title = cut > 0.05
+      ? ('Clip length after edits (' + span.toFixed(1) + 's selection \u2212 ' + cut.toFixed(1) + 's edited out)')
+      : 'Clip length';
   }
 
   document.getElementById('in-time-field').addEventListener('change', function () {
@@ -6798,8 +6825,10 @@
     for (var _gi = 0; _gi < (options.omitElements ? [] : (draft.graphic_elements || [])).length; _gi++) {
       var _ge = draft.graphic_elements[_gi];
       var _rot = (_ge.rotation || 0) * Math.PI / 180;
+      var _fx = _ge.flipH ? -1 : 1, _fy = _ge.flipV ? -1 : 1;
       var _gcx = (_ge.x || 0) + (_ge.width || 200) / 2, _gcy = (_ge.y || 0) + (_ge.height || 200) / 2;
-      if (_rot) { ctx.save(); ctx.translate(_gcx, _gcy); ctx.rotate(_rot); ctx.translate(-_gcx, -_gcy); }
+      var _xf = (_rot || _fx < 0 || _fy < 0);
+      if (_xf) { ctx.save(); ctx.translate(_gcx, _gcy); if (_rot) ctx.rotate(_rot); if (_fx < 0 || _fy < 0) ctx.scale(_fx, _fy); ctx.translate(-_gcx, -_gcy); }
       if (_ge.type === 'shape') {
         drawShapeToCanvas(ctx, _ge);
       } else if (_ge.type === 'image' && _ge.asset) {
@@ -6815,7 +6844,7 @@
           ctx.globalAlpha = _pa2;
         } catch (_) {}
       }
-      if (_rot) ctx.restore();
+      if (_xf) ctx.restore();
     }
     if (!options.omitText) {
       (draft.text_boxes || []).forEach((box, index) => {
@@ -8860,6 +8889,12 @@
   // Shape library: single source of truth for overlay (SVG) AND export (Path2D).
   // All paths use a 100x100 viewBox; sw = stroke width in that space; fill=true fills with the element color.
   const SHAPE_LIBRARY = {
+    circle_fill: { paths: [
+      { d: 'M50 4 C76 4 96 24 96 50 C96 76 76 96 50 96 C24 96 4 76 4 50 C4 24 24 4 50 4 Z', fill: true },
+    ]},
+    square_fill: { paths: [
+      { d: 'M5 5 H95 V95 H5 Z', fill: true },
+    ]},
     circle: { paths: [
       { d: 'M 50 8 C 72 7, 92 26, 92 50 C 92 74, 73 93, 50 93 C 27 93, 8 74, 8 50 C 8 26, 28 7, 50 8 Z', sw: 4.5 },
     ]},
@@ -8899,7 +8934,8 @@
     quote: { glyph: '\u201C' },
   };
   const SHAPE_LABELS = {
-    circle: 'Circle', scribble_circle: 'Sketch circle', arrow: 'Curved arrow',
+    circle_fill: 'Circle', square_fill: 'Square',
+    circle: 'Sketch circle (outline)', scribble_circle: 'Sketch circle', arrow: 'Curved arrow',
     arrow_straight: 'Bold arrow', underline: 'Underline', underline_double: 'Double underline',
     highlight: 'Scribble highlight', star: 'Starburst', sparkle: 'Sparkle',
     brackets: 'Brackets', check: 'Check', quote: 'Quote mark',
@@ -9035,6 +9071,46 @@
     catch (e) { _packManifest = { categories: [] }; }
     return _packManifest;
   }
+  let _savedThumbItems = [];
+  async function dlgOpenSavedThumbs() {
+    const dlg = document.getElementById('dialog-saved-thumbs'); if (!dlg) return;
+    const grid = document.getElementById('saved-thumbs-grid');
+    const st = document.getElementById('saved-thumbs-status');
+    if (grid) grid.innerHTML = '';
+    if (st) { st.style.display = 'block'; st.textContent = 'Loading…'; }
+    if (!dlg.open) dlg.showModal();
+    let items = [];
+    try { const r = await fetch(BACKEND + '/thumbnails/list'); const d = await r.json(); items = d.thumbnails || []; }
+    catch (e) { if (st) st.textContent = 'Could not load saved thumbnails.'; return; }
+    const pid = activeProject && activeProject.id;
+    _savedThumbItems = items.filter(it => it.has_frame && (!pid || it.project_id === pid));
+    if (!_savedThumbItems.length) { if (st) { st.style.display = 'block'; st.textContent = 'No saved thumbnails for this project yet — build one and click Save Draft.'; } return; }
+    if (st) st.style.display = 'none';
+    try { await document.fonts.ready; } catch (_) {}
+    for (let i = 0; i < _savedThumbItems.length; i++) {
+      const it = _savedThumbItems[i];
+      const cell = document.createElement('button');
+      cell.className = 'el-cell'; cell.type = 'button'; cell.title = 'Edit this thumbnail';
+      cell.onclick = (function (idx) { return function () { dlgUseSavedThumb(idx); }; })(i);
+      const img = document.createElement('img');
+      img.src = await _renderGalleryPreview(it.draft);
+      cell.appendChild(img); grid.appendChild(cell);
+    }
+  }
+  function dlgUseSavedThumb(i) {
+    const it = _savedThumbItems[i]; if (!it || !it.draft) return;
+    _sharedThumbnailDraft = it.draft;
+    _sharedThumbnailEntryPoint = 'standalone';
+    if (typeof updateSharedComposerDoneLabel === 'function') updateSharedComposerDoneLabel();
+    applyDraftToDialogState();
+    syncDlgTargetFormat(_dlgTargetFormat);
+    dlgBuildHeroState();
+    const dt = document.getElementById('dialog-thumb'); if (dt && !dt.open) dt.showModal();
+    dlgShowState(_dlgFrames.length ? 'editor' : 'processing');
+    if (_dlgFrames.length) dlgOpenEditor();
+    const d = document.getElementById('dialog-saved-thumbs'); if (d && d.open) d.close();
+  }
+
   async function openElementsPicker() {
     const dlg = document.getElementById('dialog-elements');
     if (!dlg) return;
@@ -9162,6 +9238,21 @@
     const sl = document.getElementById('elem-rotation-slider'); if (sl) sl.value = 0;
     setDesignElemRotation(id, 0);
   }
+  function setDesignElemFlip(id, axis) {
+    const f = (_sharedThumbnailDraft && _sharedThumbnailDraft.graphic_elements || []).find(e => e.id === id);
+    if (!f) return;
+    pushDlgUndo('elem-flip');
+    if (axis === 'h') f.flipH = !f.flipH; else f.flipV = !f.flipV;
+    syncDraftFromDialogState(); renderDialogOverlayLayer(); renderDesignElementList();
+  }
+  function dlgMoveElemLayer(id, dir) {
+    const arr = (_sharedThumbnailDraft && _sharedThumbnailDraft.graphic_elements) || [];
+    const i = arr.findIndex(e => e.id === id); if (i < 0) return;
+    const j = dir === 'forward' ? i + 1 : i - 1; if (j < 0 || j >= arr.length) return;
+    pushDlgUndo('elem-layer');
+    const t = arr[i]; arr[i] = arr[j]; arr[j] = t;
+    syncDraftFromDialogState(); renderDialogOverlayLayer(); renderDesignElementList();
+  }
 
   function setDesignElem2Color(id, color) {
     const f = (_sharedThumbnailDraft && _sharedThumbnailDraft.graphic_elements || []).find(e => e.id === id);
@@ -9205,6 +9296,8 @@
       let w = Math.round(W * 0.25), h = Math.round(H * 0.12);
       if (st === 'quote' || st === 'sparkle' || st === 'star') { w = Math.round(W * 0.16); h = w; }
       if (st === 'circle' || st === 'scribble_circle' || st === 'brackets') { w = Math.round(W * 0.3); h = Math.round(W * 0.18); }
+      if (st === 'circle_fill' || st === 'square_fill') { w = h = Math.round(W * 0.28); }
+      if (opts.oval) { w = Math.round(W * 0.36); h = Math.round(W * 0.22); }
       elem = { id, type: 'shape', shape_type: st, color: opts.color || '#c84826',
                x: Math.round(W * 0.1), y: Math.round(H * 0.42), width: w, height: h };
     } else if (opts.type === 'image') {
@@ -9292,6 +9385,12 @@
         '<div class="thumb-editor-label" style="margin:8px 0 4px;">Rotation <span id="elem-rotation-val">' + rot + '\u00b0</span>' +
           '<button type="button" class="btn-ghost btn-sm" style="float:right;padding:0 8px;font-size:10px;" onclick="resetDesignElemRotation(\'' + escHtml(selEl.id) + '\')">Reset</button></div>' +
         '<input type="range" id="elem-rotation-slider" min="-180" max="180" value="' + rot + '" style="width:100%;accent-color:var(--orange);" oninput="setDesignElemRotation(\'' + escHtml(selEl.id) + '\', this.value)">' +
+        '<div style="display:flex;gap:6px;margin-top:10px;flex-wrap:wrap;">' +
+          '<button type="button" class="btn-ghost btn-sm" onclick="setDesignElemFlip(\'' + escHtml(selEl.id) + '\',\'h\')" title="Flip horizontal">Flip H</button>' +
+          '<button type="button" class="btn-ghost btn-sm" onclick="setDesignElemFlip(\'' + escHtml(selEl.id) + '\',\'v\')" title="Flip vertical">Flip V</button>' +
+          '<button type="button" class="btn-ghost btn-sm" onclick="dlgMoveElemLayer(\'' + escHtml(selEl.id) + '\',\'back\')" title="Send backward">▼ Back</button>' +
+          '<button type="button" class="btn-ghost btn-sm" onclick="dlgMoveElemLayer(\'' + escHtml(selEl.id) + '\',\'forward\')" title="Bring forward">▲ Front</button>' +
+        '</div>' +
         '</div>';
     }
   }
@@ -9573,7 +9672,10 @@
       wrap.style.width  = dw + 'px';
       wrap.style.height = dh + 'px';
       wrap.style.opacity = ((elem.opacity ?? 100) / 100);
-      if (elem.rotation) { wrap.style.transform = 'rotate(' + elem.rotation + 'deg)'; wrap.style.transformOrigin = '50% 50%'; }
+      var _tf = '';
+      if (elem.rotation) _tf += ' rotate(' + elem.rotation + 'deg)';
+      if (elem.flipH || elem.flipV) _tf += ' scale(' + (elem.flipH ? -1 : 1) + ',' + (elem.flipV ? -1 : 1) + ')';
+      if (_tf) { wrap.style.transform = _tf.trim(); wrap.style.transformOrigin = '50% 50%'; }
       if (elem.type === 'image') {
         var _isrc = elem.packEl ? (ensurePackUrl(elem) || elem.preview || elem.asset) : (elem.asset || '');
         wrap.innerHTML = '<img src="' + escHtml(_isrc) + '" alt="" draggable="false" style="width:100%;height:100%;object-fit:contain;display:block;pointer-events:none;">';
@@ -9720,14 +9822,16 @@
       e.preventDefault();
     });
 
-    // Click on canvas background deselects logo
+    // Click empty canvas deselects everything so the user previews the viewer's view.
     document.addEventListener('mousedown', function(e) {
-      if (!e.target.closest('.dlg-logo-overlay') && !e.target.closest('.dlg-resize-handle')) {
-        if (_dlgLogoSelected) {
-          _dlgLogoSelected = false;
-          renderDialogOverlayLayer();
-        }
-      }
+      if (!e.target.closest('#dlg-canvas-wrap')) return;
+      if (e.target.closest('.dlg-overlay-text') || e.target.closest('.dlg-logo-overlay') ||
+          e.target.closest('.dlg-design-elem-overlay') || e.target.closest('.dlg-resize-handle')) return;
+      let changed = false;
+      if (_sharedThumbnailDraft && _sharedThumbnailDraft.selected_text_box_id) { _sharedThumbnailDraft.selected_text_box_id = null; changed = true; }
+      if (_dlgSelectedElemId) { _dlgSelectedElemId = null; changed = true; }
+      if (_dlgLogoSelected) { _dlgLogoSelected = false; changed = true; }
+      if (changed) { renderDialogOverlayLayer(); renderDesignElementList(); if (typeof _refreshTextBoxChips === 'function') _refreshTextBoxChips(); }
     });
 
     document.addEventListener('mousemove', function (e) {
@@ -9787,7 +9891,7 @@
         const newW = Math.max(40, dragging.origW + hdx * dx * scaleX);
         let newH = Math.max(30, dragging.origH + hdy * dy * scaleY);
         // Glyphs, sparkles, stars, and brand images keep their aspect ratio
-        const aspectLocked = found.type === 'image' ||
+        const aspectLocked = (found.type === 'image' && !found.packEl) ||
           ['quote', 'sparkle', 'star'].includes(found.shape_type);
         if (aspectLocked && dragging.origW > 0) {
           newH = Math.max(30, newW * (dragging.origH / dragging.origW));
@@ -10868,6 +10972,20 @@
 </dialog>
 
 <!-- Thumbnail Creator Dialog -->
+<dialog id="dialog-saved-thumbs">
+  <div class="dialog-header">
+    <h2>Saved thumbnails</h2>
+    <div class="dialog-header-actions">
+      <button class="dialog-icon-btn" onclick="document.getElementById('dialog-saved-thumbs').close()">&#x2715; Close</button>
+    </div>
+  </div>
+  <div class="dialog-body">
+    <p style="font-size:12.5px;color:var(--text-2);margin:0 0 14px;">Pick one of this project&rsquo;s saved thumbnails to keep editing it.</p>
+    <div id="saved-thumbs-status" style="font-size:13px;color:var(--text-2);">Loading&hellip;</div>
+    <div class="el-grid" id="saved-thumbs-grid"></div>
+  </div>
+</dialog>
+
 <dialog id="dialog-elements">
   <div class="dialog-header">
     <h2>Notes, Shapes &amp; Squiggles</h2>
@@ -10946,6 +11064,10 @@
                 <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="16"/><line x1="8" y1="12" x2="16" y2="12"/></svg>
                 Pick Frame
               </button>
+              <button class="btn-ghost btn-sm" type="button" onclick="dlgOpenSavedThumbs()" title="Start from a thumbnail you saved earlier for this project">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="M21 15l-5-5L5 21"/></svg>
+                Saved thumbnails&hellip;
+              </button>
             </div>
             <!-- Frame picker scrub panel -->
             <div id="dlg-frame-picker" style="display:none;margin-top:12px;border-top:1px solid var(--border);padding-top:12px;">
@@ -10999,6 +11121,14 @@
             <div style="margin-bottom:10px;">
               <div class="thumb-editor-label">Logo Opacity <span id="dlg-logo-opacity-val">100</span>%</div>
               <input type="range" id="dlg-logo-opacity-slider" min="10" max="100" step="1" value="100" style="width:100%;accent-color:var(--orange);margin-top:4px;" oninput="setDlgLogoOpacity(this.value)">
+            </div>
+            <div style="margin:4px 0 12px;">
+              <div style="font-size:10px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:var(--muted);margin-bottom:6px;">Basic shapes</div>
+              <div class="thumb-inline-row">
+                <button class="btn-ghost btn-sm" type="button" onclick="dlgAddDesignElement({type:'shape',shape_type:'circle_fill'})">Circle</button>
+                <button class="btn-ghost btn-sm" type="button" onclick="dlgAddDesignElement({type:'shape',shape_type:'circle_fill',oval:true})">Oval</button>
+                <button class="btn-ghost btn-sm" type="button" onclick="dlgAddDesignElement({type:'shape',shape_type:'square_fill'})">Square</button>
+              </div>
             </div>
             <div style="margin:4px 0 12px;">
               <div style="font-size:10px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:var(--muted);margin-bottom:6px;">Notes, Shapes &amp; Squiggles</div>
