@@ -1513,6 +1513,13 @@
     }
     .tx-word.tx-bleep:hover { background: #FDE68A; }
     .tx-mode-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 8px; }
+    .clip-cuts-list { margin-top: 12px; border: 1px solid var(--border); border-radius: 8px; padding: 8px 10px; background: var(--surface); }
+    .clip-cuts-list .cuts-title { font-size: 10px; font-weight: 700; letter-spacing: 0.07em; text-transform: uppercase; color: var(--muted); margin-bottom: 6px; }
+    .cut-row { display: flex; align-items: center; gap: 4px; flex-wrap: wrap; font-size: 12px; color: var(--text-2); padding: 3px 0; }
+    .cut-row .cut-label { font-weight: 600; color: var(--text); min-width: 42px; }
+    .cut-row .cut-t { font-family: monospace; min-width: 60px; text-align: center; }
+    .cut-row button { border: 1px solid var(--border-2); background: var(--bg); border-radius: 5px; cursor: pointer; padding: 1px 7px; font-size: 11px; color: var(--text-2); }
+    .cut-row button:hover { border-color: var(--orange); color: var(--orange); }
     .tx-zone-row { display: flex; gap: 10px; align-items: flex-start; }
     .tx-mode-rail {
       position: sticky; top: 12px;
@@ -2517,6 +2524,7 @@
                   <button type="button" class="tx-mode-btn" onclick="editorUndo()" title="Undo the last edit (Ctrl+Z) — works for cuts, bleeps, caption splits/joins, and text edits">&#8630;<br>Undo</button>
                 </div>
               </div>
+                <div id="clip-cuts-list" class="clip-cuts-list" style="display:none;"></div>
             </div><!-- /.editor-right-zone -->
 
           </div><!-- /.editor-two-col -->
@@ -4380,6 +4388,12 @@
   // ── Render Stage 2 candidate cards ──
   function renderCandidates(candidates) {
     seedEditedKeys(candidates);
+    candidates.sort(function (a, b) {
+      const ea = _editedClipKeys.has(clipEditKey(a)) ? 1 : 0;
+      const eb = _editedClipKeys.has(clipEditKey(b)) ? 1 : 0;
+      if (ea !== eb) return eb - ea;
+      return (b.hook_score ?? 0) - (a.hook_score ?? 0);
+    });
     const section = document.getElementById('candidates-section');
     section.innerHTML = '';
 
@@ -4609,6 +4623,7 @@
     editorCutRanges = [];
     editorBleepRanges = [];
     resetCaptionEdits();
+    restoreSavedClipEdits(_editCandidate.hook_line);
 
     const vid = document.getElementById('edit-video');
     vid.src = getPlayableVideoUrl('clips');
@@ -4628,12 +4643,7 @@
 
     document.getElementById('export-status').style.display = 'none';
     document.getElementById('export-status').innerHTML = '';
-    updateProject('clip_selected', {
-      start_time: _editCandidate.start_time,
-      end_time: _editCandidate.end_time,
-      hook_line: _editCandidate.hook_line || p.hook || '',
-      mode: 'split',
-    });
+    updateProject('clip_selected', _buildClipEditPayload());
     showStage(3);
   }
 
@@ -4759,12 +4769,7 @@
 
     document.getElementById('export-status').style.display = 'none';
     document.getElementById('export-status').innerHTML = '';
-    updateProject('clip_selected', {
-      start_time: _editCandidate.start_time,
-      end_time: _editCandidate.end_time,
-      hook_line: _editCandidate.hook_line || '',
-      mode: 'viral',
-    });
+    updateProject('clip_selected', _buildClipEditPayload());
     showStage(3);
   }
 
@@ -5165,6 +5170,71 @@
     renderTimelineBar();
     renderTranscriptAlways(false);
     updateCaptionOverlay(true);
+    renderCutsList();
+    autosaveClipEdits();
+  }
+
+  function renderCutsList() {
+    const el = document.getElementById('clip-cuts-list');
+    if (!el) return;
+    const cuts = editorCutRanges || [];
+    if (!cuts.length) { el.style.display = 'none'; el.innerHTML = ''; return; }
+    el.style.display = 'block';
+    el.innerHTML = '<div class="cuts-title">Fine-tune edit-out cuts &mdash; nudge ±0.05s, preview the join</div>' +
+      cuts.map(function (r, i) {
+        return '<div class="cut-row"><span class="cut-label">Cut ' + (i + 1) + '</span>' +
+          'start <button type="button" onclick="nudgeCut(' + i + ',\'start\',-0.05)">◀</button>' +
+          '<span class="cut-t">' + fmtPrecise(r.start) + '</span>' +
+          '<button type="button" onclick="nudgeCut(' + i + ',\'start\',0.05)">▶</button>' +
+          '&nbsp; end <button type="button" onclick="nudgeCut(' + i + ',\'end\',-0.05)">◀</button>' +
+          '<span class="cut-t">' + fmtPrecise(r.end) + '</span>' +
+          '<button type="button" onclick="nudgeCut(' + i + ',\'end\',0.05)">▶</button>' +
+          '&nbsp; <button type="button" onclick="playCut(' + i + ')" title="Hear the join">▶ preview</button>' +
+          ' <button type="button" onclick="removeCutByIndex(' + i + ')" title="Restore these words">✕</button>' +
+          '</div>';
+      }).join('');
+  }
+  function nudgeCut(i, which, delta) {
+    const r = editorCutRanges[i]; if (!r) return;
+    pushEditorUndo('nudge-cut');
+    if (which === 'start') r.start = Math.max(editorInTime, Math.min(r.start + delta, r.end - 0.05));
+    else r.end = Math.min(editorOutTime, Math.max(r.end + delta, r.start + 0.05));
+    updateAllEditorUI();
+  }
+  function removeCutByIndex(i) {
+    if (!editorCutRanges[i]) return;
+    pushEditorUndo('remove-cut');
+    editorCutRanges.splice(i, 1);
+    updateAllEditorUI();
+  }
+  function playCut(i) {
+    const r = editorCutRanges[i]; if (!r) return;
+    const vid = document.getElementById('edit-video'); if (!vid) return;
+    const pre = Math.max(editorInTime, r.start - 0.6);
+    const post = Math.min(editorOutTime, r.end + 0.6);
+    function onTU() {
+      if (vid.currentTime >= r.start && vid.currentTime < r.end - 0.02) vid.currentTime = r.end;
+      if (vid.currentTime >= post) { vid.pause(); vid.removeEventListener('timeupdate', onTU); }
+    }
+    vid.removeEventListener('timeupdate', onTU);
+    vid.currentTime = pre;
+    vid.addEventListener('timeupdate', onTU);
+    vid.play().catch(function () {});
+  }
+
+  let _clipAutosaveTimer = null;
+  function autosaveClipEdits() {
+    if (!_editCandidate || !activeProject) return;
+    clearTimeout(_clipAutosaveTimer);
+    _clipAutosaveTimer = setTimeout(function () {
+      const payload = _buildClipEditPayload();
+      if (!activeProject.edited_clips) activeProject.edited_clips = [];
+      const k = _editCandidate.hook_line;
+      const entry = Object.assign({}, payload, { updated_at: new Date().toISOString() });
+      const idx = activeProject.edited_clips.findIndex(function (x) { return k && x.hook_line === k; });
+      if (idx >= 0) activeProject.edited_clips[idx] = entry; else activeProject.edited_clips.push(entry);
+      try { updateProject('clip_selected', payload); } catch (_) {}
+    }, 700);
   }
 
   // Shims for time-field change handlers that call these names

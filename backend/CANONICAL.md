@@ -1683,3 +1683,14 @@ Regression risk: Medium (drag/render).
   results list (seedEditedKeys + _editedClipKeys; real-edit detection).
 - Launcher rocket.ico regenerated with crisp native per-size frames (manual ICO
   packer, sizes 16-256) instead of one downscaled image.
+
+## Clip editor: nudge, persistence, edited-to-top (June 17, 2026 pm3)
+- Manual cut fine-tuning: #clip-cuts-list lists each edit-out cut with ±0.05s
+  nudge buttons for start/end, a "preview join" play, and remove. (renderCutsList,
+  nudgeCut, playCut, removeCutByIndex). Rendered from updateAllEditorUI.
+- Persistence fix: selecting a clip used to write a clip_selected with NO edits,
+  which the backend upsert replaced over the saved edits (wiping them). Both
+  select paths now send the full payload (_buildClipEditPayload), the split path
+  restores saved edits first, and a debounced autosaveClipEdits() persists after
+  every edit — so edits survive relaunch.
+- renderCandidates sorts edited clips to the top (then by hook_score).
