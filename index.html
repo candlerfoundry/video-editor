@@ -9271,7 +9271,9 @@
   function dlgUseSavedThumb(i) {
     const it = _savedThumbItems[i]; if (!it || !it.draft) return;
     _sharedThumbnailDraft = it.draft;
-    _sharedThumbnailEntryPoint = 'standalone';
+    // Preserve the entry point: if the composer was opened from a clip's save
+    // flow, keep 'clip' so Done returns to the Save Clip (with thumbnail) window
+    // instead of just saving a standalone PNG.
     if (typeof updateSharedComposerDoneLabel === 'function') updateSharedComposerDoneLabel();
     applyDraftToDialogState();
     syncDlgTargetFormat(_dlgTargetFormat);
@@ -11243,7 +11245,7 @@
 
 <dialog id="dialog-thumb">
   <div class="dialog-header">
-    <h2>Create Thumbnail <span style="font-size:10px;font-weight:500;color:var(--muted);vertical-align:middle;">build 6-18d</span></h2>
+    <h2>Create Thumbnail <span style="font-size:10px;font-weight:500;color:var(--muted);vertical-align:middle;">build 6-18e</span></h2>
     <div class="dialog-header-actions">
       <button class="dialog-icon-btn" id="btn-thumb-expand" onclick="toggleThumbDialogExpand()">Expand &#x2197;</button>
       <button class="dialog-icon-btn" onclick="closeThumbDialog()">&#x2715; Close</button>
