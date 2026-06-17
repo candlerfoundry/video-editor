@@ -62,7 +62,7 @@ CORS(app)
 
 # Bump this whenever the frontend/backend contract changes (the frontend
 # carries a matching EXPECTED_BACKEND_BUILD and warns when they differ).
-BACKEND_BUILD = "2026-06-17-captions"
+BACKEND_BUILD = "2026-06-17-coverproof"
 
 CREATE_NO_WINDOW = 0x08000000 if platform.system() == 'Windows' else 0
 
@@ -3016,6 +3016,25 @@ def export_thumbnail():
         finally:
             shutil.rmtree(tmp_dir, ignore_errors=True)
 
+    # First frame of the saved clip — returned so the app can SHOW the user the
+    # embedded cover without posting anywhere.
+    first_frame_b64 = None
+    if FFMPEG_EXE and os.path.isfile(clip_path):
+        try:
+            import base64 as _b64
+            _ftmp = tempfile.mkdtemp()
+            _fp = os.path.join(_ftmp, "frame0.jpg")
+            subprocess.run(
+                [FFMPEG_EXE, "-y", "-i", clip_path, "-frames:v", "1", "-vf", "scale=320:-1", "-q:v", "4", _fp],
+                capture_output=True, creationflags=CREATE_NO_WINDOW,
+            )
+            if os.path.isfile(_fp):
+                with open(_fp, "rb") as _fh:
+                    first_frame_b64 = "data:image/jpeg;base64," + _b64.b64encode(_fh.read()).decode("ascii")
+            shutil.rmtree(_ftmp, ignore_errors=True)
+        except Exception as _e:
+            logger.warning("[export] first-frame preview failed: %s", _e)
+
     thumb_url = None
     if save_png and thumb_dbx_path:
         try:
@@ -3060,6 +3079,7 @@ def export_thumbnail():
         "thumbnail_filename": thumb_name,
         "thumbnail_dropbox_url": thumb_url,
         "cover_burned": cover_burned,
+        "first_frame_b64": first_frame_b64,
         "folder_name": folder_name,
     })
 
