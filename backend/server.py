@@ -62,7 +62,7 @@ CORS(app)
 
 # Bump this whenever the frontend/backend contract changes (the frontend
 # carries a matching EXPECTED_BACKEND_BUILD and warns when they differ).
-BACKEND_BUILD = "2026-06-16-projdelete"
+BACKEND_BUILD = "2026-06-16-thumbgallery"
 
 CREATE_NO_WINDOW = 0x08000000 if platform.system() == 'Windows' else 0
 
@@ -777,6 +777,11 @@ def normalize_text_box(item, fallback_id='text-1'):
         'shadow': bool(item.get('shadow', True)),
         'align': item.get('align') or 'center',
         'width': item.get('width'),
+        'height': item.get('height'),
+        'letter_spacing': item.get('letter_spacing') or 0,
+        'line_spacing': item.get('line_spacing') or 1.25,
+        'bg_pill': bool(item.get('bg_pill', False)),
+        'runs': item.get('runs'),
     }
 
 
@@ -1292,6 +1297,51 @@ def recent_projects():
     except Exception as exc:
         logger.exception('[projects] Failed to list recent projects')
         return jsonify({'error': str(exc), 'projects': []}), 500
+
+
+@app.route('/thumbnails/list', methods=['GET'])
+def list_thumbnails():
+    """Every saved thumbnail draft across all projects, slimmed to one frame
+    each so the Thumbnails-tab gallery can render previews client-side."""
+    try:
+        items = []
+        with project_store_lock:
+            for name in os.listdir(project_store_dir):
+                if not name.endswith('.json'):
+                    continue
+                path = os.path.join(project_store_dir, name)
+                try:
+                    with open(path, 'r', encoding='utf-8') as handle:
+                        project = json.load(handle)
+                except Exception:
+                    logger.warning('[thumbnails] Skipping unreadable project file: %s', path)
+                    continue
+                source_video = project.get('source_video') or {}
+                pid = project.get('id')
+                for draft in (project.get('thumbnail_drafts') or []):
+                    frames = draft.get('available_frames') or []
+                    idx = int(draft.get('selected_frame_index') or 0)
+                    if not (0 <= idx < len(frames)):
+                        idx = 0
+                    sel = frames[idx] if frames else None
+                    slim = dict(draft)
+                    slim['available_frames'] = [sel] if sel else []
+                    slim['selected_frame_index'] = 0
+                    items.append({
+                        'project_id': pid,
+                        'project_name': project.get('project_name'),
+                        'source_filename': draft.get('source_filename') or source_video.get('filename'),
+                        'updated_at': project.get('updated_at') or project.get('last_opened_at'),
+                        'draft_id': draft.get('draft_id'),
+                        'target_format': draft.get('target_format') or 'instagram',
+                        'has_frame': bool(sel),
+                        'draft': slim,
+                    })
+        items.sort(key=lambda x: x.get('updated_at') or '', reverse=True)
+        return jsonify({'thumbnails': items})
+    except Exception as exc:
+        logger.exception('[thumbnails] Failed to list thumbnails')
+        return jsonify({'error': str(exc), 'thumbnails': []}), 500
 
 
 @app.route('/projects/delete', methods=['POST'])

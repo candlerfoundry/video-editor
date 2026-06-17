@@ -1567,3 +1567,16 @@ STILL OPEN (bigger): full Canva-style photo - click the image to select, corner
 handles to scale, no mode button.
 
 Regression risk: Medium (drag/render).
+
+## Free-form text boxes + Saved Thumbnails gallery (June 16, 2026)
+- Thumbnail text boxes are free-form rectangles: each box has `width` AND `height`
+  (centred on `x,y`). Text wraps to the width and the font auto-sizes to fill the
+  rectangle via `fitFontSizeToBox`. All 8 resize handles are active on a selected
+  box; dragging any handle reshapes the rectangle and anchors the opposite edge.
+  The font-size slider scales the whole box (width+height) about its centre.
+- `normalize_text_box` now persists `height`, `letter_spacing`, `line_spacing`,
+  `bg_pill`, and `runs` (previously dropped on save).
+- Backend `GET /thumbnails/list` returns every saved thumbnail draft across all
+  projects, each slimmed to its selected frame. The Thumbnails tab renders these
+  as a "Saved Thumbnails" gallery (`loadThumbnailGallery`) with per-card Open
+  (re-open in composer) and Download (render PNG) actions. Loaded on tab open.

@@ -2792,6 +2792,18 @@
           </div>
         </div>
 
+        <div id="thumb-gallery-panel" class="card" style="margin-top:20px;">
+          <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-bottom:14px;">
+            <div>
+              <h3 style="margin-bottom:4px;">Saved Thumbnails</h3>
+              <p style="font-size:12.5px;color:var(--text-2);margin:0;max-width:560px;">Every thumbnail you&rsquo;ve saved, newest first &mdash; from any video. Click one to re-open it in the composer, or download the PNG.</p>
+            </div>
+            <button class="btn-ghost btn-sm" type="button" onclick="loadThumbnailGallery()">Refresh</button>
+          </div>
+          <div id="thumb-gallery-status" style="font-size:13px;color:var(--text-2);">Loading saved thumbnails&hellip;</div>
+          <div id="thumb-gallery-grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(170px,1fr));gap:16px;"></div>
+        </div>
+
       </div>
     </div>
 
@@ -2863,6 +2875,7 @@
     document.querySelectorAll('.tab-panel').forEach(panel => {
       panel.classList.toggle('active', panel.id === 'tab-' + target);
     });
+    if (target === 'thumbnails') loadThumbnailGallery();
   }
 
   document.querySelectorAll('.tab-btn').forEach(btn => {
@@ -2927,7 +2940,7 @@
   // Must match BACKEND_BUILD in server.py — bumped together whenever the
   // frontend/backend contract changes. A mismatch means the user is running
   // an old backend (launcher not restarted after a deploy).
-  const EXPECTED_BACKEND_BUILD = '2026-06-16-projdelete';
+  const EXPECTED_BACKEND_BUILD = '2026-06-16-thumbgallery';
   if (document.fonts && document.fonts.load) { document.fonts.load("700 64px 'Handmade Sans'").catch(function(){}); }
   let _staleBackendWarned = false;
   function showStaleBackendBanner(stale) {
@@ -5426,6 +5439,7 @@
       shadow: overrides.shadow ?? true,
       align: overrides.align || 'center',
       width: overrides.width ?? null,
+      height: overrides.height ?? null,
     };
   }
 
@@ -5543,6 +5557,7 @@
     box.shadow = _dlgShadowOn;
     box.align = _dlgAlign || box.align || 'center';
     box.width = box.width ?? getDefaultThumbTextPosition(_dlgStyle, _dlgTargetFormat, 0).width;
+    ensureTextBoxDims(box);
     return _sharedThumbnailDraft;
   }
 
@@ -5636,6 +5651,121 @@
     a.download = stem + ' - Thumbnail.png';
     a.click();
     setTimeout(() => URL.revokeObjectURL(url), 5000);
+  }
+
+  // ── Saved-thumbnails gallery (Thumbnails tab) ─────────────────────────
+  let _thumbGalleryItems = [];
+
+  function _galleryRatio(format) {
+    const cfg = getThumbTargetConfig(format || 'instagram');
+    return cfg.width + ' / ' + cfg.height;
+  }
+  function _galleryStripExt(name) { return (name || '').replace(/\.(mp4|mov|m4v|webm)$/i, ''); }
+  function _galleryDate(s) {
+    if (!s) return '';
+    const d = new Date(s); if (isNaN(d.getTime())) return '';
+    return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
+  }
+
+  async function _renderGalleryPreview(draft) {
+    try {
+      const cfg = getThumbTargetConfig(draft.target_format || 'instagram');
+      const canvas = document.createElement('canvas');
+      canvas.width = cfg.width; canvas.height = cfg.height;
+      const ok = await renderThumbnailDraftToCanvas(canvas, draft);
+      return ok === false ? '' : canvas.toDataURL('image/png');
+    } catch (err) { return ''; }
+  }
+
+  async function loadThumbnailGallery() {
+    const grid = document.getElementById('thumb-gallery-grid');
+    const status = document.getElementById('thumb-gallery-status');
+    if (!grid) return;
+    if (status) { status.style.display = 'block'; status.textContent = 'Loading saved thumbnails…'; }
+    grid.innerHTML = '';
+    try {
+      const res = await fetch(BACKEND + '/thumbnails/list');
+      const data = await res.json();
+      _thumbGalleryItems = (data.thumbnails || []).filter(function(it) { return it.has_frame; });
+    } catch (err) {
+      if (status) { status.style.display = 'block'; status.textContent = 'Could not load saved thumbnails. Is the backend running?'; }
+      return;
+    }
+    if (!_thumbGalleryItems.length) {
+      if (status) { status.style.display = 'block'; status.textContent = 'No saved thumbnails yet. Build one in the composer and click “Save Draft” — it will show up here.'; }
+      return;
+    }
+    if (status) status.style.display = 'none';
+    try { await document.fonts.ready; } catch (_) {}
+    for (let i = 0; i < _thumbGalleryItems.length; i++) {
+      const item = _thumbGalleryItems[i];
+      const card = document.createElement('div');
+      card.style.cssText = 'border:1px solid var(--border);border-radius:10px;overflow:hidden;background:var(--surface);display:flex;flex-direction:column;';
+      const imgWrap = document.createElement('div');
+      imgWrap.style.cssText = 'background:#111;aspect-ratio:' + _galleryRatio(item.target_format) + ';display:flex;align-items:center;justify-content:center;overflow:hidden;cursor:pointer;';
+      imgWrap.title = 'Open in composer';
+      imgWrap.onclick = function() { openThumbnailFromGallery(i); };
+      const img = document.createElement('img');
+      img.alt = item.source_filename || 'Saved thumbnail';
+      img.style.cssText = 'width:100%;height:100%;object-fit:contain;display:block;';
+      img.src = await _renderGalleryPreview(item.draft);
+      imgWrap.appendChild(img);
+      const body = document.createElement('div');
+      body.style.cssText = 'padding:10px 12px;display:flex;flex-direction:column;gap:8px;';
+      const title = document.createElement('div');
+      title.style.cssText = 'font-size:12.5px;font-weight:600;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;';
+      title.textContent = _galleryStripExt(item.source_filename || item.project_name || 'Thumbnail');
+      const meta = document.createElement('div');
+      meta.style.cssText = 'font-size:11px;color:var(--muted);';
+      const dateStr = _galleryDate(item.updated_at);
+      meta.textContent = [dateStr, item.target_format].filter(Boolean).join(' · ');
+      const btnRow = document.createElement('div');
+      btnRow.style.cssText = 'display:flex;gap:8px;';
+      const openBtn = document.createElement('button');
+      openBtn.className = 'btn-ghost btn-sm'; openBtn.type = 'button'; openBtn.textContent = 'Open';
+      openBtn.onclick = function() { openThumbnailFromGallery(i); };
+      const dlBtn = document.createElement('button');
+      dlBtn.className = 'btn-ghost btn-sm'; dlBtn.type = 'button'; dlBtn.textContent = 'Download';
+      dlBtn.onclick = function() { downloadThumbnailFromGallery(i); };
+      btnRow.appendChild(openBtn); btnRow.appendChild(dlBtn);
+      body.appendChild(title); body.appendChild(meta); body.appendChild(btnRow);
+      card.appendChild(imgWrap); card.appendChild(body);
+      grid.appendChild(card);
+    }
+  }
+
+  async function openThumbnailFromGallery(i) {
+    const item = _thumbGalleryItems[i];
+    if (!item || !item.draft) return;
+    _sharedThumbnailDraft = item.draft;
+    _sharedThumbnailEntryPoint = 'standalone';
+    updateSharedComposerDoneLabel();
+    applyDraftToDialogState();
+    syncDlgTargetFormat(_dlgTargetFormat);
+    dlgBuildHeroState();
+    const dlg = document.getElementById('dialog-thumb');
+    if (dlg && !dlg.open) dlg.showModal();
+    dlgShowState(_dlgFrames.length ? 'editor' : 'processing');
+    if (_dlgFrames.length) dlgOpenEditor();
+  }
+
+  async function downloadThumbnailFromGallery(i) {
+    const item = _thumbGalleryItems[i];
+    if (!item || !item.draft) return;
+    try { await document.fonts.ready; } catch (_) {}
+    const cfg = getThumbTargetConfig(item.draft.target_format || 'instagram');
+    const canvas = document.createElement('canvas');
+    canvas.width = cfg.width; canvas.height = cfg.height;
+    await renderThumbnailDraftToCanvas(canvas, item.draft);
+    canvas.toBlob(function(blob) {
+      if (!blob) return;
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = _galleryStripExt(item.source_filename || item.project_name || 'thumbnail') + ' - Thumbnail.png';
+      a.click();
+      setTimeout(function() { URL.revokeObjectURL(url); }, 5000);
+    }, 'image/png');
   }
 
   function reopenSharedThumbnailComposerFromTab() {
@@ -6159,6 +6289,64 @@
     }
   }
 
+  // ── Free-form text-box sizing helpers ──────────────────────────────
+  // A text box is a rectangle (width x height) centred on (x, y). Text wraps
+  // to the width and the font auto-sizes to fill the rectangle. See CANONICAL
+  // section "Free-form text boxes".
+  const _txMeasureCtx = document.createElement('canvas').getContext('2d');
+
+  function thumbBoxPad(box) {
+    const w = box.width || 200, h = box.height || 100;
+    return { padX: Math.max(10, Math.round(w * 0.05)), padY: Math.max(8, Math.round(h * 0.07)) };
+  }
+
+  // Largest 700-weight font size whose wrapped text fits inside box.width x box.height.
+  function fitFontSizeToBox(box) {
+    const ctx = _txMeasureCtx;
+    const W = Math.max(20, box.width || 200), H = Math.max(20, box.height || 100);
+    const fam = (box.font_family || 'Poppins');
+    const ls  = box.line_spacing || 1.25;
+    let lo = 8, hi = Math.max(8, Math.floor(H)), best = 8;
+    while (lo <= hi) {
+      const mid = (lo + hi) >> 1;
+      const { padX, padY } = thumbBoxPad(box);
+      ctx.font = `700 ${mid}px ${fam}, sans-serif`;
+      ctx.letterSpacing = (box.letter_spacing || 0) + 'px';
+      const lines = wrapText(ctx, box.text || '', Math.max(1, W - padX * 2));
+      const safe = lines.length ? lines : [''];
+      let widest = 0;
+      for (const l of safe) widest = Math.max(widest, ctx.measureText(l).width);
+      const totalH = safe.length * mid * ls + padY * 2;
+      if (widest <= (W - padX * 2) && totalH <= H) { best = mid; lo = mid + 1; }
+      else hi = mid - 1;
+    }
+    return Math.max(8, Math.min(400, best));
+  }
+
+  // Natural height a box needs to contain its text at a given font size.
+  function thumbTextBlockHeight(box, fontSize) {
+    const ctx = _txMeasureCtx;
+    const fam = (box.font_family || 'Poppins');
+    ctx.font = `700 ${fontSize}px ${fam}, sans-serif`;
+    ctx.letterSpacing = (box.letter_spacing || 0) + 'px';
+    const { padX, padY } = thumbBoxPad(box);
+    const lines = wrapText(ctx, box.text || '', Math.max(1, (box.width || 200) - padX * 2));
+    const n = Math.max(1, lines.length);
+    return Math.round(n * fontSize * (box.line_spacing || 1.25) + padY * 2);
+  }
+
+  // Backfill width/height on boxes that predate the free-form model.
+  function ensureTextBoxDims(box) {
+    if (!box) return;
+    if (box.width == null) {
+      const pos = getDefaultThumbTextPosition(_dlgStyle || 'lower_third', _dlgTargetFormat || 'instagram', 0);
+      box.width = pos.width;
+    }
+    if (box.height == null) {
+      box.height = thumbTextBlockHeight(box, box.font_size || 64);
+    }
+  }
+
   function drawThumbTextBlock(ctx, W, titleOrBox, fontSize, fontFamily, tx, ty, textColor, shadowOn, overlayOpacity, backgroundColor = '#111111') {
     const box = typeof titleOrBox === 'object' && titleOrBox !== null
       ? titleOrBox
@@ -6175,32 +6363,56 @@
           align: 'center',
           width: W * 0.8,
         };
-    const resolvedFontSize = box.font_size || 64;
+    const isObjectBox = typeof titleOrBox === 'object' && titleOrBox !== null;
+    if (isObjectBox) ensureTextBoxDims(box);
     const resolvedFontFamily = box.font_family || 'Poppins';
     const resolvedX = box.x ?? (W * 0.5);
     const resolvedY = box.y ?? 0;
     const resolvedAlign = box.align || 'center';
-    const maxWidth = Math.min(box.width || W * 0.8, W * 0.92);
-    const paddingX = Math.max(16, resolvedFontSize * 0.22);
-    const paddingY = Math.max(12, resolvedFontSize * 0.14);
-    ctx.font = `700 ${resolvedFontSize}px ${resolvedFontFamily}, sans-serif`;
-    ctx.letterSpacing = (box.letter_spacing || 0) + 'px';
-    const lines = wrapText(ctx, box.text || '', maxWidth - paddingX * 2);
-    const safeLines = lines.length ? lines : [''];
-    const lineH = resolvedFontSize * (box.line_spacing || 1.25);
-    const widestLine = Math.max(...safeLines.map(line => ctx.measureText(line).width), resolvedFontSize * 1.4);
-    const blockW = Math.min(maxWidth, widestLine + paddingX * 2);
-    const blockH = safeLines.length * lineH + paddingY * 2;
-    const left = resolvedAlign === 'left'
-      ? resolvedX
-      : resolvedAlign === 'right'
-        ? resolvedX - blockW
-        : resolvedX - blockW / 2;
-    const textX = resolvedAlign === 'left'
-      ? left + paddingX
-      : resolvedAlign === 'right'
-        ? left + blockW - paddingX
-        : resolvedX;
+    let resolvedFontSize, paddingX, paddingY, safeLines, lineH, blockW, blockH, left, textX;
+
+    if (isObjectBox) {
+      // ── Free-form rectangle: the box is a fixed width x height; the font
+      //    auto-sizes to fill it and the text wraps to the width. ──
+      resolvedFontSize = fitFontSizeToBox(box);
+      box.font_size = resolvedFontSize;            // keep stored value coherent
+      const pad = thumbBoxPad(box);
+      paddingX = pad.padX; paddingY = pad.padY;
+      blockW = box.width; blockH = box.height;
+      ctx.font = `700 ${resolvedFontSize}px ${resolvedFontFamily}, sans-serif`;
+      ctx.letterSpacing = (box.letter_spacing || 0) + 'px';
+      const flines = wrapText(ctx, box.text || '', blockW - paddingX * 2);
+      safeLines = flines.length ? flines : [''];
+      lineH = resolvedFontSize * (box.line_spacing || 1.25);
+      left = resolvedX - blockW / 2;               // rectangle is centred on x
+      textX = resolvedAlign === 'left' ? left + paddingX
+            : resolvedAlign === 'right' ? left + blockW - paddingX
+            : resolvedX;
+    } else {
+      // ── Legacy string title path: block hugs the text. ──
+      resolvedFontSize = box.font_size || 64;
+      const maxWidth = Math.min(box.width || W * 0.8, W * 0.92);
+      paddingX = Math.max(16, resolvedFontSize * 0.22);
+      paddingY = Math.max(12, resolvedFontSize * 0.14);
+      ctx.font = `700 ${resolvedFontSize}px ${resolvedFontFamily}, sans-serif`;
+      ctx.letterSpacing = (box.letter_spacing || 0) + 'px';
+      const lines = wrapText(ctx, box.text || '', maxWidth - paddingX * 2);
+      safeLines = lines.length ? lines : [''];
+      lineH = resolvedFontSize * (box.line_spacing || 1.25);
+      const widestLine = Math.max(...safeLines.map(line => ctx.measureText(line).width), resolvedFontSize * 1.4);
+      blockW = Math.min(maxWidth, widestLine + paddingX * 2);
+      blockH = safeLines.length * lineH + paddingY * 2;
+      left = resolvedAlign === 'left'
+        ? resolvedX
+        : resolvedAlign === 'right'
+          ? resolvedX - blockW
+          : resolvedX - blockW / 2;
+      textX = resolvedAlign === 'left'
+        ? left + paddingX
+        : resolvedAlign === 'right'
+          ? left + blockW - paddingX
+          : resolvedX;
+    }
 
     if ((box.background_opacity ?? 0) > 0) {
       const { r, g, b } = hexToRgb(box.background_color || '#111111');
@@ -7912,10 +8124,28 @@
   }
 
   function setDlgFontSize(val) {
-    _dlgFontSize = Math.max(24, Math.min(400, parseInt(val)));
+    // Free-form model: the font fills the box, so the size slider scales the
+    // whole box (width + height) about its centre to reach the target font.
+    const target = Math.max(12, Math.min(400, parseInt(val)));
+    const box = getActiveThumbnailTextBox();
+    if (box) {
+      ensureTextBoxDims(box);
+      const cur = fitFontSizeToBox(box) || 64;
+      const scale = Math.max(0.1, target / cur);
+      box.width  = Math.max(60, Math.round(box.width  * scale));
+      box.height = Math.max(36, Math.round(box.height * scale));
+      box.font_size = fitFontSizeToBox(box);
+      _dlgFontSize = box.font_size;
+      _dlgCanvasTX = box.x; _dlgCanvasTY = box.y;
+    } else {
+      _dlgFontSize = target;
+    }
     const slider = document.getElementById('dlg-size-slider');
     if (slider) slider.value = _dlgFontSize;
-    dlgUpdateText();
+    const sv = document.getElementById('dlg-size-val'); if (sv) sv.textContent = _dlgFontSize;
+    syncDraftFromDialogState();
+    renderDialogOverlayLayer();
+    dlgDrawCanvas();
   }
 
   function setDlgLetterSpacing(val) {
@@ -8702,17 +8932,32 @@
       } else {
         div.textContent = box.text || `Text Box ${index + 1}`;
       }
-      const bx = box.x ?? getDefaultThumbTextPosition(_dlgStyle, _dlgTargetFormat, index).x;
-      const by = box.y ?? getDefaultThumbTextPosition(_dlgStyle, _dlgTargetFormat, index).y;
-      const bw = box.width || getDefaultThumbTextPosition(_dlgStyle, _dlgTargetFormat, index).width || 400;
+      ensureTextBoxDims(box);
+      const dpos = getDefaultThumbTextPosition(_dlgStyle, _dlgTargetFormat, index);
+      const bx = box.x ?? dpos.x;
+      const by = box.y ?? dpos.y;
+      const bw = box.width  || dpos.width || 400;
+      const bh = box.height || thumbTextBlockHeight(box, box.font_size || 64);
+      const fit = fitFontSizeToBox(box);
+      box.font_size = fit;                          // keep stored value coherent
+      const pad = thumbBoxPad(box);
       div.style.left       = (bx / scaleX) + 'px';
       div.style.top        = (by / scaleY) + 'px';
       div.style.transform  = 'translate(-50%, -50%)';
-      div.style.width      = 'max-content';
-      div.style.maxWidth   = (bw / scaleX) + 'px';
+      div.style.width      = (bw / scaleX) + 'px';
+      div.style.height     = (bh / scaleY) + 'px';
+      div.style.boxSizing  = 'border-box';
+      div.style.padding    = (pad.padY / scaleY) + 'px ' + (pad.padX / scaleX) + 'px';
+      div.style.display        = 'flex';
+      div.style.flexDirection  = 'column';
+      div.style.justifyContent = 'center';
+      div.style.alignItems     = box.align === 'left' ? 'flex-start' : box.align === 'right' ? 'flex-end' : 'center';
+      div.style.overflow   = 'hidden';
+      div.style.whiteSpace = 'normal';
+      div.style.wordBreak  = 'break-word';
       div.style.zIndex     = isSelected ? '20' : '1';
       div.style.fontFamily = (box.font_family || 'Poppins') + ', sans-serif';
-      div.style.fontSize   = Math.round((box.font_size || 64) / Math.max(scaleX, scaleY)) + 'px';
+      div.style.fontSize   = (fit / Math.max(scaleX, scaleY)) + 'px';
       div.style.letterSpacing = ((box.letter_spacing || 0) / Math.max(scaleX, scaleY)) + 'px';
       div.style.lineHeight = (box.line_spacing || 1.25);
       div.style.color      = box.color || '#ffffff';
@@ -8721,9 +8966,8 @@
       const alpha = (box.background_opacity ?? 0) / 100;
       const bg = hexToRgb(box.background_color || '#111111');
       div.style.background = alpha > 0 ? `rgba(${bg.r},${bg.g},${bg.b},${alpha})` : 'transparent';
-      div.style.padding    = alpha > 0 ? '10px 16px' : '4px 8px';
       div.style.borderRadius = (alpha > 0 && box.bg_pill) ? '999px' : (alpha > 0 ? '10px' : '0');
-      if (isSelected) _addResizeHandles(div, CORNER_HANDLES);
+      if (isSelected) _addResizeHandles(div, ALL_HANDLES);
       layer.appendChild(div);
     });
 
@@ -8800,6 +9044,9 @@
     textEl.contentEditable = 'true';
     textEl.classList.add('editing');
     textEl.style.userSelect = 'text';
+    // Allow the text to overflow the fixed box while typing so nothing is clipped.
+    textEl.style.height = 'auto';
+    textEl.style.overflow = 'visible';
     textEl.focus();
     const range = document.createRange();
     range.selectNodeContents(textEl);
@@ -8859,12 +9106,15 @@
         // ── Resize ──
         const handle = handleEl.dataset.handle;
         if (textEl) {
-          // Text box resize (width only via corners)
+          // Free-form text-box resize: any handle reshapes the rectangle; font auto-fits.
           const bid = textEl.dataset.boxId;
           const box = (_sharedThumbnailDraft?.text_boxes || []).find(function(b) { return b.id === bid; });
           if (!box) return;
+          ensureTextBoxDims(box);
+          const dp = getDefaultThumbTextPosition(_dlgStyle, _dlgTargetFormat, 0);
           dragging = { type: 'resize-text', handle, startX: e.clientX, startY: e.clientY,
-                       origX: box.x, origY: box.y, origW: box.width || 400, origFont: box.font_size || 64, boxId: bid };
+                       origX: box.x ?? dp.x, origY: box.y ?? dp.y,
+                       origW: box.width || dp.width || 400, origH: box.height || 200, boxId: bid };
         } else if (logoEl && _sharedThumbnailDraft?.logo) {
           const logo = _sharedThumbnailDraft.logo;
           dragging = { type: 'resize-logo', handle, startX: e.clientX, startY: e.clientY,
@@ -8937,9 +9187,17 @@
         const box = (_sharedThumbnailDraft?.text_boxes || []).find(function(b) { return b.id === bid; });
         if (!box) return;
         const hdx = hdxMap[dragging.handle] || 0;
-        const ratio = Math.max(0.2, (dragging.origW + hdx * dx * scaleX) / Math.max(1, dragging.origW));
-        box.font_size = Math.max(12, Math.min(400, Math.round((dragging.origFont || 64) * ratio)));
+        const hdy = hdyMap[dragging.handle] || 0;
+        const newW = Math.max(60, Math.round(dragging.origW + hdx * dx * scaleX));
+        const newH = Math.max(36, Math.round(dragging.origH + hdy * dy * scaleY));
+        // Anchor the opposite edge: shift centre by half the size change.
+        box.x = Math.round(dragging.origX + hdx * (newW - dragging.origW) / 2);
+        box.y = Math.round(dragging.origY + hdy * (newH - dragging.origH) / 2);
+        box.width  = newW;
+        box.height = newH;
+        box.font_size = fitFontSizeToBox(box);       // font fills the new rectangle
         _dlgFontSize = box.font_size;
+        _dlgCanvasTX = box.x; _dlgCanvasTY = box.y;  // keep move-state in sync
         const ss = document.getElementById('dlg-size-slider'); if (ss) ss.value = _dlgFontSize;
         const sv = document.getElementById('dlg-size-val'); if (sv) sv.textContent = _dlgFontSize;
         syncDraftFromDialogState();
