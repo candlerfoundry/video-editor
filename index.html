@@ -5817,7 +5817,12 @@
     _sharedThumbnailDraft.suggested_titles = _thumbTitles || [];
     _sharedThumbnailDraft.video_info = _dlgVideoInfo || null;
     _sharedThumbnailDraft.logo = normalizeThumbnailLogo(_sharedThumbnailDraft.logo, _dlgTargetFormat);
-    const box = getActiveThumbnailTextBox();
+    // Only write the editor's text-control state onto the box that is ACTUALLY
+    // selected. Without this, a deselected state (selected_text_box_id = null)
+    // would fall back to text_boxes[0] and overwrite it with the previously
+    // selected box's text — the source of the "random duplication/deletion".
+    const _selId = _sharedThumbnailDraft.selected_text_box_id;
+    const box = _selId ? (_sharedThumbnailDraft.text_boxes || []).find(function (b) { return b.id === _selId; }) : null;
     if (!box) return _sharedThumbnailDraft;
     box.text = _dlgTitle;
     box.color = _dlgTextColor;
@@ -8920,6 +8925,10 @@
     });
     document.addEventListener('mousemove', function (e) {
       if (!panning || !_sharedThumbnailDraft) return;
+      if (!panning.moved) {
+        if (Math.abs(e.clientX - panning.startX) < 4 && Math.abs(e.clientY - panning.startY) < 4) return;
+        panning.moved = true;
+      }
       const wrap = document.getElementById('dlg-canvas-wrap');
       const rect = wrap ? wrap.getBoundingClientRect() : { width: 600, height: 600 };
       const zoom = _sharedThumbnailDraft.frame_zoom || 1;
@@ -8933,7 +8942,7 @@
       }
     });
     document.addEventListener('mouseup', function () {
-      if (panning) { syncDraftFromDialogState(); panning = null; }
+      if (panning) { if (panning.moved) syncDraftFromDialogState(); panning = null; }
     });
   })();
 
@@ -11219,7 +11228,7 @@
 
 <dialog id="dialog-thumb">
   <div class="dialog-header">
-    <h2>Create Thumbnail <span style="font-size:10px;font-weight:500;color:var(--muted);vertical-align:middle;">build 6-18b</span></h2>
+    <h2>Create Thumbnail <span style="font-size:10px;font-weight:500;color:var(--muted);vertical-align:middle;">build 6-18c</span></h2>
     <div class="dialog-header-actions">
       <button class="dialog-icon-btn" id="btn-thumb-expand" onclick="toggleThumbDialogExpand()">Expand &#x2197;</button>
       <button class="dialog-icon-btn" onclick="closeThumbDialog()">&#x2715; Close</button>
