@@ -4902,14 +4902,18 @@
     return editorCutRanges.some(r => t >= r.start && t < r.end);
   }
   function cutBoundsForWords(i0, i1, fallbackLo, fallbackHi) {
+    // Whisper word start/end times are approximate (often the start runs early,
+    // overlapping the previous word). Cut in the GAP between the deleted run and
+    // its kept neighbours — midway between the previous word's end and the first
+    // deleted word's start, and between the last deleted word's end and the next
+    // word's start — so we neither clip a kept word nor leave a fragment.
     const W = _wordsData || [];
-    let lo = fallbackLo, hi = fallbackHi;
     const a = W[i0], b = W[i1];
-    if (a && a.start != null) lo = a.start;
-    if (b && b.end != null) hi = b.end;
+    let lo = (a && a.start != null) ? a.start : fallbackLo;
+    let hi = (b && b.end != null) ? b.end : fallbackHi;
     const prev = W[i0 - 1], next = W[i1 + 1];
-    if (prev && prev.start != null && prev.end != null) { const pm = (prev.start + prev.end) / 2; if (lo <= pm) lo = pm + 0.012; }
-    if (next && next.start != null && next.end != null) { const nm = (next.start + next.end) / 2; if (hi >= nm) hi = nm - 0.012; }
+    if (prev && prev.end != null) lo = (prev.end + lo) / 2;
+    if (next && next.start != null) hi = (hi + next.start) / 2;
     if (hi - lo < 0.05) hi = lo + 0.05;
     return { lo, hi };
   }
