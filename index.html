@@ -2107,6 +2107,7 @@
     .el-cell { border: 1px solid var(--border); border-radius: 10px; background: var(--surface); padding: 8px; cursor: pointer; aspect-ratio: 1; display: flex; align-items: center; justify-content: center; }
     .el-cell:hover { border-color: var(--orange); background: var(--orange-tint); }
     .el-cell img { max-width: 100%; max-height: 100%; object-fit: contain; display: block; }
+    .elem-controls { border-top: 1px solid var(--border); margin-top: 10px; padding-top: 4px; }
   </style>
 </head>
 <body>
@@ -6796,6 +6797,9 @@
     // overlays there; baking them too created ghost duplicates after moves.
     for (var _gi = 0; _gi < (options.omitElements ? [] : (draft.graphic_elements || [])).length; _gi++) {
       var _ge = draft.graphic_elements[_gi];
+      var _rot = (_ge.rotation || 0) * Math.PI / 180;
+      var _gcx = (_ge.x || 0) + (_ge.width || 200) / 2, _gcy = (_ge.y || 0) + (_ge.height || 200) / 2;
+      if (_rot) { ctx.save(); ctx.translate(_gcx, _gcy); ctx.rotate(_rot); ctx.translate(-_gcx, -_gcy); }
       if (_ge.type === 'shape') {
         drawShapeToCanvas(ctx, _ge);
       } else if (_ge.type === 'image' && _ge.asset) {
@@ -6811,6 +6815,7 @@
           ctx.globalAlpha = _pa2;
         } catch (_) {}
       }
+      if (_rot) ctx.restore();
     }
     if (!options.omitText) {
       (draft.text_boxes || []).forEach((box, index) => {
@@ -9065,7 +9070,7 @@
       id, type: 'image', packEl: true, asset: it.file, preview: it.preview, label: cat.label,
       twoTone: !!it.twoTone, hues: it.hues || [],
       color: '#c84826', color2: it.twoTone ? '#1e2530' : null,
-      x: Math.round((W - w) / 2), y: Math.round((H - h) / 2), width: w, height: h, opacity: 100,
+      x: Math.round((W - w) / 2), y: Math.round((H - h) / 2), width: w, height: h, opacity: 100, rotation: 0,
     };
     _sharedThumbnailDraft.graphic_elements.push(elem);
     _dlgSelectedElemId = id;
@@ -9105,14 +9110,14 @@
         const a = d[i+3]; if (!a) { o[i+3] = 0; continue; }
         const r = d[i], g = d[i+1], b = d[i+2];
         const L = (0.299*r + 0.587*g + 0.114*b) / 255, hu = _hue(r,g,b);
-        const t = (_hueDist(hu,h0) <= _hueDist(hu,h1)) ? c1 : c2, sh = 0.5 + 0.6*L;
+        const t = (_hueDist(hu,h0) <= _hueDist(hu,h1)) ? c1 : c2, sh = 0.80 + 0.24*L;
         o[i]=Math.min(255,t.r*sh); o[i+1]=Math.min(255,t.g*sh); o[i+2]=Math.min(255,t.b*sh); o[i+3]=a;
       }
     } else if (elem.color) {
       const t = _hx(elem.color);
       for (let i = 0; i < d.length; i += 4) {
         const a = d[i+3]; if (!a) { o[i+3] = 0; continue; }
-        const gg = d[i] / 255, sh = 0.45 + 0.7*gg;
+        const gg = d[i] / 255, sh = 0.80 + 0.26*gg;
         o[i]=Math.min(255,t.r*sh); o[i+1]=Math.min(255,t.g*sh); o[i+2]=Math.min(255,t.b*sh); o[i+3]=a;
       }
     } else {
@@ -9137,6 +9142,27 @@
       _setTriggerColor(anchor, hex);
     });
   }
+  function setDesignElemOpacity(id, val) {
+    const f = (_sharedThumbnailDraft && _sharedThumbnailDraft.graphic_elements || []).find(e => e.id === id);
+    if (!f) return;
+    f.opacity = Math.max(5, Math.min(100, parseInt(val) || 100));
+    const lbl = document.getElementById('elem-opacity-val'); if (lbl) lbl.textContent = f.opacity;
+    syncDraftFromDialogState();
+    renderDialogOverlayLayer();
+  }
+  function setDesignElemRotation(id, val) {
+    const f = (_sharedThumbnailDraft && _sharedThumbnailDraft.graphic_elements || []).find(e => e.id === id);
+    if (!f) return;
+    f.rotation = Math.max(-180, Math.min(180, parseInt(val) || 0));
+    const lbl = document.getElementById('elem-rotation-val'); if (lbl) lbl.textContent = f.rotation + '\u00b0';
+    syncDraftFromDialogState();
+    renderDialogOverlayLayer();
+  }
+  function resetDesignElemRotation(id) {
+    const sl = document.getElementById('elem-rotation-slider'); if (sl) sl.value = 0;
+    setDesignElemRotation(id, 0);
+  }
+
   function setDesignElem2Color(id, color) {
     const f = (_sharedThumbnailDraft && _sharedThumbnailDraft.graphic_elements || []).find(e => e.id === id);
     if (!f) return;
@@ -9257,6 +9283,17 @@
         '</div>';
     });
     listEl.innerHTML = '<div style="font-size:10px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:var(--muted);margin:8px 0 5px;">Added elements</div>' + rows;
+    const selEl = (_sharedThumbnailDraft && _sharedThumbnailDraft.graphic_elements || []).find(e => e.id === _dlgSelectedElemId);
+    if (selEl) {
+      const op = selEl.opacity ?? 100, rot = selEl.rotation || 0;
+      listEl.innerHTML += '<div class="elem-controls">' +
+        '<div class="thumb-editor-label" style="margin:10px 0 4px;">Opacity <span id="elem-opacity-val">' + op + '</span>%</div>' +
+        '<input type="range" min="5" max="100" value="' + op + '" style="width:100%;accent-color:var(--orange);" oninput="setDesignElemOpacity(\'' + escHtml(selEl.id) + '\', this.value)">' +
+        '<div class="thumb-editor-label" style="margin:8px 0 4px;">Rotation <span id="elem-rotation-val">' + rot + '\u00b0</span>' +
+          '<button type="button" class="btn-ghost btn-sm" style="float:right;padding:0 8px;font-size:10px;" onclick="resetDesignElemRotation(\'' + escHtml(selEl.id) + '\')">Reset</button></div>' +
+        '<input type="range" id="elem-rotation-slider" min="-180" max="180" value="' + rot + '" style="width:100%;accent-color:var(--orange);" oninput="setDesignElemRotation(\'' + escHtml(selEl.id) + '\', this.value)">' +
+        '</div>';
+    }
   }
 
   function setSelectedElemBrandColor(color) {
@@ -9274,11 +9311,38 @@
     renderDialogOverlayLayer();
   }
 
+  // Push current _dlg* control state into the sidebar inputs (no redraw).
+  function pushControlsToSidebar() {
+    const fs = document.getElementById('dlg-font-select'); if (fs) fs.value = _dlgFontFamily;
+    const set = (id, v) => { const el = document.getElementById(id); if (el) el.value = v; };
+    const txt = (id, v) => { const el = document.getElementById(id); if (el) el.textContent = v; };
+    set('dlg-size-slider', _dlgFontSize);       txt('dlg-size-val', _dlgFontSize);
+    set('dlg-letter-slider', _dlgLetterSpacing); txt('dlg-letter-val', _dlgLetterSpacing);
+    set('dlg-line-slider', _dlgLineSpacing);     txt('dlg-line-val', (_dlgLineSpacing || 1.25).toFixed(2));
+    set('dlg-overlay-slider', _dlgOverlayOpacity); txt('dlg-overlay-val', _dlgOverlayOpacity);
+    const sh = document.getElementById('dlg-shadow-toggle'); if (sh) sh.checked = _dlgShadowOn;
+    if (typeof dlgSyncAlignButtons === 'function') dlgSyncAlignButtons();
+    if (typeof refreshColorTriggers === 'function') refreshColorTriggers();
+  }
+  function _refreshTextBoxChips() {
+    const boxList = document.getElementById('dlg-textbox-list');
+    if (!boxList || !_sharedThumbnailDraft) return;
+    const boxes = _sharedThumbnailDraft.text_boxes || [];
+    boxList.innerHTML = boxes.map((box, index) => (
+      '<button type="button" class="thumb-chip' + (_sharedThumbnailDraft.selected_text_box_id === box.id ? ' selected' : '') + '" onclick="dlgSelectTextBox(\'' + escHtml(box.id) + '\')">' +
+      escHtml(box.text || ('Text Box ' + (index + 1))) +
+      (boxes.length > 1 ? '<span class="thumb-chip-x" title="Delete this text box" onclick="dlgRemoveTextBoxById(\'' + escHtml(box.id) + '\', event)">&times;</span>' : '') +
+      '</button>'
+    )).join('');
+  }
+  // Lightweight selection: no full editor rebuild (which caused the jank / wrong-box bugs).
   function dlgSelectTextBox(id) {
     if (!_sharedThumbnailDraft) return;
     _sharedThumbnailDraft.selected_text_box_id = id;
     applyDraftToDialogState();
-    dlgOpenEditor();
+    pushControlsToSidebar();
+    _refreshTextBoxChips();
+    renderDialogOverlayLayer();
   }
 
   function dlgAddTextBox() {
@@ -9509,6 +9573,7 @@
       wrap.style.width  = dw + 'px';
       wrap.style.height = dh + 'px';
       wrap.style.opacity = ((elem.opacity ?? 100) / 100);
+      if (elem.rotation) { wrap.style.transform = 'rotate(' + elem.rotation + 'deg)'; wrap.style.transformOrigin = '50% 50%'; }
       if (elem.type === 'image') {
         var _isrc = elem.packEl ? (ensurePackUrl(elem) || elem.preview || elem.asset) : (elem.asset || '');
         wrap.innerHTML = '<img src="' + escHtml(_isrc) + '" alt="" draggable="false" style="width:100%;height:100%;object-fit:contain;display:block;pointer-events:none;">';
@@ -9537,6 +9602,7 @@
   }
 
   function _dlgBeginTextEdit(bid) {
+    if (_sharedThumbnailDraft && _sharedThumbnailDraft.selected_text_box_id !== bid) dlgSelectTextBox(bid);
     const textEl = document.querySelector('.dlg-overlay-text[data-box-id="' + bid + '"]');
     const box = (_sharedThumbnailDraft?.text_boxes || []).find(function(b) { return b.id === bid; });
     if (!textEl || !box) return;
@@ -9635,29 +9701,20 @@
       if (textEl && textEl.dataset.boxId) {
         if (textEl.classList.contains('editing')) return;
         const bid = textEl.dataset.boxId;
-        const now = Date.now();
-        if (_dlgLastTextClick && _dlgLastTextClick.id === bid && (now - _dlgLastTextClick.t) < 350) {
-          _dlgLastTextClick = null;
-          e.preventDefault();
-          if (_sharedThumbnailDraft) _sharedThumbnailDraft.selected_text_box_id = bid;
-          _dlgBeginTextEdit(bid);
-          return;
-        }
-        _dlgLastTextClick = { id: bid, t: now };
-        dlgSelectTextBox(bid);
+        if (!_sharedThumbnailDraft || _sharedThumbnailDraft.selected_text_box_id !== bid) dlgSelectTextBox(bid);
         const box = getActiveThumbnailTextBox();
-        dragging = { type: 'text', startX: e.clientX, startY: e.clientY, origX: box?.x ?? _dlgCanvasTX, origY: box?.y ?? _dlgCanvasTY };
+        dragging = { type: 'text', startX: e.clientX, startY: e.clientY, origX: box?.x ?? _dlgCanvasTX, origY: box?.y ?? _dlgCanvasTY, moved: false };
       } else if (logoEl) {
         const logo = _sharedThumbnailDraft?.logo;
         if (!logo) return;
         _dlgLogoSelected = true;
         renderDialogOverlayLayer();
-        dragging = { type: 'logo', startX: e.clientX, startY: e.clientY, origX: logo.x, origY: logo.y };
+        dragging = { type: 'logo', startX: e.clientX, startY: e.clientY, origX: logo.x, origY: logo.y, moved: false };
       } else if (elemEl) {
         const eid   = elemEl.dataset.elemId;
         const found = (_sharedThumbnailDraft?.graphic_elements || []).find(function(el) { return el.id === eid; });
         if (!found) return;
-        dragging = { type: 'elem', elemId: eid, startX: e.clientX, startY: e.clientY, origX: found.x, origY: found.y };
+        dragging = { type: 'elem', elemId: eid, startX: e.clientX, startY: e.clientY, origX: found.x, origY: found.y, moved: false };
         dlgSelectDesignElement(eid);
       }
       e.preventDefault();
@@ -9679,6 +9736,10 @@
       const canvas = document.getElementById('dlg-canvas');
       const dx = e.clientX - dragging.startX;
       const dy = e.clientY - dragging.startY;
+      if ((dragging.type === 'text' || dragging.type === 'elem' || dragging.type === 'logo') && !dragging.moved) {
+        if (Math.abs(dx) < 4 && Math.abs(dy) < 4) return;
+        dragging.moved = true;
+      }
       const hdxMap = { 'nw': -1, 'n': 0, 'ne': 1, 'e': 1, 'se': 1, 's': 0, 'sw': -1, 'w': -1 };
       const hdyMap = { 'nw': -1, 'n': -1, 'ne': -1, 'e': 0, 'se': 1, 's': 1, 'sw': 1, 'w': 0 };
 

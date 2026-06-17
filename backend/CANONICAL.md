@@ -1619,3 +1619,18 @@ Regression risk: Medium (drag/render).
   resolution), so the canvas scales up when the window is expanded / on big
   monitors instead of leaving dead space. Called on open, format change, expand,
   drag-resize, and window resize. Below 1180px the layout wraps (canvas on top).
+
+## Thumbnail editor Phase 4 + fixes (June 17, 2026)
+- Element recolor was muddy: shade band widened the texture into near-black.
+  Tightened to sh = 0.80 + 0.26*gray (single) and 0.80 + 0.24*L (two-tone) so
+  elements read as solid on-brand color with subtle hand-drawn texture.
+- Text-box interaction fixes: dlgSelectTextBox is now lightweight (no full
+  dlgOpenEditor rebuild) and pushes control state to the sidebar + refreshes
+  chips; selecting only re-runs on a different box. Double-click / begin-edit now
+  set the edited box as selected so the sidebar always targets the right box. A
+  4px drag threshold stops accidental nudges when clicking to select/edit.
+- Phase 4: design elements now support rotation (-180..180) and opacity (5-100)
+  via per-selected-element sliders in the element list (setDesignElemRotation /
+  setDesignElemOpacity). Rotation applies in the overlay (CSS transform) and is
+  baked into export (ctx rotate about the element centre) for shapes and images.
+  (Resizing a rotated element is off-axis for now — rotate after sizing.)
