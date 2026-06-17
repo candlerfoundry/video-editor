@@ -1592,3 +1592,20 @@ Regression risk: Medium (drag/render).
   control + hex field, the refined FOUNDRY_PALETTE (dropped CF Orange #E8541A,
   CF Amber #F5A623, CF Green #2D6A4F), and a Recent/in-this-design row backed by
   localStorage `fve_recent_colors` + colorsUsedInDesign().
+
+## Thumbnail editor Phase 2 — Notes/Shapes/Squiggles pack (June 17, 2026)
+- Curated 64 elements from the "Notes by Basia Stryjecka" pack into
+  brand/elements/<slug>/ across speech-bubbles, large-shapes, highlights,
+  arrows, squiggles, lines. Each has a working asset + small _t.png preview;
+  brand/elements/manifest.json lists them.
+- Single-tone elements stored as grayscale-luminance PNGs (mode LA) so they can
+  be recolored to any brand color at runtime (shade = 0.45 + 0.7*gray). Two-tone
+  elements kept as RGBA with detected dominant hues; recolor segments pixels by
+  nearest hue and tints each region independently (color + color2).
+- Picker: dialog-elements (openElementsPicker) with category tabs + preview grid;
+  insertPackElement adds a draggable/resizable image element.
+- Recolor engine: getPackCanvas + ensurePackUrl (cached); overlay shows tinted
+  dataURL, export bakes the tinted canvas. Element list shows 1 colour trigger
+  (single) or 2 (two-tone), wired to the Canva color popover.
+- Fix: color popover now re-parents into the open modal <dialog> (top layer) so
+  it isn't hidden behind the modal.

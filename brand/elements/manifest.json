@@ -1,0 +1,794 @@
+{
+ "categories": [
+  {
+   "label": "Speech Bubbles",
+   "slug": "speech-bubbles",
+   "items": [
+    {
+     "id": "speech-bubbles-01",
+     "file": "brand/elements/speech-bubbles/01.png",
+     "preview": "brand/elements/speech-bubbles/01_t.png",
+     "w": 500,
+     "h": 324,
+     "mode": "LA",
+     "twoTone": false,
+     "hues": [
+      65.0
+     ]
+    },
+    {
+     "id": "speech-bubbles-02",
+     "file": "brand/elements/speech-bubbles/02.png",
+     "preview": "brand/elements/speech-bubbles/02_t.png",
+     "w": 500,
+     "h": 324,
+     "mode": "LA",
+     "twoTone": false,
+     "hues": [
+      345.0
+     ]
+    },
+    {
+     "id": "speech-bubbles-03",
+     "file": "brand/elements/speech-bubbles/03.png",
+     "preview": "brand/elements/speech-bubbles/03_t.png",
+     "w": 500,
+     "h": 397,
+     "mode": "LA",
+     "twoTone": false,
+     "hues": [
+      175.0
+     ]
+    },
+    {
+     "id": "speech-bubbles-04",
+     "file": "brand/elements/speech-bubbles/04.png",
+     "preview": "brand/elements/speech-bubbles/04_t.png",
+     "w": 500,
+     "h": 397,
+     "mode": "LA",
+     "twoTone": false,
+     "hues": [
+      45.0
+     ]
+    },
+    {
+     "id": "speech-bubbles-05",
+     "file": "brand/elements/speech-bubbles/05.png",
+     "preview": "brand/elements/speech-bubbles/05_t.png",
+     "w": 500,
+     "h": 291,
+     "mode": "LA",
+     "twoTone": false,
+     "hues": [
+      195.0
+     ]
+    },
+    {
+     "id": "speech-bubbles-06",
+     "file": "brand/elements/speech-bubbles/06.png",
+     "preview": "brand/elements/speech-bubbles/06_t.png",
+     "w": 500,
+     "h": 291,
+     "mode": "LA",
+     "twoTone": false,
+     "hues": [
+      65.0
+     ]
+    },
+    {
+     "id": "speech-bubbles-07",
+     "file": "brand/elements/speech-bubbles/07.png",
+     "preview": "brand/elements/speech-bubbles/07_t.png",
+     "w": 500,
+     "h": 336,
+     "mode": "LA",
+     "twoTone": false,
+     "hues": [
+      15.0
+     ]
+    },
+    {
+     "id": "speech-bubbles-08",
+     "file": "brand/elements/speech-bubbles/08.png",
+     "preview": "brand/elements/speech-bubbles/08_t.png",
+     "w": 500,
+     "h": 336,
+     "mode": "LA",
+     "twoTone": false,
+     "hues": [
+      65.0
+     ]
+    },
+    {
+     "id": "speech-bubbles-09",
+     "file": "brand/elements/speech-bubbles/09.png",
+     "preview": "brand/elements/speech-bubbles/09_t.png",
+     "w": 346,
+     "h": 500,
+     "mode": "LA",
+     "twoTone": false,
+     "hues": [
+      25.0
+     ]
+    },
+    {
+     "id": "speech-bubbles-10",
+     "file": "brand/elements/speech-bubbles/10.png",
+     "preview": "brand/elements/speech-bubbles/10_t.png",
+     "w": 346,
+     "h": 500,
+     "mode": "LA",
+     "twoTone": false,
+     "hues": [
+      65.0
+     ]
+    }
+   ]
+  },
+  {
+   "label": "Large Shapes",
+   "slug": "large-shapes",
+   "items": [
+    {
+     "id": "large-shapes-01",
+     "file": "brand/elements/large-shapes/01.png",
+     "preview": "brand/elements/large-shapes/01_t.png",
+     "w": 500,
+     "h": 389,
+     "mode": "LA",
+     "twoTone": false,
+     "hues": [
+      65.0
+     ]
+    },
+    {
+     "id": "large-shapes-02",
+     "file": "brand/elements/large-shapes/02.png",
+     "preview": "brand/elements/large-shapes/02_t.png",
+     "w": 428,
+     "h": 500,
+     "mode": "LA",
+     "twoTone": false,
+     "hues": [
+      15.0
+     ]
+    },
+    {
+     "id": "large-shapes-03",
+     "file": "brand/elements/large-shapes/03.png",
+     "preview": "brand/elements/large-shapes/03_t.png",
+     "w": 385,
+     "h": 499,
+     "mode": "LA",
+     "twoTone": false,
+     "hues": [
+      65.0
+     ]
+    },
+    {
+     "id": "large-shapes-04",
+     "file": "brand/elements/large-shapes/04.png",
+     "preview": "brand/elements/large-shapes/04_t.png",
+     "w": 500,
+     "h": 255,
+     "mode": "LA",
+     "twoTone": false,
+     "hues": [
+      85.0
+     ]
+    },
+    {
+     "id": "large-shapes-05",
+     "file": "brand/elements/large-shapes/05.png",
+     "preview": "brand/elements/large-shapes/05_t.png",
+     "w": 500,
+     "h": 140,
+     "mode": "LA",
+     "twoTone": false,
+     "hues": [
+      25.0
+     ]
+    },
+    {
+     "id": "large-shapes-06",
+     "file": "brand/elements/large-shapes/06.png",
+     "preview": "brand/elements/large-shapes/06_t.png",
+     "w": 500,
+     "h": 499,
+     "mode": "LA",
+     "twoTone": false,
+     "hues": [
+      25.0
+     ]
+    },
+    {
+     "id": "large-shapes-07",
+     "file": "brand/elements/large-shapes/07.png",
+     "preview": "brand/elements/large-shapes/07_t.png",
+     "w": 500,
+     "h": 479,
+     "mode": "LA",
+     "twoTone": false,
+     "hues": [
+      185.0
+     ]
+    },
+    {
+     "id": "large-shapes-08",
+     "file": "brand/elements/large-shapes/08.png",
+     "preview": "brand/elements/large-shapes/08_t.png",
+     "w": 499,
+     "h": 479,
+     "mode": "LA",
+     "twoTone": false,
+     "hues": [
+      45.0
+     ]
+    }
+   ]
+  },
+  {
+   "label": "Highlights & Boxes",
+   "slug": "highlights",
+   "items": [
+    {
+     "id": "highlights-01",
+     "file": "brand/elements/highlights/01.png",
+     "preview": "brand/elements/highlights/01_t.png",
+     "w": 500,
+     "h": 500,
+     "mode": "LA",
+     "twoTone": false,
+     "hues": [
+      25.0
+     ]
+    },
+    {
+     "id": "highlights-02",
+     "file": "brand/elements/highlights/02.png",
+     "preview": "brand/elements/highlights/02_t.png",
+     "w": 499,
+     "h": 500,
+     "mode": "LA",
+     "twoTone": false,
+     "hues": []
+    },
+    {
+     "id": "highlights-03",
+     "file": "brand/elements/highlights/03.png",
+     "preview": "brand/elements/highlights/03_t.png",
+     "w": 500,
+     "h": 486,
+     "mode": "LA",
+     "twoTone": false,
+     "hues": [
+      15.0
+     ]
+    },
+    {
+     "id": "highlights-04",
+     "file": "brand/elements/highlights/04.png",
+     "preview": "brand/elements/highlights/04_t.png",
+     "w": 500,
+     "h": 74,
+     "mode": "LA",
+     "twoTone": false,
+     "hues": []
+    },
+    {
+     "id": "highlights-05",
+     "file": "brand/elements/highlights/05.png",
+     "preview": "brand/elements/highlights/05_t.png",
+     "w": 500,
+     "h": 236,
+     "mode": "LA",
+     "twoTone": false,
+     "hues": [
+      65.0
+     ]
+    },
+    {
+     "id": "highlights-06",
+     "file": "brand/elements/highlights/06.png",
+     "preview": "brand/elements/highlights/06_t.png",
+     "w": 500,
+     "h": 324,
+     "mode": "LA",
+     "twoTone": false,
+     "hues": [
+      45.0
+     ]
+    },
+    {
+     "id": "highlights-07",
+     "file": "brand/elements/highlights/07.png",
+     "preview": "brand/elements/highlights/07_t.png",
+     "w": 499,
+     "h": 45,
+     "mode": "LA",
+     "twoTone": false,
+     "hues": []
+    },
+    {
+     "id": "highlights-08",
+     "file": "brand/elements/highlights/08.png",
+     "preview": "brand/elements/highlights/08_t.png",
+     "w": 500,
+     "h": 54,
+     "mode": "LA",
+     "twoTone": false,
+     "hues": [
+      195.0
+     ]
+    },
+    {
+     "id": "highlights-09",
+     "file": "brand/elements/highlights/09.png",
+     "preview": "brand/elements/highlights/09_t.png",
+     "w": 500,
+     "h": 151,
+     "mode": "LA",
+     "twoTone": false,
+     "hues": [
+      65.0
+     ]
+    },
+    {
+     "id": "highlights-10",
+     "file": "brand/elements/highlights/10.png",
+     "preview": "brand/elements/highlights/10_t.png",
+     "w": 500,
+     "h": 323,
+     "mode": "LA",
+     "twoTone": false,
+     "hues": [
+      15.0
+     ]
+    },
+    {
+     "id": "highlights-11",
+     "file": "brand/elements/highlights/11.png",
+     "preview": "brand/elements/highlights/11_t.png",
+     "w": 500,
+     "h": 81,
+     "mode": "LA",
+     "twoTone": false,
+     "hues": []
+    },
+    {
+     "id": "highlights-12",
+     "file": "brand/elements/highlights/12.png",
+     "preview": "brand/elements/highlights/12_t.png",
+     "w": 500,
+     "h": 139,
+     "mode": "LA",
+     "twoTone": false,
+     "hues": [
+      95.0
+     ]
+    },
+    {
+     "id": "highlights-13",
+     "file": "brand/elements/highlights/13.png",
+     "preview": "brand/elements/highlights/13_t.png",
+     "w": 500,
+     "h": 82,
+     "mode": "LA",
+     "twoTone": false,
+     "hues": [
+      195.0
+     ]
+    },
+    {
+     "id": "highlights-14",
+     "file": "brand/elements/highlights/14.png",
+     "preview": "brand/elements/highlights/14_t.png",
+     "w": 499,
+     "h": 122,
+     "mode": "LA",
+     "twoTone": false,
+     "hues": [
+      25.0
+     ]
+    }
+   ]
+  },
+  {
+   "label": "Arrows",
+   "slug": "arrows",
+   "items": [
+    {
+     "id": "arrows-01",
+     "file": "brand/elements/arrows/01.png",
+     "preview": "brand/elements/arrows/01_t.png",
+     "w": 304,
+     "h": 500,
+     "mode": "LA",
+     "twoTone": false,
+     "hues": [
+      195.0
+     ]
+    },
+    {
+     "id": "arrows-02",
+     "file": "brand/elements/arrows/02.png",
+     "preview": "brand/elements/arrows/02_t.png",
+     "w": 304,
+     "h": 500,
+     "mode": "LA",
+     "twoTone": false,
+     "hues": [
+      65.0
+     ]
+    },
+    {
+     "id": "arrows-03",
+     "file": "brand/elements/arrows/03.png",
+     "preview": "brand/elements/arrows/03_t.png",
+     "w": 423,
+     "h": 500,
+     "mode": "LA",
+     "twoTone": false,
+     "hues": [
+      345.0
+     ]
+    },
+    {
+     "id": "arrows-04",
+     "file": "brand/elements/arrows/04.png",
+     "preview": "brand/elements/arrows/04_t.png",
+     "w": 423,
+     "h": 500,
+     "mode": "LA",
+     "twoTone": false,
+     "hues": []
+    },
+    {
+     "id": "arrows-05",
+     "file": "brand/elements/arrows/05.png",
+     "preview": "brand/elements/arrows/05_t.png",
+     "w": 500,
+     "h": 329,
+     "mode": "LA",
+     "twoTone": false,
+     "hues": [
+      15.0
+     ]
+    },
+    {
+     "id": "arrows-06",
+     "file": "brand/elements/arrows/06.png",
+     "preview": "brand/elements/arrows/06_t.png",
+     "w": 500,
+     "h": 434,
+     "mode": "LA",
+     "twoTone": false,
+     "hues": [
+      195.0
+     ]
+    },
+    {
+     "id": "arrows-07",
+     "file": "brand/elements/arrows/07.png",
+     "preview": "brand/elements/arrows/07_t.png",
+     "w": 500,
+     "h": 434,
+     "mode": "LA",
+     "twoTone": false,
+     "hues": [
+      175.0
+     ]
+    },
+    {
+     "id": "arrows-08",
+     "file": "brand/elements/arrows/08.png",
+     "preview": "brand/elements/arrows/08_t.png",
+     "w": 495,
+     "h": 500,
+     "mode": "LA",
+     "twoTone": false,
+     "hues": [
+      345.0
+     ]
+    },
+    {
+     "id": "arrows-09",
+     "file": "brand/elements/arrows/09.png",
+     "preview": "brand/elements/arrows/09_t.png",
+     "w": 495,
+     "h": 500,
+     "mode": "RGBA",
+     "twoTone": true,
+     "hues": [
+      25.0,
+      195.0
+     ]
+    },
+    {
+     "id": "arrows-10",
+     "file": "brand/elements/arrows/10.png",
+     "preview": "brand/elements/arrows/10_t.png",
+     "w": 448,
+     "h": 500,
+     "mode": "LA",
+     "twoTone": false,
+     "hues": [
+      65.0
+     ]
+    },
+    {
+     "id": "arrows-11",
+     "file": "brand/elements/arrows/11.png",
+     "preview": "brand/elements/arrows/11_t.png",
+     "w": 500,
+     "h": 127,
+     "mode": "LA",
+     "twoTone": false,
+     "hues": [
+      25.0
+     ]
+    },
+    {
+     "id": "arrows-12",
+     "file": "brand/elements/arrows/12.png",
+     "preview": "brand/elements/arrows/12_t.png",
+     "w": 500,
+     "h": 127,
+     "mode": "LA",
+     "twoTone": false,
+     "hues": [
+      15.0
+     ]
+    }
+   ]
+  },
+  {
+   "label": "Squiggles",
+   "slug": "squiggles",
+   "items": [
+    {
+     "id": "squiggles-01",
+     "file": "brand/elements/squiggles/01.png",
+     "preview": "brand/elements/squiggles/01_t.png",
+     "w": 301,
+     "h": 500,
+     "mode": "LA",
+     "twoTone": false,
+     "hues": [
+      195.0
+     ]
+    },
+    {
+     "id": "squiggles-02",
+     "file": "brand/elements/squiggles/02.png",
+     "preview": "brand/elements/squiggles/02_t.png",
+     "w": 459,
+     "h": 499,
+     "mode": "LA",
+     "twoTone": false,
+     "hues": [
+      15.0
+     ]
+    },
+    {
+     "id": "squiggles-03",
+     "file": "brand/elements/squiggles/03.png",
+     "preview": "brand/elements/squiggles/03_t.png",
+     "w": 500,
+     "h": 318,
+     "mode": "LA",
+     "twoTone": false,
+     "hues": [
+      45.0
+     ]
+    },
+    {
+     "id": "squiggles-04",
+     "file": "brand/elements/squiggles/04.png",
+     "preview": "brand/elements/squiggles/04_t.png",
+     "w": 500,
+     "h": 70,
+     "mode": "LA",
+     "twoTone": false,
+     "hues": []
+    },
+    {
+     "id": "squiggles-05",
+     "file": "brand/elements/squiggles/05.png",
+     "preview": "brand/elements/squiggles/05_t.png",
+     "w": 500,
+     "h": 207,
+     "mode": "LA",
+     "twoTone": false,
+     "hues": [
+      345.0
+     ]
+    },
+    {
+     "id": "squiggles-06",
+     "file": "brand/elements/squiggles/06.png",
+     "preview": "brand/elements/squiggles/06_t.png",
+     "w": 500,
+     "h": 104,
+     "mode": "LA",
+     "twoTone": false,
+     "hues": [
+      15.0
+     ]
+    },
+    {
+     "id": "squiggles-07",
+     "file": "brand/elements/squiggles/07.png",
+     "preview": "brand/elements/squiggles/07_t.png",
+     "w": 500,
+     "h": 368,
+     "mode": "LA",
+     "twoTone": false,
+     "hues": [
+      45.0
+     ]
+    },
+    {
+     "id": "squiggles-08",
+     "file": "brand/elements/squiggles/08.png",
+     "preview": "brand/elements/squiggles/08_t.png",
+     "w": 500,
+     "h": 111,
+     "mode": "LA",
+     "twoTone": false,
+     "hues": [
+      45.0
+     ]
+    },
+    {
+     "id": "squiggles-09",
+     "file": "brand/elements/squiggles/09.png",
+     "preview": "brand/elements/squiggles/09_t.png",
+     "w": 500,
+     "h": 486,
+     "mode": "LA",
+     "twoTone": false,
+     "hues": [
+      45.0
+     ]
+    },
+    {
+     "id": "squiggles-10",
+     "file": "brand/elements/squiggles/10.png",
+     "preview": "brand/elements/squiggles/10_t.png",
+     "w": 500,
+     "h": 371,
+     "mode": "LA",
+     "twoTone": false,
+     "hues": [
+      45.0
+     ]
+    }
+   ]
+  },
+  {
+   "label": "Lines & Dividers",
+   "slug": "lines",
+   "items": [
+    {
+     "id": "lines-01",
+     "file": "brand/elements/lines/01.png",
+     "preview": "brand/elements/lines/01_t.png",
+     "w": 500,
+     "h": 3,
+     "mode": "LA",
+     "twoTone": false,
+     "hues": [
+      195.0
+     ]
+    },
+    {
+     "id": "lines-02",
+     "file": "brand/elements/lines/02.png",
+     "preview": "brand/elements/lines/02_t.png",
+     "w": 500,
+     "h": 2,
+     "mode": "LA",
+     "twoTone": false,
+     "hues": []
+    },
+    {
+     "id": "lines-03",
+     "file": "brand/elements/lines/03.png",
+     "preview": "brand/elements/lines/03_t.png",
+     "w": 500,
+     "h": 6,
+     "mode": "LA",
+     "twoTone": false,
+     "hues": [
+      195.0
+     ]
+    },
+    {
+     "id": "lines-04",
+     "file": "brand/elements/lines/04.png",
+     "preview": "brand/elements/lines/04_t.png",
+     "w": 500,
+     "h": 6,
+     "mode": "LA",
+     "twoTone": false,
+     "hues": []
+    },
+    {
+     "id": "lines-05",
+     "file": "brand/elements/lines/05.png",
+     "preview": "brand/elements/lines/05_t.png",
+     "w": 500,
+     "h": 9,
+     "mode": "LA",
+     "twoTone": false,
+     "hues": [
+      65.0
+     ]
+    },
+    {
+     "id": "lines-06",
+     "file": "brand/elements/lines/06.png",
+     "preview": "brand/elements/lines/06_t.png",
+     "w": 500,
+     "h": 28,
+     "mode": "LA",
+     "twoTone": false,
+     "hues": [
+      15.0
+     ]
+    },
+    {
+     "id": "lines-07",
+     "file": "brand/elements/lines/07.png",
+     "preview": "brand/elements/lines/07_t.png",
+     "w": 500,
+     "h": 16,
+     "mode": "LA",
+     "twoTone": false,
+     "hues": [
+      15.0
+     ]
+    },
+    {
+     "id": "lines-08",
+     "file": "brand/elements/lines/08.png",
+     "preview": "brand/elements/lines/08_t.png",
+     "w": 500,
+     "h": 31,
+     "mode": "LA",
+     "twoTone": false,
+     "hues": [
+      15.0
+     ]
+    },
+    {
+     "id": "lines-09",
+     "file": "brand/elements/lines/09.png",
+     "preview": "brand/elements/lines/09_t.png",
+     "w": 500,
+     "h": 12,
+     "mode": "LA",
+     "twoTone": false,
+     "hues": [
+      345.0
+     ]
+    },
+    {
+     "id": "lines-10",
+     "file": "brand/elements/lines/10.png",
+     "preview": "brand/elements/lines/10_t.png",
+     "w": 499,
+     "h": 12,
+     "mode": "RGBA",
+     "twoTone": true,
+     "hues": [
+      195.0,
+      65.0
+     ]
+    }
+   ]
+  }
+ ]
+}
