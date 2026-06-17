@@ -9992,9 +9992,17 @@
       if (textEl && textEl.dataset.boxId) {
         if (textEl.classList.contains('editing')) return;
         const bid = textEl.dataset.boxId;
-        if (!_sharedThumbnailDraft || _sharedThumbnailDraft.selected_text_box_id !== bid) selectTextBoxData(bid);
+        const px = e.clientX, py = e.clientY;
+        // All boxes whose rectangle is under the cursor (top-most last in DOM order).
+        const stack = [].slice.call(document.querySelectorAll('.dlg-overlay-text')).filter(function (el) {
+          const r = el.getBoundingClientRect();
+          return px >= r.left && px <= r.right && py >= r.top && py <= r.bottom;
+        }).map(function (el) { return el.dataset.boxId; });
+        const alreadySel = _sharedThumbnailDraft && _sharedThumbnailDraft.selected_text_box_id === bid;
+        if (!alreadySel) selectTextBoxData(bid);
         const box = getActiveThumbnailTextBox();
-        dragging = { type: 'text', startX: e.clientX, startY: e.clientY, origX: box?.x ?? _dlgCanvasTX, origY: box?.y ?? _dlgCanvasTY, moved: false };
+        dragging = { type: 'text', startX: px, startY: py, origX: box?.x ?? _dlgCanvasTX, origY: box?.y ?? _dlgCanvasTY, moved: false,
+                     cycleStack: (alreadySel && stack.length > 1) ? stack : null };
       } else if (logoEl) {
         const logo = _sharedThumbnailDraft?.logo;
         if (!logo) return;
@@ -10141,7 +10149,14 @@
     document.addEventListener('mouseup', function() {
       if (dragging) {
         _dlgSetGuides(null, null);
-        if (!dragging.moved && (dragging.type === 'text' || dragging.type === 'elem' || dragging.type === 'logo')) renderDialogOverlayLayer();
+        if (!dragging.moved) {
+          if (dragging.cycleStack && dragging.cycleStack.length > 1 && _sharedThumbnailDraft) {
+            const ids = dragging.cycleStack;
+            const ci = ids.indexOf(_sharedThumbnailDraft.selected_text_box_id);
+            selectTextBoxData(ids[(ci + 1) % ids.length]);
+          }
+          if (dragging.type === 'text' || dragging.type === 'elem' || dragging.type === 'logo') renderDialogOverlayLayer();
+        }
       }
       dragging = null;
     });
@@ -11228,7 +11243,7 @@
 
 <dialog id="dialog-thumb">
   <div class="dialog-header">
-    <h2>Create Thumbnail <span style="font-size:10px;font-weight:500;color:var(--muted);vertical-align:middle;">build 6-18c</span></h2>
+    <h2>Create Thumbnail <span style="font-size:10px;font-weight:500;color:var(--muted);vertical-align:middle;">build 6-18d</span></h2>
     <div class="dialog-header-actions">
       <button class="dialog-icon-btn" id="btn-thumb-expand" onclick="toggleThumbDialogExpand()">Expand &#x2197;</button>
       <button class="dialog-icon-btn" onclick="closeThumbDialog()">&#x2715; Close</button>
