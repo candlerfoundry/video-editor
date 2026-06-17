@@ -9591,12 +9591,29 @@
     )).join('');
   }
   // Lightweight selection: no full editor rebuild (which caused the jank / wrong-box bugs).
-  function dlgSelectTextBox(id) {
+  function selectTextBoxData(bid) {
     if (!_sharedThumbnailDraft) return;
-    _sharedThumbnailDraft.selected_text_box_id = id;
-    applyDraftToDialogState();
+    _sharedThumbnailDraft.selected_text_box_id = bid;
+    const box = (_sharedThumbnailDraft.text_boxes || []).find(function (b) { return b.id === bid; });
+    if (box) {
+      _dlgTitle = box.text || '';
+      _dlgFontFamily = box.font_family || 'Handmade Sans';
+      _dlgFontSize = box.font_size || 64;
+      _dlgTextColor = box.color || '#ffffff';
+      _dlgBackgroundColor = box.background_color || '#111111';
+      _dlgOverlayOpacity = box.background_opacity ?? 0;
+      _dlgShadowOn = box.shadow ?? true;
+      _dlgLetterSpacing = box.letter_spacing ?? 0;
+      _dlgLineSpacing = box.line_spacing ?? 1.25;
+      _dlgAlign = box.align || 'center';
+      _dlgBgPill = box.bg_pill ?? false;
+      _dlgCanvasTX = box.x; _dlgCanvasTY = box.y;
+    }
     pushControlsToSidebar();
     _refreshTextBoxChips();
+  }
+  function dlgSelectTextBox(id) {
+    selectTextBoxData(id);
     renderDialogOverlayLayer();
   }
 
@@ -9886,12 +9903,13 @@
       textEl.removeEventListener('input', onInput);
       textEl.removeEventListener('blur', onBlur);
       _dlgParseRunsFromEl(textEl, box);
-      _dlgTitle = box.text;
       textEl.contentEditable = 'false';
       textEl.classList.remove('editing');
       textEl.style.userSelect = '';
       _dlgEditingTextId = null;
-      syncDraftFromDialogState();
+      // Only mirror this box's text into the editor vars if it is STILL the
+      // selected box — otherwise we'd overwrite the newly-clicked box's text.
+      if (_sharedThumbnailDraft && _sharedThumbnailDraft.selected_text_box_id === box.id) _dlgTitle = box.text;
       dlgDrawCanvas();
       renderDialogOverlayLayer();
     }
@@ -9959,7 +9977,7 @@
       if (textEl && textEl.dataset.boxId) {
         if (textEl.classList.contains('editing')) return;
         const bid = textEl.dataset.boxId;
-        if (!_sharedThumbnailDraft || _sharedThumbnailDraft.selected_text_box_id !== bid) dlgSelectTextBox(bid);
+        if (!_sharedThumbnailDraft || _sharedThumbnailDraft.selected_text_box_id !== bid) selectTextBoxData(bid);
         const box = getActiveThumbnailTextBox();
         dragging = { type: 'text', startX: e.clientX, startY: e.clientY, origX: box?.x ?? _dlgCanvasTX, origY: box?.y ?? _dlgCanvasTY, moved: false };
       } else if (logoEl) {
@@ -9976,6 +9994,7 @@
         dlgSelectDesignElement(eid);
       }
       e.preventDefault();
+      e.stopImmediatePropagation();
     });
 
     // Click empty canvas deselects everything so the user previews the viewer's view.
@@ -10104,7 +10123,13 @@
       renderDialogOverlayLayer();
     });
 
-    document.addEventListener('mouseup', function() { if (dragging) _dlgSetGuides(null, null); dragging = null; });
+    document.addEventListener('mouseup', function() {
+      if (dragging) {
+        _dlgSetGuides(null, null);
+        if (!dragging.moved && (dragging.type === 'text' || dragging.type === 'elem' || dragging.type === 'logo')) renderDialogOverlayLayer();
+      }
+      dragging = null;
+    });
   })();
 
   // "Done — Use This Thumbnail" → render canvas → capture blob
