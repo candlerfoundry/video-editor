@@ -1662,3 +1662,12 @@ Regression risk: Medium (drag/render).
 - BACKEND_BUILD -> 2026-06-17-captions (server.py must be updated for these).
 - NOTE: line spacing for burned captions is not supported by libass (no
   line-spacing style field), so it was not added.
+
+## Phase 5 — launcher facelift (June 17, 2026)
+- Launcher renamed "App Launcher" (window title, label, exe/spec/build names).
+- New tech-logo rocket icon (launcher/rocket.ico); foundry.ico removed.
+- Launcher window draws a rocket (tk Canvas) and uses rocket-themed copy:
+  subtitle "Mission control — prepping for launch", status "Fueling up…" /
+  "Cleared for launch", button "Launch 🚀".
+- spec/build.bat bundle rocket.ico (icon + --add-data) and output "App Launcher.exe".
+  NOTE: the .exe must be rebuilt via launcher/build.bat to pick this up.

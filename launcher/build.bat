@@ -1,5 +1,5 @@
 @echo off
-title Building Foundry Video Editor Launcher
+title Building App Launcher
 echo Installing PyInstaller...
 python -m pip install pyinstaller -q
 if errorlevel 1 (
@@ -10,7 +10,7 @@ if errorlevel 1 (
 )
 
 echo Building launcher...
-python -m PyInstaller --onefile --windowed --icon foundry.ico --name "Foundry Video Editor" launcher.py
+python -m PyInstaller --onefile --windowed --icon rocket.ico --add-data "rocket.ico;." --name "App Launcher" launcher.py
 if errorlevel 1 (
   echo.
   echo Build failed.

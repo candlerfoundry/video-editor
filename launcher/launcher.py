@@ -1,5 +1,5 @@
 """
-Foundry Video Editor - Desktop Launcher
+App Launcher - Desktop Launcher
 Starts the local backend silently, then opens the web app in the browser.
 Double-click this script (or the compiled .exe) to use.
 """
@@ -35,6 +35,19 @@ DOT_GREEN = '#2D6A4F'
 DOT_RED = '#CC2200'
 ORANGE = '#E8541A'
 ORANGE_HOV = '#C94516'
+CREAM = '#FAFAF2'
+AMBER = '#F5A623'
+SKY = '#41B6E6'
+NAVY = '#1E2530'
+
+
+def _resource_path(name):
+    """Path to a bundled resource (works for PyInstaller onefile and source)."""
+    base = getattr(sys, '_MEIPASS', None)
+    if base and os.path.isfile(os.path.join(base, name)):
+        return os.path.join(base, name)
+    here = os.path.dirname(os.path.abspath(sys.executable if getattr(sys, 'frozen', False) else __file__))
+    return os.path.join(here, name)
 
 
 class LauncherApp:
@@ -48,30 +61,55 @@ class LauncherApp:
         self.root.after(0, self._launch_sequence)
 
     def _build_window(self):
-        self.root.title('Foundry Video Editor')
+        self.root.title('App Launcher')
         try:
-            _icon = os.path.join(os.path.dirname(os.path.abspath(sys.executable if getattr(sys, 'frozen', False) else __file__)), 'foundry.ico')
+            _icon = _resource_path('rocket.ico')
             if os.path.isfile(_icon):
                 self.root.iconbitmap(_icon)
         except Exception:
             pass
-        self.root.geometry('360x500')
+        self.root.geometry('380x600')
         self.root.resizable(False, False)
         self.root.configure(bg=BG)
         self.root.protocol('WM_DELETE_WINDOW', self._on_close)
 
+    def _build_rocket(self):
+        c = tk.Canvas(self.root, width=360, height=132, bg=BG, highlightthickness=0)
+        c.pack(pady=(26, 0))
+        cx = 180
+        # flame
+        c.create_polygon(cx, 130, cx - 13, 104, cx + 13, 104, fill=AMBER, outline='')
+        c.create_polygon(cx, 121, cx - 6, 104, cx + 6, 104, fill=CREAM, outline='')
+        # fins
+        c.create_polygon(cx - 22, 70, cx - 22, 102, cx - 42, 104, fill=ORANGE, outline='')
+        c.create_polygon(cx + 22, 70, cx + 22, 102, cx + 42, 104, fill=ORANGE, outline='')
+        # body
+        c.create_oval(cx - 22, 92, cx + 22, 116, fill=CREAM, outline='')
+        c.create_rectangle(cx - 22, 56, cx + 22, 104, fill=CREAM, outline='')
+        # nose cone
+        c.create_polygon(cx, 16, cx - 22, 60, cx + 22, 60, fill=ORANGE, outline='')
+        c.create_rectangle(cx - 22, 50, cx + 22, 62, fill=ORANGE, outline='')
+        # window
+        c.create_oval(cx - 13, 63, cx + 13, 89, fill=NAVY, outline='')
+        c.create_oval(cx - 8, 68, cx + 8, 84, fill=SKY, outline='')
+        # motion ticks
+        for dy in (74, 86, 98):
+            c.create_line(cx - 58, dy, cx - 44, dy, fill='#3A3A3A', width=3)
+            c.create_line(cx + 44, dy, cx + 58, dy, fill='#3A3A3A', width=3)
+
     def _build_ui(self):
+        self._build_rocket()
         tk.Label(
             self.root,
-            text='Foundry Video Editor',
+            text='App Launcher',
             bg=BG,
             fg=WHITE,
-            font=('Arial', 16, 'bold')
-        ).pack(pady=(40, 2))
+            font=('Arial', 18, 'bold')
+        ).pack(pady=(8, 2))
 
         tk.Label(
             self.root,
-            text='The Candler Foundry',
+            text='Mission control \u2014 prepping for launch',
             bg=BG,
             fg=MUTED,
             font=('Arial', 11)
@@ -92,7 +130,7 @@ class LauncherApp:
             1, 1, 11, 11, fill=DOT_GRAY, outline=''
         )
 
-        self._status_var = tk.StringVar(value='Starting backend...')
+        self._status_var = tk.StringVar(value='Fueling up\u2026')
         self._status_label = tk.Label(
             status_row,
             textvariable=self._status_var,
@@ -108,7 +146,7 @@ class LauncherApp:
 
         self._btn = tk.Button(
             btn_frame,
-            text='Open Video Editor',
+            text='Launch \U0001F680',
             bg=ORANGE,
             fg=WHITE,
             activebackground=ORANGE_HOV,
@@ -276,7 +314,7 @@ class LauncherApp:
             try:
                 with urllib.request.urlopen(HEALTH_URL, timeout=1) as resp:
                     if resp.status == 200:
-                        self._set_status('Backend running', DOT_GREEN)
+                        self._set_status('Cleared for launch', DOT_GREEN)
                         self._log_line('[launcher] Backend ready')
                         self._enable_btn()
                         return

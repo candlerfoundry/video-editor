@@ -1,16 +1,16 @@
-# Foundry Video Editor — Launcher Setup
+# App Launcher — Setup
 
 ## First time only
 
 1. Download this folder from Dropbox: `Scripts/Video Editor Downloads/foundry-video-editor-backend/`
-2. Make sure `server.py` is in the **same folder** as `Foundry Video Editor.exe`
-3. Double-click `Foundry Video Editor.exe`
+2. Make sure `server.py` is in the **same folder** as `App Launcher.exe`
+3. Double-click `App Launcher.exe`
 
 The launcher will install dependencies automatically and open the editor in your browser.
 
 ## Every time after that
 
-Just double-click `Foundry Video Editor.exe` — that's it.
+Just double-click `App Launcher.exe` — that's it.
 
 ## Troubleshooting
 
