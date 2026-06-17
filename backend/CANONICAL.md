@@ -1580,3 +1580,15 @@ Regression risk: Medium (drag/render).
   projects, each slimmed to its selected frame. The Thumbnails tab renders these
   as a "Saved Thumbnails" gallery (`loadThumbnailGallery`) with per-card Open
   (re-open in composer) and Download (render PNG) actions. Loaded on tab open.
+
+## Thumbnail editor Phase 1 (June 17, 2026)
+- Fonts: removed Poppins, Boogaloo, Just Another Hand, Patrick Hand SC. Added
+  Covered By Your Grace, Permanent Marker, Rock Salt, Shadows Into Light Two,
+  Waiting for the Sunrise (Google Fonts). Default text font is now Handmade Sans.
+- Create Thumbnail window is freely resizable via a bottom-right corner grip
+  (startThumbResize); adds class `user-resized`; Expand/Collapse clears it.
+- Canva-style color popover (openColorPopover) replaces the swatch grids for
+  text color, background color, and element color. Includes a rainbow custom-hex
+  control + hex field, the refined FOUNDRY_PALETTE (dropped CF Orange #E8541A,
+  CF Amber #F5A623, CF Green #2D6A4F), and a Recent/in-this-design row backed by
+  localStorage `fve_recent_colors` + colorsUsedInDesign().

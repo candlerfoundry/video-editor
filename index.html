@@ -7,7 +7,7 @@
   <link rel="icon" type="image/png" href="brand/foundry-f-orange.png">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600;700&family=Bebas+Neue&family=Cormorant+Garamond:wght@400;500;600;700&family=DM+Sans:wght@400;500;600;700&family=Inter:wght@400;500;600;700&family=Lora:wght@400;500;600;700&family=Montserrat:wght@400;500;600;700&family=Oswald:wght@400;500;600;700&family=Playfair+Display:wght@600;700&family=Spectral:wght@400;500;600;700&family=Poppins:wght@400;500;600;700;800;900&family=Boogaloo&family=Just+Another+Hand&family=Patrick+Hand+SC&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600;700&family=Bebas+Neue&family=Cormorant+Garamond:wght@400;500;600;700&family=DM+Sans:wght@400;500;600;700&family=Inter:wght@400;500;600;700&family=Lora:wght@400;500;600;700&family=Montserrat:wght@400;500;600;700&family=Oswald:wght@400;500;600;700&family=Playfair+Display:wght@600;700&family=Spectral:wght@400;500;600;700&family=Covered+By+Your+Grace&family=Permanent+Marker&family=Rock+Salt&family=Shadows+Into+Light+Two&family=Waiting+for+the+Sunrise&display=swap" rel="stylesheet">
   <style>
     @font-face {
       font-family: 'Handmade Sans';
@@ -1605,6 +1605,10 @@
     #dialog-thumb { max-width: min(1100px, 96vw); }
     #dialog-thumb.expanded { max-width: 99vw; max-height: 99vh; }
     #dialog-thumb.expanded .dialog-body { max-height: calc(99vh - 120px); }
+    #dialog-thumb.user-resized { max-width: none; max-height: none; display: flex; flex-direction: column; }
+    #dialog-thumb.user-resized .dialog-body { max-height: none; flex: 1 1 auto; }
+    .dlg-resize-grip { position: absolute; right: 3px; bottom: 3px; width: 18px; height: 18px; display: flex; align-items: flex-end; justify-content: flex-end; color: var(--muted); cursor: nwse-resize; z-index: 60; opacity: 0.6; }
+    .dlg-resize-grip:hover { opacity: 1; color: var(--orange); }
     .dialog-header {
       display: flex; align-items: center; gap: 12px;
       padding: 18px 24px; border-bottom: 1px solid var(--border);
@@ -2082,6 +2086,17 @@
     }
     .color-swatch:hover { transform: scale(1.12); }
     .color-swatch.selected { border-color: var(--orange) !important; }
+    .color-trigger { width: 30px; height: 30px; border-radius: 8px; border: 1px solid var(--border-2); cursor: pointer; padding: 0; flex-shrink: 0; box-shadow: inset 0 0 0 1px rgba(255,255,255,0.25); }
+    .color-trigger:hover { transform: scale(1.06); }
+    .color-pop { position: fixed; z-index: 10000; width: 236px; background: var(--bg); border: 1px solid var(--border); border-radius: 12px; box-shadow: 0 12px 34px rgba(0,0,0,0.22); padding: 12px; font-family: var(--font); }
+    .color-pop h5 { font-size: 10px; font-weight: 700; letter-spacing: 0.07em; text-transform: uppercase; color: var(--muted); margin: 0 0 7px; }
+    .color-pop .cp-grid { display: flex; flex-wrap: wrap; gap: 7px; margin-bottom: 12px; }
+    .cp-sw { width: 24px; height: 24px; border-radius: 50%; border: 1px solid rgba(0,0,0,0.15); cursor: pointer; padding: 0; transition: transform 100ms; }
+    .cp-sw:hover { transform: scale(1.14); }
+    .cp-sw.sel { box-shadow: 0 0 0 2px var(--orange); }
+    .cp-rainbow { width: 26px; height: 26px; border-radius: 50%; cursor: pointer; flex-shrink: 0; border: 1px solid rgba(0,0,0,0.2); background: conic-gradient(from 0deg, #ff0000, #ffee00, #00ff2f, #00d9ff, #0026ff, #ff00e1, #ff0000); }
+    .cp-hexrow { display: flex; gap: 8px; align-items: center; margin-bottom: 12px; position: relative; }
+    .cp-hexrow input#cp-hex { flex: 1; font-family: var(--font); font-size: 12.5px; padding: 6px 8px; border: 1px solid var(--border); border-radius: 7px; color: var(--text); background: var(--surface); }
   </style>
 </head>
 <body>
@@ -2731,11 +2746,12 @@
                   <div>
                     <div class="thumb-control-label">Font</div>
                     <select class="thumb-font-select" id="thumb-font-select" onchange="updateThumbText();renderThumbCanvas()">
-                      <option value="Poppins" style="font-family:'Poppins'">Poppins</option>
-                      <option value="Boogaloo" style="font-family:'Boogaloo'">Boogaloo</option>
-                      <option value="'Just Another Hand'" style="font-family:'Just Another Hand'">Just Another Hand</option>
-                      <option value="'Patrick Hand SC'" style="font-family:'Patrick Hand SC'">Patrick Hand SC</option>
                   <option value="'Handmade Sans'" style="font-family:'Handmade Sans'">Handmade Sans</option>
+                  <option value="'Covered By Your Grace'" style="font-family:'Covered By Your Grace'">Covered By Your Grace</option>
+                  <option value="'Permanent Marker'" style="font-family:'Permanent Marker'">Permanent Marker</option>
+                  <option value="'Rock Salt'" style="font-family:'Rock Salt'">Rock Salt</option>
+                  <option value="'Shadows Into Light Two'" style="font-family:'Shadows Into Light Two'">Shadows Into Light Two</option>
+                  <option value="'Waiting for the Sunrise'" style="font-family:'Waiting for the Sunrise'">Waiting for the Sunrise</option>
                     </select>
                   </div>
 
@@ -5500,7 +5516,7 @@
 
   let _thumbStyle          = 'lower_third';
   let _thumbTitle          = '';
-  let _thumbFontFamily     = 'Poppins';
+  let _thumbFontFamily     = 'Handmade Sans';
   let _thumbFontSize       = 64;     // canvas-resolution px (1280-wide canvas)
   let _thumbCanvasTX       = 640;    // text center X in canvas-space (0-1280)
   let _thumbCanvasTY       = 590;    // text center Y in canvas-space (0-720)
@@ -5534,7 +5550,7 @@
       color: overrides.color || '#ffffff',
       background_color: overrides.background_color || '#111111',
       background_opacity: overrides.background_opacity ?? 70,
-      font_family: overrides.font_family || 'Poppins',
+      font_family: overrides.font_family || 'Handmade Sans',
       font_size: overrides.font_size ?? 64,
       letter_spacing: overrides.letter_spacing ?? 0,
       line_spacing: overrides.line_spacing ?? 1.25,
@@ -5601,7 +5617,7 @@
         color: options.textColor || '#ffffff',
         background_color: options.backgroundColor || '#111111',
         background_opacity: options.backgroundOpacity ?? 70,
-        font_family: options.fontFamily || 'Poppins',
+        font_family: options.fontFamily || 'Handmade Sans',
         font_size: options.fontSize ?? 64,
         shadow: options.shadowOn ?? true,
       });
@@ -5688,7 +5704,7 @@
     _dlgTargetFormat = _sharedThumbnailDraft.target_format || 'instagram';
     _dlgVideoInfo = _sharedThumbnailDraft.video_info || null;
     _dlgTitle = box?.text || '';
-    _dlgFontFamily = box?.font_family || 'Poppins';
+    _dlgFontFamily = box?.font_family || 'Handmade Sans';
     _dlgFontSize = box?.font_size || 64;
     _dlgTextColor = box?.color || '#ffffff';
     _dlgBackgroundColor = box?.background_color || '#111111';
@@ -6196,14 +6212,14 @@
 
   function openThumbEditor() {
     // Reset controls to defaults
-    _thumbFontFamily     = 'Poppins';
+    _thumbFontFamily     = 'Handmade Sans';
     _thumbFontSize       = 64;
     _thumbTextColor      = '#ffffff';
     _thumbShadowOn       = true;
     _thumbOverlayOpacity = 0;
 
     const fontSel = document.getElementById('thumb-font-select');
-    if (fontSel) fontSel.value = 'Poppins';
+    if (fontSel) fontSel.value = 'Handmade Sans';
     const sizeSlider = document.getElementById('thumb-size-slider');
     if (sizeSlider) sizeSlider.value = 64;
     const shadowChk = document.getElementById('thumb-shadow-toggle');
@@ -6410,7 +6426,7 @@
   function fitFontSizeToBox(box) {
     const ctx = _txMeasureCtx;
     const W = Math.max(20, box.width || 200), H = Math.max(20, box.height || 100);
-    const fam = (box.font_family || 'Poppins');
+    const fam = (box.font_family || 'Handmade Sans');
     const ls  = box.line_spacing || 1.25;
     let lo = 8, hi = Math.max(8, Math.floor(H)), best = 8;
     while (lo <= hi) {
@@ -6432,7 +6448,7 @@
   // Natural height a box needs to contain its text at a given font size.
   function thumbTextBlockHeight(box, fontSize) {
     const ctx = _txMeasureCtx;
-    const fam = (box.font_family || 'Poppins');
+    const fam = (box.font_family || 'Handmade Sans');
     ctx.font = `700 ${fontSize}px ${fam}, sans-serif`;
     ctx.letterSpacing = (box.letter_spacing || 0) + 'px';
     const { padX, padY } = thumbBoxPad(box);
@@ -6471,7 +6487,7 @@
         };
     const isObjectBox = typeof titleOrBox === 'object' && titleOrBox !== null;
     if (isObjectBox) ensureTextBoxDims(box);
-    const resolvedFontFamily = box.font_family || 'Poppins';
+    const resolvedFontFamily = box.font_family || 'Handmade Sans';
     const resolvedX = box.x ?? (W * 0.5);
     const resolvedY = box.y ?? 0;
     const resolvedAlign = box.align || 'center';
@@ -7080,7 +7096,7 @@
   let _savedClipExport = null;
   let _dlgStyle          = 'lower_third';
   let _dlgTitle          = '';
-  let _dlgFontFamily     = 'Poppins';
+  let _dlgFontFamily     = 'Handmade Sans';
   let _dlgLetterSpacing  = 0;
   let _dlgLineSpacing    = 1.25;
   let _dlgAlign          = 'center';
@@ -7896,12 +7912,48 @@
   function toggleThumbDialogExpand() {
     const dlg = document.getElementById('dialog-thumb');
     const btn = document.getElementById('btn-thumb-expand');
+    dlg.classList.remove('user-resized');
+    dlg.style.width = ''; dlg.style.height = ''; dlg.style.left = ''; dlg.style.top = ''; dlg.style.margin = '';
     const expanded = dlg.classList.toggle('expanded');
     btn.textContent = expanded ? 'Collapse \u2199' : 'Expand \u2197';
     requestAnimationFrame(() => {
       updateStyleCardPreviews(_dlgFrames, _dlgSelectedFrame, 'dlg-style-canvas-');
       if (document.getElementById('dlg-state-editor').style.display !== 'none') dlgDrawCanvas();
     });
+  }
+
+  // Free drag-resize of the Create Thumbnail window via the corner grip.
+  function _thumbResizeReflow() {
+    try {
+      updateStyleCardPreviews(_dlgFrames, _dlgSelectedFrame, 'dlg-style-canvas-');
+      if (document.getElementById('dlg-state-editor').style.display !== 'none') dlgDrawCanvas();
+    } catch (_) {}
+  }
+  function startThumbResize(e) {
+    e.preventDefault(); e.stopPropagation();
+    const dlg = document.getElementById('dialog-thumb');
+    if (!dlg) return;
+    const r = dlg.getBoundingClientRect();
+    const st = { x: e.clientX, y: e.clientY, w: r.width, h: r.height };
+    dlg.classList.add('user-resized');
+    dlg.classList.remove('expanded');
+    const exb = document.getElementById('btn-thumb-expand'); if (exb) exb.textContent = 'Expand \u2197';
+    dlg.style.margin = '0'; dlg.style.left = r.left + 'px'; dlg.style.top = r.top + 'px';
+    let raf = null;
+    function mv(ev) {
+      const w = Math.max(560, Math.min(window.innerWidth * 0.99,  st.w + (ev.clientX - st.x)));
+      const h = Math.max(420, Math.min(window.innerHeight * 0.99, st.h + (ev.clientY - st.y)));
+      dlg.style.width = w + 'px'; dlg.style.height = h + 'px';
+      if (raf) return;
+      raf = requestAnimationFrame(() => { raf = null; _thumbResizeReflow(); });
+    }
+    function up() {
+      document.removeEventListener('mousemove', mv);
+      document.removeEventListener('mouseup', up);
+      _thumbResizeReflow();
+    }
+    document.addEventListener('mousemove', mv);
+    document.addEventListener('mouseup', up);
   }
 
   function dlgShowState(state) {
@@ -8152,7 +8204,7 @@
 
   function dlgOpenEditor() {
     const box = getActiveThumbnailTextBox();
-    _dlgFontFamily = box?.font_family || 'Poppins';
+    _dlgFontFamily = box?.font_family || 'Handmade Sans';
     _dlgFontSize = box?.font_size || 64;
     _dlgTextColor = box?.color || '#ffffff';
     _dlgBackgroundColor = box?.background_color || '#111111';
@@ -8204,6 +8256,7 @@
     dlgDrawCanvas();
     requestAnimationFrame(() => dlgUpdateText());
     renderDesignElementList();
+    refreshColorTriggers();
   }
 
   function dlgBackToTitles() { dlgShowState('editor'); }
@@ -8299,6 +8352,162 @@
     renderDialogOverlayLayer();
     dlgDrawCanvas();
   }
+
+  // ════════════════════════════════════════════════════════════
+  // Canva-style color popover (text, background, element colors)
+  // ════════════════════════════════════════════════════════════
+  const FOUNDRY_PALETTE = [
+    { hex: '#FAFAF2', name: 'Brand Cream' },
+    { hex: '#1E2530', name: 'Brand Navy' },
+    { hex: '#C84826', name: 'Brand Orange' },
+    { hex: '#F6A85D', name: 'Brand Yellow' },
+    { hex: '#103EDF', name: 'TheoEd Blue' },
+    { hex: '#41B6E6', name: 'TheoEd Light Blue' },
+    { hex: '#111111', name: 'Black' },
+    { hex: '#FFFFFF', name: 'White' },
+  ];
+  let _recentColors = [];
+  try { _recentColors = JSON.parse(localStorage.getItem('fve_recent_colors') || '[]') || []; } catch (_) { _recentColors = []; }
+
+  function _normHex(h) {
+    if (!h) return '';
+    h = String(h).trim();
+    if (h[0] !== '#') h = '#' + h;
+    if (/^#[0-9a-fA-F]{3}$/.test(h)) h = '#' + h[1]+h[1]+h[2]+h[2]+h[3]+h[3];
+    return /^#[0-9a-fA-F]{6}$/.test(h) ? h.toLowerCase() : '';
+  }
+  function _isLight(hex) {
+    hex = _normHex(hex); if (!hex) return false;
+    const r = parseInt(hex.slice(1,3),16), g = parseInt(hex.slice(3,5),16), b = parseInt(hex.slice(5,7),16);
+    return (0.299*r + 0.587*g + 0.114*b) > 200;
+  }
+  function _cpAddRecent(hex) {
+    hex = _normHex(hex); if (!hex) return;
+    if (FOUNDRY_PALETTE.some(p => p.hex.toLowerCase() === hex)) return;
+    _recentColors = [hex, ..._recentColors.filter(c => c !== hex)].slice(0, 12);
+    try { localStorage.setItem('fve_recent_colors', JSON.stringify(_recentColors)); } catch (_) {}
+  }
+  function colorsUsedInDesign() {
+    const seen = new Set(), out = [];
+    const push = h => { h = _normHex(h); if (h && !seen.has(h)) { seen.add(h); out.push(h); } };
+    const d = _sharedThumbnailDraft;
+    if (d) {
+      (d.text_boxes || []).forEach(b => {
+        push(b.color);
+        if ((b.background_opacity ?? 0) > 0) push(b.background_color);
+        (b.runs || []).forEach(r => push(r.color));
+      });
+      (d.graphic_elements || []).forEach(e => push(e.color));
+    }
+    return out;
+  }
+
+  let _cpOnPick = null, _cpCurrent = '';
+  function _ensureColorPop() {
+    let pop = document.getElementById('fve-color-pop');
+    if (!pop) {
+      pop = document.createElement('div');
+      pop.id = 'fve-color-pop';
+      pop.className = 'color-pop';
+      pop.style.display = 'none';
+      document.body.appendChild(pop);
+    }
+    return pop;
+  }
+  function _cpSwatch(hex, name) {
+    const sel = (hex.toLowerCase() === _cpCurrent) ? ' sel' : '';
+    const lb = _isLight(hex) ? 'border-color:#ccc;' : '';
+    return '<button class="cp-sw'+sel+'" style="background:'+hex+';'+lb+'" title="'+(name||hex)+'" onclick="_cpPick(\''+hex+'\')"></button>';
+  }
+  function _cpRender() {
+    const pop = _ensureColorPop();
+    const brand = FOUNDRY_PALETTE.map(p => _cpSwatch(p.hex, p.name)).join('');
+    const used = colorsUsedInDesign().filter(h => !FOUNDRY_PALETTE.some(p => p.hex.toLowerCase() === h));
+    const recents = [];
+    const seen = new Set(used);
+    used.forEach(h => recents.push(h));
+    _recentColors.forEach(h => { if (!seen.has(h)) { seen.add(h); recents.push(h); } });
+    const recentHtml = recents.slice(0, 12).map(h => _cpSwatch(h)).join('');
+    pop.innerHTML =
+      '<h5>Custom</h5>' +
+      '<div class="cp-hexrow">' +
+        '<button class="cp-rainbow" title="Pick any color" onclick="document.getElementById(\'cp-native\').click()"></button>' +
+        '<input id="cp-hex" type="text" spellcheck="false" value="'+(_cpCurrent||'')+'" placeholder="#000000" ' +
+          'onkeydown="if(event.key===\'Enter\'){_cpPick(this.value);}" onchange="_cpPick(this.value)">' +
+        '<input type="color" id="cp-native" value="'+(_normHex(_cpCurrent)||'#000000')+'" ' +
+          'style="position:absolute;width:0;height:0;opacity:0;pointer-events:none;" oninput="_cpPick(this.value)">' +
+      '</div>' +
+      '<h5>Foundry colors</h5>' +
+      '<div class="cp-grid">' + brand + '</div>' +
+      (recentHtml ? ('<h5>Recent &amp; in this design</h5><div class="cp-grid">' + recentHtml + '</div>') : '');
+  }
+  function _cpPick(hex) {
+    hex = _normHex(hex);
+    if (!hex) return;
+    _cpCurrent = hex;
+    _cpAddRecent(hex);
+    if (_cpOnPick) { try { _cpOnPick(hex); } catch (_) {} }
+    _cpRender();
+  }
+  function _cpOutside(e) {
+    const pop = document.getElementById('fve-color-pop');
+    if (pop && !pop.contains(e.target)) closeColorPopover();
+  }
+  function _cpKey(e) { if (e.key === 'Escape') closeColorPopover(); }
+  function closeColorPopover() {
+    const pop = document.getElementById('fve-color-pop');
+    if (pop) pop.style.display = 'none';
+    document.removeEventListener('mousedown', _cpOutside, true);
+    document.removeEventListener('keydown', _cpKey, true);
+  }
+  function openColorPopover(anchor, current, onPick) {
+    const pop = _ensureColorPop();
+    _cpOnPick = onPick;
+    _cpCurrent = _normHex(current) || '';
+    _cpRender();
+    pop.style.display = 'block';
+    const r = anchor.getBoundingClientRect();
+    const pw = pop.offsetWidth, ph = pop.offsetHeight;
+    let left = r.left, top = r.bottom + 6;
+    if (left + pw > window.innerWidth - 8) left = Math.max(8, window.innerWidth - pw - 8);
+    if (top + ph > window.innerHeight - 8) top = Math.max(8, r.top - ph - 6);
+    pop.style.left = left + 'px';
+    pop.style.top = top + 'px';
+    setTimeout(function() {
+      document.addEventListener('mousedown', _cpOutside, true);
+      document.addEventListener('keydown', _cpKey, true);
+    }, 0);
+  }
+
+  function _setTriggerColor(el, hex) {
+    if (!el) return;
+    el.style.background = hex;
+    el.style.borderColor = _isLight(hex) ? '#ccc' : 'transparent';
+  }
+  function refreshColorTriggers() {
+    _setTriggerColor(document.getElementById('dlg-textcolor-trigger'), _dlgTextColor || '#ffffff');
+    _setTriggerColor(document.getElementById('dlg-bgcolor-trigger'), _dlgBackgroundColor || '#111111');
+  }
+  function openTextColorPopover(anchor) {
+    openColorPopover(anchor, _dlgTextColor || '#ffffff', function(hex) {
+      setDlgColorFree(hex);
+      _setTriggerColor(anchor, hex);
+    });
+  }
+  function openBgColorPopover(anchor) {
+    openColorPopover(anchor, _dlgBackgroundColor || '#111111', function(hex) {
+      setDlgBackgroundColor(hex);
+      _setTriggerColor(anchor, hex);
+    });
+  }
+  function openElemColorPopover(anchor, id) {
+    const found = (_sharedThumbnailDraft?.graphic_elements || []).find(function(e) { return e.id === id; });
+    openColorPopover(anchor, (found && found.color) || '#c84826', function(hex) {
+      setDesignElemColor(id, hex);
+      _setTriggerColor(anchor, hex);
+    });
+  }
+
 
   function setDlgColor(hex, btn) {
     if (_dlgEditingTextId && _dlgApplyColorToSelection(hex)) {
@@ -8852,9 +9061,9 @@
     elems.forEach(function(e) {
       var label = e.type === 'image' ? (e.label || 'Logo') : (SHAPE_LABELS[e.shape_type] || e.shape_type || 'Shape');
       var colorInput = e.type === 'image' ? '' :
-        '<input type="color" value="' + escHtml(e.color || '#c84826') + '" title="Shape color" ' +
-        'style="width:24px;height:22px;border:1px solid var(--border);border-radius:5px;padding:0;cursor:pointer;" ' +
-        'onclick="event.stopPropagation();" oninput="setDesignElemColor(\'' + escHtml(e.id) + '\', this.value)"> ';
+        '<button type="button" class="color-trigger" title="Shape color" ' +
+        'style="width:24px;height:22px;border-radius:5px;background:' + escHtml(e.color || '#c84826') + ';" ' +
+        'onclick="event.stopPropagation();openElemColorPopover(this,\'' + escHtml(e.id) + '\')"></button> ';
       var isSelected = _dlgSelectedElemId === e.id;
       rows += '<div class="design-elem-list-row' + (isSelected ? ' selected' : '') + '" onclick="dlgSelectDesignElement(\'' + escHtml(e.id) + '\')">' +
         '<span style="text-transform:capitalize;">' + escHtml(label) + '</span>' +
@@ -9062,7 +9271,7 @@
       div.style.whiteSpace = 'normal';
       div.style.wordBreak  = 'break-word';
       div.style.zIndex     = isSelected ? '20' : '1';
-      div.style.fontFamily = (box.font_family || 'Poppins') + ', sans-serif';
+      div.style.fontFamily = (box.font_family || 'Handmade Sans') + ', sans-serif';
       div.style.fontSize   = (fit / Math.max(scaleX, scaleY)) + 'px';
       div.style.letterSpacing = ((box.letter_spacing || 0) / Math.max(scaleX, scaleY)) + 'px';
       div.style.lineHeight = (box.line_spacing || 1.25);
@@ -10421,6 +10630,7 @@
       <button class="dialog-icon-btn" onclick="closeThumbDialog()">&#x2715; Close</button>
     </div>
   </div>
+  <div class="dlg-resize-grip" id="dlg-resize-grip" title="Drag to resize" onmousedown="startThumbResize(event)"><svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><path d="M14 6 L6 14 M14 11 L11 14" stroke="currentColor" stroke-width="1.6" fill="none" stroke-linecap="round"/></svg></div>
   <div class="dialog-body">
 
     <!-- STATE: processing -->
@@ -10548,11 +10758,12 @@
               <div>
                 <div class="thumb-editor-label">Font</div>
                 <select class="thumb-editor-select" id="dlg-font-select" onchange="dlgUpdateText()">
-                  <option value="Poppins" style="font-family:'Poppins'">Poppins</option>
-                  <option value="Boogaloo" style="font-family:'Boogaloo'">Boogaloo</option>
-                  <option value="'Just Another Hand'" style="font-family:'Just Another Hand'">Just Another Hand</option>
-                  <option value="'Patrick Hand SC'" style="font-family:'Patrick Hand SC'">Patrick Hand SC</option>
                   <option value="'Handmade Sans'" style="font-family:'Handmade Sans'">Handmade Sans</option>
+                  <option value="'Covered By Your Grace'" style="font-family:'Covered By Your Grace'">Covered By Your Grace</option>
+                  <option value="'Permanent Marker'" style="font-family:'Permanent Marker'">Permanent Marker</option>
+                  <option value="'Rock Salt'" style="font-family:'Rock Salt'">Rock Salt</option>
+                  <option value="'Shadows Into Light Two'" style="font-family:'Shadows Into Light Two'">Shadows Into Light Two</option>
+                  <option value="'Waiting for the Sunrise'" style="font-family:'Waiting for the Sunrise'">Waiting for the Sunrise</option>
                 </select>
               </div>
               <div>
@@ -10578,19 +10789,9 @@
             </div>
             <div style="margin-top:14px;">
               <div class="thumb-editor-label">Text Color</div>
-              <div class="thumb-inline-row">
-                <button class="color-swatch selected" style="background:#FFFFFF;border-color:#ccc;" onclick="setDlgColor('#ffffff',this)" title="White"></button>
-                <button class="color-swatch" style="background:#111111;" onclick="setDlgColor('#111111',this)" title="Black"></button>
-                <button class="color-swatch" style="background:#E8541A;" onclick="setDlgColor('#E8541A',this)" title="CF Orange"></button>
-                <button class="color-swatch" style="background:#F5A623;" onclick="setDlgColor('#F5A623',this)" title="CF Amber"></button>
-                <button class="color-swatch" style="background:#2D6A4F;" onclick="setDlgColor('#2D6A4F',this)" title="CF Green"></button>
-                <button class="color-swatch" style="background:#1E2530;" onclick="setDlgColor('#1E2530',this)" title="Brand Navy"></button>
-                <button class="color-swatch" style="background:#C84826;" onclick="setDlgColor('#C84826',this)" title="Brand Orange"></button>
-                <button class="color-swatch" style="background:#FAFAF2;border-color:#ccc;" onclick="setDlgColor('#FAFAF2',this)" title="Brand Cream"></button>
-                <button class="color-swatch" style="background:#F6A85D;" onclick="setDlgColor('#F6A85D',this)" title="Brand Yellow"></button>
-                <button class="color-swatch" style="background:#103EDF;" onclick="setDlgColor('#103EDF',this)" title="TheoEd Blue"></button>
-                <button class="color-swatch" style="background:#41B6E6;" onclick="setDlgColor('#41B6E6',this)" title="TheoEd Light Blue"></button>
-                <input type="color" id="dlg-color-custom" value="#ffffff" style="width:28px;height:28px;border:1px solid var(--border);border-radius:50%;cursor:pointer;padding:0;flex-shrink:0;" oninput="setDlgColorFree(this.value)">
+              <div class="thumb-inline-row" style="gap:9px;align-items:center;">
+                <button type="button" class="color-trigger" id="dlg-textcolor-trigger" style="background:#ffffff;border-color:#ccc;" onclick="openTextColorPopover(this)" title="Choose text color"></button>
+                <span style="font-size:12px;color:var(--text-2);">Foundry colors, custom hex &amp; recents</span>
               </div>
             </div>
             <div class="thumb-editor-grid" style="margin-top:14px;">
@@ -10600,16 +10801,8 @@
               </div>
               <div>
                 <div class="thumb-editor-label">Background Color</div>
-                <div class="thumb-inline-row">
-                  <button class="color-swatch" style="background:#111111;" onclick="setDlgBackgroundColor('#111111')" title="Dark"></button>
-                  <button class="color-swatch" style="background:#E8541A;" onclick="setDlgBackgroundColor('#E8541A')" title="CF Orange"></button>
-                  <button class="color-swatch" style="background:#C84826;" onclick="setDlgBackgroundColor('#C84826')" title="Brand Orange"></button>
-                  <button class="color-swatch" style="background:#1E2530;" onclick="setDlgBackgroundColor('#1E2530')" title="Brand Navy"></button>
-                  <button class="color-swatch" style="background:#2D6A4F;" onclick="setDlgBackgroundColor('#2D6A4F')" title="CF Green"></button>
-                  <button class="color-swatch" style="background:#FAFAF2;border-color:#ccc;" onclick="setDlgBackgroundColor('#FAFAF2')" title="Brand Cream"></button>
-                  <button class="color-swatch" style="background:#103EDF;" onclick="setDlgBackgroundColor('#103EDF')" title="TheoEd Blue"></button>
-                  <button class="color-swatch" style="background:#41B6E6;" onclick="setDlgBackgroundColor('#41B6E6')" title="TheoEd Light Blue"></button>
-                  <input type="color" id="dlg-bg-color-custom" value="#111111" style="width:28px;height:28px;border:1px solid var(--border);border-radius:50%;cursor:pointer;padding:0;flex-shrink:0;" oninput="setDlgBackgroundColor(this.value)">
+                <div class="thumb-inline-row" style="gap:9px;align-items:center;">
+                  <button type="button" class="color-trigger" id="dlg-bgcolor-trigger" style="background:#111111;" onclick="openBgColorPopover(this)" title="Choose background color"></button>
                 </div>
               </div>
             </div>
