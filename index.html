@@ -1514,12 +1514,13 @@
     .tx-word.tx-bleep:hover { background: #FDE68A; }
     .tx-mode-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 8px; }
     .clip-cuts-list { margin-top: 12px; border: 1px solid var(--border); border-radius: 8px; padding: 8px 10px; background: var(--surface); }
-    .clip-cuts-list .cuts-title { font-size: 10px; font-weight: 700; letter-spacing: 0.07em; text-transform: uppercase; color: var(--muted); margin-bottom: 6px; }
-    .cut-row { display: flex; align-items: center; gap: 4px; flex-wrap: wrap; font-size: 12px; color: var(--text-2); padding: 3px 0; }
-    .cut-row .cut-label { font-weight: 600; color: var(--text); min-width: 42px; }
-    .cut-row .cut-t { font-family: monospace; min-width: 60px; text-align: center; }
-    .cut-row button { border: 1px solid var(--border-2); background: var(--bg); border-radius: 5px; cursor: pointer; padding: 1px 7px; font-size: 11px; color: var(--text-2); }
+    .clip-cuts-list .cuts-title { font-size: 12px; font-weight: 700; letter-spacing: 0.07em; text-transform: uppercase; color: var(--muted); margin-bottom: 7px; }
+    .cut-row { display: flex; align-items: center; gap: 5px; flex-wrap: wrap; font-size: 14.5px; color: var(--text-2); padding: 4px 0; }
+    .cut-row .cut-label { font-weight: 600; color: var(--text); }
+    .cut-row .cut-t { font-family: monospace; min-width: 66px; text-align: center; }
+    .cut-row button { border: 1px solid var(--border-2); background: var(--bg); border-radius: 5px; cursor: pointer; padding: 2px 9px; font-size: 13px; color: var(--text-2); }
     .cut-row button:hover { border-color: var(--orange); color: var(--orange); }
+    .cut-num { display: inline-flex; align-items: center; justify-content: center; min-width: 17px; height: 17px; padding: 0 3px; border-radius: 9px; background: #cc2200; color: #fff; font-size: 10.5px; font-weight: 700; line-height: 1; vertical-align: super; margin-right: 2px; }
     .tx-zone-row { display: flex; gap: 10px; align-items: flex-start; }
     .tx-mode-rail {
       position: sticky; top: 12px;
@@ -2518,7 +2519,7 @@
                 </div>
                 <div class="tx-mode-rail">
                   <span class="tx-mode-rail-label">Click<br>mode</span>
-                  <button type="button" id="tx-mode-scrub" class="tx-mode-btn active" onclick="setTxEditMode('scrub')" title="Clicking a word jumps the video to that moment (default)">&#9654;<br>Scrub</button>
+                  <button type="button" id="tx-mode-scrub" class="tx-mode-btn active" onclick="setTxEditMode('scrub')" title="Normal mode — NOT an edit. Click a word to jump the video there; click a struck-out (removed) word to put it back.">&#9654;<br>Normal</button>
                   <button type="button" id="tx-mode-cut" class="tx-mode-btn" onclick="setTxEditMode('cut')" title="Click or drag across words to REMOVE them and their video frames (red strikethrough). Click a struck word to restore.">&#9986;<br>Edit<br>out</button>
                   <button type="button" id="tx-mode-bleep" class="tx-mode-btn" onclick="setTxEditMode('bleep')" title="Click or drag across words to BLEEP their audio (a censor tone replaces the words; amber highlight). Click a bleeped word to restore.">&#128263;<br>Bleep</button>
                   <button type="button" class="tx-mode-btn" onclick="editorUndo()" title="Undo the last edit (Ctrl+Z) — works for cuts, bleeps, caption splits/joins, and text edits">&#8630;<br>Undo</button>
@@ -3962,10 +3963,17 @@
     // Sync playhead line with video currentTime
     editVid.addEventListener('timeupdate', () => {
       updatePlayhead();
-      if (!editVid.paused && editorBleepRanges && editorBleepRanges.length) {
-        const _bl = isTimeBleeped(editVid.currentTime);
-        editVid.muted = _bl;
-        if (_bl) startBleepTone(); else stopBleepTone();
+      if (!editVid.paused) {
+        if (editorCutRanges && editorCutRanges.length) {
+          const _ct = editVid.currentTime;
+          const _cut = editorCutRanges.find(r => _ct >= r.start - 0.02 && _ct < r.end - 0.02);
+          if (_cut) { editVid.currentTime = Math.min(_cut.end + 0.01, (editorOutTime || editVid.duration)); }
+        }
+        if (editorBleepRanges && editorBleepRanges.length) {
+          const _bl = isTimeBleeped(editVid.currentTime);
+          editVid.muted = _bl;
+          if (_bl) startBleepTone(); else stopBleepTone();
+        }
       }
     });
   })();
@@ -5182,7 +5190,7 @@
     el.style.display = 'block';
     el.innerHTML = '<div class="cuts-title">Fine-tune edit-out cuts &mdash; nudge ±0.05s, preview the join</div>' +
       cuts.map(function (r, i) {
-        return '<div class="cut-row"><span class="cut-label">Cut ' + (i + 1) + '</span>' +
+        return '<div class="cut-row"><span class="cut-num">' + (i + 1) + '</span><span class="cut-label">Cut</span>' +
           'start <button type="button" onclick="nudgeCut(' + i + ',\'start\',-0.05)">◀</button>' +
           '<span class="cut-t">' + fmtPrecise(r.start) + '</span>' +
           '<button type="button" onclick="nudgeCut(' + i + ',\'start\',0.05)">▶</button>' +
@@ -5445,6 +5453,7 @@
 
     let firstInClipEl  = null;
     let clipEndAdded   = false;
+    let _cutRun = 0, _prevCutWord = false;
 
     _wordsData.forEach((w, i) => {
       const wStart = w.start ?? 0;
@@ -5476,6 +5485,15 @@
 
       const cut = inClip && isWordCut(w);
       const bleeped = inClip && !cut && isWordBleeped(w);
+      if (cut && !_prevCutWord) {
+        _cutRun++;
+        const nm = document.createElement('span');
+        nm.className = 'cut-num';
+        nm.textContent = _cutRun;
+        nm.title = 'Edit-out cut ' + _cutRun;
+        panel.appendChild(nm);
+      }
+      _prevCutWord = cut;
       const span = document.createElement('span');
       span.className = 'tx-word' + (isPre ? ' tx-out-pre' : isPost ? ' tx-out-post' : ' tx-in-clip') + (cut ? ' tx-cut' : '') + (bleeped ? ' tx-bleep' : '');
       span.dataset.idx   = i;
