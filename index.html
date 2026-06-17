@@ -1890,16 +1890,18 @@
       height: auto;
     }
     .thumb-editor-layout {
-      display: grid;
-      grid-template-columns: minmax(480px, 1.8fr) 330px;
-      gap: 24px;
-      align-items: start;
-    }
-    .thumb-editor-left,
-    .thumb-editor-sidebar {
       display: flex;
-      flex-direction: column;
-      gap: 16px;
+      align-items: flex-start;
+      gap: 20px;
+    }
+    .thumb-editor-left   { order: 1; flex: 0 0 300px; display: flex; flex-direction: column; gap: 16px; }
+    .thumb-editor-canvas { order: 2; flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; align-items: center; position: sticky; top: 0; }
+    .thumb-editor-sidebar{ order: 3; flex: 0 0 340px; display: flex; flex-direction: column; gap: 16px; }
+    @media (max-width: 1180px) {
+      .thumb-editor-layout { flex-wrap: wrap; }
+      .thumb-editor-canvas { order: 1; flex-basis: 100%; position: static; }
+      .thumb-editor-left   { order: 2; flex: 1 1 280px; }
+      .thumb-editor-sidebar{ order: 3; flex: 1 1 320px; }
     }
     .thumb-inline-row {
       display: flex;
@@ -6315,6 +6317,33 @@
     canvas.height = cfg.height;
   }
 
+  // Size the editor canvas responsively to fill the available space (fixes the
+  // dead zones when the window is expanded or on large monitors).
+  function fitDlgCanvas() {
+    const wrap = document.getElementById('dlg-canvas-wrap');
+    const col = wrap && wrap.parentElement;
+    const ed = document.getElementById('dlg-state-editor');
+    if (!wrap || !col || !ed || ed.style.display === 'none') return;
+    const cfg = getThumbTargetConfig(_dlgTargetFormat || 'instagram');
+    const aspect = cfg.width / cfg.height;
+    const colW = col.clientWidth || 440;
+    const body = wrap.closest('.dialog-body');
+    const bodyH = body ? body.clientHeight : 600;
+    const availW = Math.max(220, colW - 8);
+    const availH = Math.max(280, bodyH - 70);
+    let h = availH, w = h * aspect;
+    if (w > availW) { w = availW; h = w / aspect; }
+    w = Math.min(w, cfg.width * 1.1); h = w / aspect;
+    wrap.style.width = Math.round(w) + 'px';
+    wrap.style.height = Math.round(h) + 'px';
+    renderDialogOverlayLayer();
+  }
+  let _fitRaf = null;
+  window.addEventListener('resize', function () {
+    if (_fitRaf) return;
+    _fitRaf = requestAnimationFrame(function () { _fitRaf = null; fitDlgCanvas(); });
+  });
+
   function applyStylePreviewRatio(prefix, format) {
     const cfg = getThumbTargetConfig(format);
     const ratio = `${cfg.width} / ${cfg.height}`;
@@ -6339,6 +6368,7 @@
     setThumbPreviewRatio(format);
     applyStylePreviewRatio('dlg-style-canvas-', format);
     applyEditorCanvasLayout('dlg-canvas', 'dlg-canvas-wrap', format);
+    requestAnimationFrame(fitDlgCanvas);
   }
 
   function getCoverSourceRect(srcW, srcH, destW, destH) {
@@ -7927,6 +7957,7 @@
     btn.textContent = expanded ? 'Collapse \u2199' : 'Expand \u2197';
     requestAnimationFrame(() => {
       updateStyleCardPreviews(_dlgFrames, _dlgSelectedFrame, 'dlg-style-canvas-');
+      fitDlgCanvas();
       if (document.getElementById('dlg-state-editor').style.display !== 'none') dlgDrawCanvas();
     });
   }
@@ -7935,6 +7966,7 @@
   function _thumbResizeReflow() {
     try {
       updateStyleCardPreviews(_dlgFrames, _dlgSelectedFrame, 'dlg-style-canvas-');
+      fitDlgCanvas();
       if (document.getElementById('dlg-state-editor').style.display !== 'none') dlgDrawCanvas();
     } catch (_) {}
   }
@@ -8263,7 +8295,7 @@
     dlgBuildHeroState();
     dlgShowState('editor');
     dlgDrawCanvas();
-    requestAnimationFrame(() => dlgUpdateText());
+    requestAnimationFrame(() => { dlgUpdateText(); fitDlgCanvas(); });
     renderDesignElementList();
     refreshColorTriggers();
   }
@@ -10815,12 +10847,14 @@
 
     <div id="dlg-state-editor" style="display:none;">
       <div class="thumb-editor-layout">
-        <div class="thumb-editor-left">
+        <div class="thumb-editor-canvas">
           <div class="thumb-canvas-wrap" id="dlg-canvas-wrap">
             <canvas id="dlg-canvas" width="1280" height="720"></canvas>
             <div id="dlg-overlay-layer"></div>
           </div>
-          <p style="font-size:12px;color:var(--muted);margin-top:-4px;">Drag text or the logo directly on the thumbnail to reposition them.</p>
+          <p style="font-size:12px;color:var(--muted);margin-top:8px;text-align:center;">Drag text or the logo directly on the thumbnail to reposition them.</p>
+        </div>
+        <div class="thumb-editor-left">
 
           <div class="card" style="padding:12px 16px;">
             <div class="thumb-inline-row" style="justify-content:space-between;align-items:center;margin-bottom:4px;">

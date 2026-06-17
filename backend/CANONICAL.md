@@ -1609,3 +1609,13 @@ Regression risk: Medium (drag/render).
   (single) or 2 (two-tone), wired to the Canva color popover.
 - Fix: color popover now re-parents into the open modal <dialog> (top layer) so
   it isn't hidden behind the modal.
+
+## Thumbnail editor Phase 3 — layout redesign (June 17, 2026)
+- Editor is now a 3-column flex layout (order: left controls 300px · canvas · right
+  sidebar 340px). The canvas lives in its own .thumb-editor-canvas column that
+  grows to fill space and is sticky while the side controls scroll.
+- fitDlgCanvas() sizes #dlg-canvas-wrap responsively from the available column
+  width and the visible dialog-body height (aspect-preserving, capped ~1.1x source
+  resolution), so the canvas scales up when the window is expanded / on big
+  monitors instead of leaving dead space. Called on open, format change, expand,
+  drag-resize, and window resize. Below 1180px the layout wraps (canvas on top).
