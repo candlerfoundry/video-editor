@@ -1588,6 +1588,20 @@
       box-shadow: 0 20px 60px rgba(0,0,0,0.28);
     }
     dialog::backdrop { background: rgba(0,0,0,0.58); backdrop-filter: blur(2px); }
+    #dialog-confirm-generic { max-width: min(420px, 92vw); }
+    .ctx-menu {
+      position: fixed; z-index: 9999; min-width: 150px;
+      background: var(--bg); border: 1px solid var(--border);
+      border-radius: 8px; box-shadow: 0 10px 30px rgba(0,0,0,0.24);
+      padding: 5px;
+    }
+    .ctx-menu button {
+      display: flex; align-items: center; gap: 8px; width: 100%;
+      background: none; border: none; text-align: left;
+      font-family: var(--font); font-size: 13px; font-weight: 500;
+      color: var(--text); padding: 8px 10px; border-radius: 6px; cursor: pointer;
+    }
+    .ctx-menu button:hover { background: rgba(204,34,0,0.10); color: #cc2200; }
     #dialog-thumb { max-width: min(1100px, 96vw); }
     #dialog-thumb.expanded { max-width: 99vw; max-height: 99vh; }
     #dialog-thumb.expanded .dialog-body { max-height: calc(99vh - 120px); }
@@ -3097,7 +3111,7 @@
       const lastView = project?.meta?.last_view === 'thumbnails' ? 'thumbnails' : 'clips';
 
       return (
-        '<button class="sidebar-project-item' + (isActive ? ' active' : '') + '" type="button" oncontextmenu="deleteRecentProject(\'' + escHtml(project.id) + '\', event); return false;" onclick="selectRecentProject(\'' + escHtml(project.id) + '\', \'' + lastView + '\')">' +
+        '<button class="sidebar-project-item' + (isActive ? ' active' : '') + '" type="button" oncontextmenu="showProjectContextMenu(\'' + escHtml(project.id) + '\', event); return false;" onclick="selectRecentProject(\'' + escHtml(project.id) + '\', \'' + lastView + '\')">' +
           '<div class="sidebar-project-item-head">' +
             '<div class="recent-project-name" title="' + escHtml(getProjectLabel(project)) + '">' + escHtml(getProjectLabel(project)) + '</div>' +
             '<div class="recent-project-date">' + escHtml(formatProjectDate(project.last_modified)) + '</div>' +
@@ -3109,10 +3123,9 @@
     }).join('');
   }
 
-  async function deleteRecentProject(projectId, ev) {
-    if (ev) { ev.stopPropagation(); ev.preventDefault(); }
+  // Actually remove a project (no prompts — callers confirm first).
+  async function performProjectDelete(projectId) {
     if (!projectId) return;
-    if (!confirm('Remove this project from Recent Projects?\n\nThis deletes its saved clip/thumbnail markers only — your original video and any exported clips are NOT touched.')) return;
     try {
       const res = await fetch(BACKEND + '/projects/delete', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ project_id: projectId }) });
       const data = await res.json().catch(function(){ return {}; });
@@ -3124,6 +3137,99 @@
         alert('Could not delete the project. If you just updated, restart the launcher so the backend has the delete feature.');
       }
     } catch (_) { alert('Could not reach the backend to delete the project.'); }
+  }
+
+  // ── Right-click context menu for recent projects ──
+  let _projectCtxMenuEl = null;
+
+  function closeProjectContextMenu() {
+    if (_projectCtxMenuEl && _projectCtxMenuEl.parentNode) _projectCtxMenuEl.parentNode.removeChild(_projectCtxMenuEl);
+    _projectCtxMenuEl = null;
+    document.removeEventListener('mousedown', _onProjectCtxOutside, true);
+    document.removeEventListener('keydown', _onProjectCtxKey, true);
+    window.removeEventListener('scroll', closeProjectContextMenu, true);
+  }
+  function _onProjectCtxOutside(e) {
+    if (_projectCtxMenuEl && !_projectCtxMenuEl.contains(e.target)) closeProjectContextMenu();
+  }
+  function _onProjectCtxKey(e) {
+    if (e.key === 'Escape') closeProjectContextMenu();
+  }
+
+  // Right-click a recent project: show a small "Delete" menu UNDER the cursor.
+  // Choosing Delete then opens a centred confirmation. Right-click alone never deletes.
+  function showProjectContextMenu(projectId, ev) {
+    if (ev) { ev.preventDefault(); ev.stopPropagation(); }
+    closeProjectContextMenu();
+    const menu = document.createElement('div');
+    menu.className = 'ctx-menu';
+    const del = document.createElement('button');
+    del.type = 'button';
+    del.innerHTML = '<span style="font-size:14px;line-height:1;">&times;</span> Delete project';
+    del.onclick = function(e) {
+      e.stopPropagation();
+      closeProjectContextMenu();
+      confirmDeleteRecentProject(projectId);
+    };
+    menu.appendChild(del);
+    menu.style.visibility = 'hidden';
+    document.body.appendChild(menu);
+    // Position under the cursor, clamped to the viewport.
+    const mw = menu.offsetWidth, mh = menu.offsetHeight;
+    let x = (ev ? ev.clientX : 0) + 2;
+    let y = (ev ? ev.clientY : 0) + 2;
+    if (x + mw > window.innerWidth - 8)  x = Math.max(8, window.innerWidth - mw - 8);
+    if (y + mh > window.innerHeight - 8) y = Math.max(8, window.innerHeight - mh - 8);
+    menu.style.left = x + 'px';
+    menu.style.top  = y + 'px';
+    menu.style.visibility = 'visible';
+    _projectCtxMenuEl = menu;
+    setTimeout(function() {
+      document.addEventListener('mousedown', _onProjectCtxOutside, true);
+      document.addEventListener('keydown', _onProjectCtxKey, true);
+      window.addEventListener('scroll', closeProjectContextMenu, true);
+    }, 0);
+    return false;
+  }
+
+  // Centred confirmation, then delete.
+  function confirmDeleteRecentProject(projectId, ev) {
+    if (ev) { ev.stopPropagation(); ev.preventDefault(); }
+    if (!projectId) return;
+    showCenteredConfirm({
+      title: 'Delete this project?',
+      message: 'This removes its saved clip/thumbnail markers only — your original video and any exported clips are <strong>NOT</strong> touched.',
+      confirmLabel: 'Delete',
+    }, function() { performProjectDelete(projectId); });
+  }
+
+  // Reusable centred confirm modal (native <dialog> centres in the viewport).
+  function showCenteredConfirm(opts, onConfirm) {
+    opts = opts || {};
+    let dlg = document.getElementById('dialog-confirm-generic');
+    if (!dlg) {
+      dlg = document.createElement('dialog');
+      dlg.id = 'dialog-confirm-generic';
+      dlg.innerHTML =
+        '<div class="dialog-header"><h2 id="confirm-generic-title"></h2></div>' +
+        '<div class="dialog-body"><p id="confirm-generic-msg" style="margin:0;font-size:14px;color:var(--text-2);line-height:1.6;"></p></div>' +
+        '<div class="dialog-footer">' +
+          '<button class="btn-ghost" id="confirm-generic-cancel" type="button">Cancel</button>' +
+          '<button class="btn" id="confirm-generic-ok" type="button">Delete</button>' +
+        '</div>';
+      document.body.appendChild(dlg);
+    }
+    dlg.querySelector('#confirm-generic-title').textContent = opts.title || 'Are you sure?';
+    dlg.querySelector('#confirm-generic-msg').innerHTML = opts.message || '';
+    let okBtn = dlg.querySelector('#confirm-generic-ok');
+    let cancelBtn = dlg.querySelector('#confirm-generic-cancel');
+    // Clone to clear any previous handlers.
+    const newOk = okBtn.cloneNode(true); okBtn.parentNode.replaceChild(newOk, okBtn);
+    const newCancel = cancelBtn.cloneNode(true); cancelBtn.parentNode.replaceChild(newCancel, cancelBtn);
+    newOk.textContent = opts.confirmLabel || 'Delete';
+    newCancel.onclick = function() { dlg.close(); };
+    newOk.onclick = function() { dlg.close(); try { onConfirm && onConfirm(); } catch (_) {} };
+    if (!dlg.open) dlg.showModal();
   }
 
   async function loadRecentProjects() {
@@ -3576,11 +3682,11 @@
             const lastView = project?.meta?.last_view === 'thumbnails' ? 'thumbnails' : 'clips';
             const hasSavedPath = !!(project?.source_path || project?.source_video?.path);
             return (
-              '<button class="sidebar-project-item' + (isActive ? ' active' : '') + '" type="button" oncontextmenu="deleteRecentProject(\'' + escHtml(project.id) + '\', event); return false;" onclick="selectRecentProject(\'' + escHtml(project.id) + '\', \'' + lastView + '\')">' +
+              '<button class="sidebar-project-item' + (isActive ? ' active' : '') + '" type="button" oncontextmenu="showProjectContextMenu(\'' + escHtml(project.id) + '\', event); return false;" onclick="selectRecentProject(\'' + escHtml(project.id) + '\', \'' + lastView + '\')">' +
                 '<div class="sidebar-project-item-head">' +
                   '<div class="recent-project-name" title="' + escHtml(getProjectLabel(project)) + '">' + escHtml(getProjectLabel(project)) + '</div>' +
                   '<div class="recent-project-date">' + escHtml(formatProjectDate(project.last_modified || project.updated_at)) + '</div>' +
-                  '<span class="recent-project-delete" title="Delete this project" onclick="deleteRecentProject(\'' + escHtml(project.id) + '\', event)">&times;</span>' +
+                  '<span class="recent-project-delete" title="Delete this project" onclick="confirmDeleteRecentProject(\'' + escHtml(project.id) + '\', event)">&times;</span>' +
                 '</div>' +
                 '<div class="sidebar-project-summary">' + escHtml(summary) + '</div>' +
                 (hasSavedPath ? '' : '<div class="sidebar-project-row"><span class="sidebar-project-dot"></span><span class="sidebar-project-status">Choose the original video once</span></div>') +
