@@ -1671,3 +1671,15 @@ Regression risk: Medium (drag/render).
   "Cleared for launch", button "Launch 🚀".
 - spec/build.bat bundle rocket.ico (icon + --add-data) and output "App Launcher.exe".
   NOTE: the .exe must be rebuilt via launcher/build.bat to pick this up.
+
+## Editor fixes + crisp icon (June 17, 2026 pm2)
+- Edit-out precision: cutBoundsForWords() clamps cut/bleep ranges to neighbour
+  word midpoints (using _wordsData by dataset.idx) so cutting no longer grabs the
+  previous/next word from Whisper's early word-start times. Applied to single
+  click and drag-select.
+- Clip editor "Back to results" now saves edits (clipEditorBack persists the full
+  clip_selected payload + local edited_clips upsert) with a "Saving… / ✓ Edits
+  saved" indicator, then returns. Edited clips show an "✎ Edited" badge in the
+  results list (seedEditedKeys + _editedClipKeys; real-edit detection).
+- Launcher rocket.ico regenerated with crisp native per-size frames (manual ICO
+  packer, sizes 16-256) instead of one downscaled image.

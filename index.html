@@ -869,6 +869,7 @@
     .score-grey   { background: #F3F4F6; color: #6B7280; }
     .cand-body { flex: 1; min-width: 0; }
     .cand-meta { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; flex-wrap: wrap; }
+    .cand-edited { font-size: 11px; font-weight: 600; color: var(--green); background: #EAF5EF; border: 1px solid #BFE3D0; border-radius: 999px; padding: 1px 9px; }
     .cand-ts {
       font-family: var(--font-mono); font-size: 12px;
       color: var(--orange); font-weight: 500;
@@ -2373,7 +2374,7 @@
         <!-- ── STAGE 3: Edit ── -->
         <div id="clips-stage3">
 
-          <button class="stage3-back" onclick="showStage(2)">
+          <button class="stage3-back" onclick="clipEditorBack()">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
             Back to results
           </button>
@@ -4288,9 +4289,10 @@
     // that single word — no dragging required.
     if (wordEl.classList.contains('tx-in-clip') && _txEditMode !== 'scrub') {
       pushEditorUndo(_txEditMode + '-word');
-      const wEnd = isNaN(tEnd) ? t + 0.3 : tEnd;
-      if (_txEditMode === 'cut') addCutRange(t, wEnd);
-      else { addBleepRange(t, wEnd); previewBleepBlip(); }
+      const _wi = parseInt(wordEl.dataset.idx);
+      const b = cutBoundsForWords(_wi, _wi, t, isNaN(tEnd) ? t + 0.3 : tEnd);
+      if (_txEditMode === 'cut') addCutRange(b.lo, b.hi);
+      else { addBleepRange(b.lo, b.hi); previewBleepBlip(); }
       updateAllEditorUI();
       return;
     }
@@ -4377,6 +4379,7 @@
 
   // ── Render Stage 2 candidate cards ──
   function renderCandidates(candidates) {
+    seedEditedKeys(candidates);
     const section = document.getElementById('candidates-section');
     section.innerHTML = '';
 
@@ -4402,6 +4405,7 @@
         '<div class="score-badge ' + scoreClass + '">' + score + '/10</div>' +
         '<div class="cand-body">' +
           '<div class="cand-meta">' +
+            (_editedClipKeys.has(clipEditKey(c)) ? '<span class="cand-edited">✎ Edited</span>' : '') +
             '<span class="cand-ts">' + startFmt + ' \u2014 ' + endFmt + '</span>' +
             '<span class="cand-dur">' + durSec + 's</span>' +
           '</div>' +
@@ -4897,6 +4901,18 @@
   function isTimeCut(t) {
     return editorCutRanges.some(r => t >= r.start && t < r.end);
   }
+  function cutBoundsForWords(i0, i1, fallbackLo, fallbackHi) {
+    const W = _wordsData || [];
+    let lo = fallbackLo, hi = fallbackHi;
+    const a = W[i0], b = W[i1];
+    if (a && a.start != null) lo = a.start;
+    if (b && b.end != null) hi = b.end;
+    const prev = W[i0 - 1], next = W[i1 + 1];
+    if (prev && prev.start != null && prev.end != null) { const pm = (prev.start + prev.end) / 2; if (lo <= pm) lo = pm + 0.012; }
+    if (next && next.start != null && next.end != null) { const nm = (next.start + next.end) / 2; if (hi >= nm) hi = nm - 0.012; }
+    if (hi - lo < 0.05) hi = lo + 0.05;
+    return { lo, hi };
+  }
   function isWordCut(w) {
     const mid = ((w.start ?? 0) + (w.end ?? w.start ?? 0)) / 2;
     return isTimeCut(mid);
@@ -5234,7 +5250,7 @@
       }
       const wordEl = e.target.closest('.tx-word');
       if (_txEditMode !== 'scrub' && wordEl && wordEl.classList.contains('tx-in-clip') && !wordEl.classList.contains('tx-cut')) {
-        _cutAnchor  = { s: parseFloat(wordEl.dataset.start), e: parseFloat(wordEl.dataset.end) };
+        _cutAnchor  = { s: parseFloat(wordEl.dataset.start), e: parseFloat(wordEl.dataset.end), idx: parseInt(wordEl.dataset.idx) };
         _cutCurrent = null;
         panel.style.userSelect = 'none';
         document.addEventListener('pointermove', onMove);
@@ -5261,7 +5277,7 @@
       } else if (_cutAnchor) {
         const wordEl = wordUnderPointer(e);
         if (!wordEl || !wordEl.classList.contains('tx-in-clip')) return;
-        _cutCurrent = { s: parseFloat(wordEl.dataset.start), e: parseFloat(wordEl.dataset.end) };
+        _cutCurrent = { s: parseFloat(wordEl.dataset.start), e: parseFloat(wordEl.dataset.end), idx: parseInt(wordEl.dataset.idx) };
         // Live highlight via classes only (no DOM rebuild during drag)
         const lo = Math.min(_cutAnchor.s, _cutCurrent.s);
         const hi = Math.max(_cutAnchor.e, _cutCurrent.e);
@@ -5283,11 +5299,12 @@
         updateAllEditorUI();
       } else if (_cutAnchor) {
         if (_cutCurrent && (_cutCurrent.s !== _cutAnchor.s || _cutCurrent.e !== _cutAnchor.e)) {
-          const lo = Math.min(_cutAnchor.s, _cutCurrent.s);
-          const hi = Math.max(_cutAnchor.e, _cutCurrent.e);
+          const i0 = Math.min(_cutAnchor.idx, _cutCurrent.idx);
+          const i1 = Math.max(_cutAnchor.idx, _cutCurrent.idx);
+          const b = cutBoundsForWords(i0, i1, Math.min(_cutAnchor.s, _cutCurrent.s), Math.max(_cutAnchor.e, _cutCurrent.e));
           pushEditorUndo(_txEditMode + '-drag');
-          if (_txEditMode === 'bleep') { addBleepRange(lo, hi); previewBleepBlip(); }
-          else addCutRange(lo, hi);
+          if (_txEditMode === 'bleep') { addBleepRange(b.lo, b.hi); previewBleepBlip(); }
+          else addCutRange(b.lo, b.hi);
           _txSuppressClick = true;
           updateAllEditorUI();
         } else {
@@ -7893,6 +7910,52 @@
     dlgShowState('processing');
     dlgSetStep(1);
     dlgGenerateThumbnail();
+  }
+
+  let _editedClipKeys = new Set();
+  function clipEditKey(c) { if (!c) return ''; return c.hook_line ? ('h:' + c.hook_line) : ('t:' + (c.start_time ?? 0) + '-' + (c.end_time ?? 0)); }
+  function _entryHasRealEdits(e, cand) {
+    if (!e) return false;
+    if ((e.cut_ranges || []).length || (e.bleep_ranges || []).length) return true;
+    if (e.caption_overrides && Object.keys(e.caption_overrides).length) return true;
+    if (e.caption_emphasis && Object.keys(e.caption_emphasis).length) return true;
+    if ((e.caption_breaks || []).length) return true;
+    if (cand && (Math.abs((e.start_time ?? cand.start_time ?? 0) - (cand.start_time ?? 0)) > 0.05 || Math.abs((e.end_time ?? cand.end_time ?? 0) - (cand.end_time ?? 0)) > 0.05)) return true;
+    return false;
+  }
+  function seedEditedKeys(candidates) {
+    _editedClipKeys = new Set();
+    const ec = (activeProject && activeProject.edited_clips) || [];
+    (candidates || []).forEach(function (c) { const e = ec.find(function (x) { return c.hook_line && x.hook_line === c.hook_line; }); if (_entryHasRealEdits(e, c)) _editedClipKeys.add(clipEditKey(c)); });
+  }
+  function currentEditHasRealEdits() {
+    return !!(editorCutRanges.length || editorBleepRanges.length || Math.abs(editorInTime - origInTime) > 0.05 || Math.abs(editorOutTime - origOutTime) > 0.05 ||
+      (editorCaptionOverrides && Object.keys(editorCaptionOverrides).length) || (editorCaptionEmphasis && Object.keys(editorCaptionEmphasis).length) || (editorCaptionBreaks && editorCaptionBreaks.length));
+  }
+  function _buildClipEditPayload() {
+    return { start_time: editorInTime, end_time: editorOutTime, hook_line: _editCandidate ? (_editCandidate.hook_line || '') : '',
+      mode: (_editCandidate && _editCandidate.part != null) ? 'split' : 'viral', cut_ranges: editorCutRanges, bleep_ranges: editorBleepRanges,
+      caption_style: editorCaptionStyle, caption_overrides: editorCaptionOverrides, caption_emphasis: editorCaptionEmphasis, caption_breaks: editorCaptionBreaks || [] };
+  }
+  async function clipEditorBack() {
+    const btn = document.querySelector('.stage3-back');
+    const hasEdits = !!_editCandidate && currentEditHasRealEdits();
+    if (_editCandidate) {
+      const payload = _buildClipEditPayload();
+      if (activeProject) {
+        if (!activeProject.edited_clips) activeProject.edited_clips = [];
+        const k = _editCandidate.hook_line;
+        const entry = Object.assign({}, payload, { updated_at: new Date().toISOString() });
+        const idx = activeProject.edited_clips.findIndex(function (x) { return k && x.hook_line === k; });
+        if (idx >= 0) activeProject.edited_clips[idx] = entry; else activeProject.edited_clips.push(entry);
+      }
+      if (hasEdits) _editedClipKeys.add(clipEditKey(_editCandidate)); else _editedClipKeys.delete(clipEditKey(_editCandidate));
+      if (btn && !btn.dataset.label) btn.dataset.label = btn.innerHTML;
+      if (btn && hasEdits) btn.innerHTML = 'Saving…';
+      try { await updateProject('clip_selected', payload); } catch (_) {}
+      if (btn && hasEdits) btn.innerHTML = '✓ Edits saved';
+    }
+    setTimeout(function () { showStage(2); renderCandidates(_candidates); if (btn && btn.dataset.label) btn.innerHTML = btn.dataset.label; }, hasEdits ? 480 : 0);
   }
 
   function openDoneEditingModal() {
