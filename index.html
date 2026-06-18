@@ -2485,8 +2485,8 @@
                   <span id="ai-emphasis-status" style="font-size:11px;color:var(--green);"></span>
                 </div>
                 <div class="thumb-inline-row" style="align-items:center;gap:10px;margin-top:8px;">
-                  <span style="font-size:10px;font-weight:700;letter-spacing:0.06em;text-transform:uppercase;color:var(--muted);">Size <span id="caption-size-val">100</span>%</span>
-                  <input type="range" id="caption-size-slider" min="70" max="300" value="100" style="width:110px;accent-color:var(--orange);" oninput="setCaptionSizeScale(this.value)">
+                  <span style="font-size:10px;font-weight:700;letter-spacing:0.06em;text-transform:uppercase;color:var(--muted);">Size <span id="caption-size-val">200</span>%</span>
+                  <input type="range" id="caption-size-slider" min="70" max="300" value="200" style="width:110px;accent-color:var(--orange);" oninput="setCaptionSizeScale(this.value)">
                   <span style="font-size:10px;font-weight:700;letter-spacing:0.06em;text-transform:uppercase;color:var(--muted);">Emphasis style</span>
                   <label class="thumb-inline-row" style="font-size:11px;cursor:pointer;gap:3px;"><input type="checkbox" id="emph-color" checked onchange="setEmphasisOption('emphasis_color_on', this.checked)" style="accent-color:var(--orange);">Color</label>
                   <label class="thumb-inline-row" style="font-size:11px;cursor:pointer;gap:3px;"><input type="checkbox" id="emph-caps" checked onchange="setEmphasisOption('emphasis_caps', this.checked)" style="accent-color:var(--orange);">CAPS</label>
@@ -2519,8 +2519,8 @@
                 </div>
                 <div class="tx-mode-rail">
                   <span class="tx-mode-rail-label">Click<br>mode</span>
-                  <button type="button" id="tx-mode-scrub" class="tx-mode-btn active" onclick="setTxEditMode('scrub')" title="Normal mode — NOT an edit. Click a word to jump the video there; click a struck-out (removed) word to put it back.">&#9654;<br>Normal</button>
-                  <button type="button" id="tx-mode-cut" class="tx-mode-btn" onclick="setTxEditMode('cut')" title="Click or drag across words to REMOVE them and their video frames (red strikethrough). Click a struck word to restore.">&#9986;<br>Edit<br>out</button>
+                  <button type="button" id="tx-mode-scrub" class="tx-mode-btn active" onclick="setTxEditMode('scrub')" title="Review mode — NOT an edit. Click any word to jump the video there. Click a struck-out (removed) word to add just that one word back.">&#9654;<br>Review</button>
+                  <button type="button" id="tx-mode-cut" class="tx-mode-btn" onclick="setTxEditMode('cut')" title="Click or drag across words to REMOVE them and their video frames (red strikethrough). Click a single struck word to add just that word back.">&#9986;<br>Edit<br>out</button>
                   <button type="button" id="tx-mode-bleep" class="tx-mode-btn" onclick="setTxEditMode('bleep')" title="Click or drag across words to BLEEP their audio (a censor tone replaces the words; amber highlight). Click a bleeped word to restore.">&#128263;<br>Bleep</button>
                   <button type="button" class="tx-mode-btn" onclick="editorUndo()" title="Undo the last edit (Ctrl+Z) — works for cuts, bleeps, caption splits/joins, and text edits">&#8630;<br>Undo</button>
                 </div>
@@ -2998,7 +2998,7 @@
   // Must match BACKEND_BUILD in server.py — bumped together whenever the
   // frontend/backend contract changes. A mismatch means the user is running
   // an old backend (launcher not restarted after a deploy).
-  const EXPECTED_BACKEND_BUILD = '2026-06-17-coverproof';
+  const EXPECTED_BACKEND_BUILD = '2026-06-18-thumbdelete';
   if (document.fonts && document.fonts.load) { document.fonts.load("700 64px 'Handmade Sans'").catch(function(){}); }
   let _staleBackendWarned = false;
   function showStaleBackendBanner(stale) {
@@ -4288,9 +4288,10 @@
     const t    = parseFloat(wordEl.dataset.start);
     const tEnd = parseFloat(wordEl.dataset.end);
     if (wordEl.classList.contains('tx-cut')) {
-      // Click a struck-out word -> restore its whole cut range
+      // Click a struck-out word -> restore JUST that word (split the cut range
+      // around it). To restore a whole region at once, use the ✕ in the cut list.
       pushEditorUndo('uncut');
-      removeCutRangeAt((t + (isNaN(tEnd) ? t : tEnd)) / 2);
+      restoreCutWord(parseInt(wordEl.dataset.idx), t, tEnd);
       updateAllEditorUI();
       return;
     }
@@ -4957,6 +4958,23 @@
     editorCutRanges = editorCutRanges.filter(r => !(t >= r.start && t < r.end));
     updateClipDuration();
   }
+  // Restore a single word from inside a cut: split its containing range into the
+  // portion before the word and the portion after, dropping only the word's span.
+  function restoreCutWord(wi, t, tEnd) {
+    if (isNaN(wi)) { removeCutRangeAt((t + (isNaN(tEnd) ? t : tEnd)) / 2); return; }
+    const b = cutBoundsForWords(wi, wi, t, isNaN(tEnd) ? t + 0.3 : tEnd);
+    const mid = (b.lo + b.hi) / 2;
+    const idx = editorCutRanges.findIndex(r => mid >= r.start && mid < r.end);
+    if (idx < 0) { removeCutRangeAt(mid); return; }
+    const r = editorCutRanges[idx];
+    const before = { start: r.start, end: Math.max(r.start, b.lo) };
+    const after  = { start: Math.min(r.end, b.hi), end: r.end };
+    editorCutRanges.splice(idx, 1);
+    if (before.end - before.start >= 0.05) editorCutRanges.push(before);
+    if (after.end  - after.start  >= 0.05) editorCutRanges.push(after);
+    editorCutRanges.sort((a, b) => a.start - b.start);
+    updateClipDuration();
+  }
   function clampCutRangesToClip() {
     editorCutRanges = editorCutRanges
       .map(r => ({ start: Math.max(r.start, editorInTime), end: Math.min(r.end, editorOutTime) }))
@@ -5006,12 +5024,41 @@
     updateClipTranscriptHighlight();
   });
 
+  // Bind a video so playback skips cut-out ranges, applies bleeps, and stops
+  // exactly at the out-point. Shared by the main Play button and Play-selection.
+  function _attachSelStop(video) {
+    if (video._selStop) video.removeEventListener('timeupdate', video._selStop);
+    video._selStop = function () {
+      if (video.currentTime >= editorOutTime - 0.03) {
+        video.muted = false;
+        stopBleepTone();
+        video.pause();
+        video.removeEventListener('timeupdate', video._selStop);
+        video._selStop = null;
+        return;
+      }
+      const cut = editorCutRanges.find(r =>
+        video.currentTime >= r.start - 0.02 && video.currentTime < r.end - 0.02);
+      if (cut) video.currentTime = Math.min(cut.end + 0.01, editorOutTime);
+      const bleeped = isTimeBleeped(video.currentTime);
+      video.muted = bleeped;
+      if (bleeped) startBleepTone(); else stopBleepTone();
+    };
+    video.addEventListener('timeupdate', video._selStop);
+  }
   function togglePlayPause() {
     const vid = document.getElementById('edit-video');
     if (!vid || !vid.src) return;
     if (vid.paused) {
       if (currentlyPlaying && currentlyPlaying !== vid) { currentlyPlaying.pause(); currentlyPlaying.currentTime = 0; }
       currentlyPlaying = vid;
+      // Keep the main Play button bounded to the selected clip. If the playhead
+      // is outside the in/out window (e.g. a clip near the very start of the
+      // long-form), jump to the in-point instead of replaying from 0.
+      if (vid.currentTime < editorInTime - 0.05 || vid.currentTime >= editorOutTime - 0.05) {
+        vid.currentTime = editorInTime;
+      }
+      _attachSelStop(vid);
       vid.play().catch(() => {});
     } else {
       vid.pause();
@@ -5041,24 +5088,7 @@
     // timeupdate listener (not setTimeout) so playback skips cut-out ranges
     // and stops exactly at the out-point even after seeks. Matches the
     // togglePreview()/toggleSplitPreview() pattern (CANONICAL section 18).
-    if (video._selStop) video.removeEventListener('timeupdate', video._selStop);
-    video._selStop = function () {
-      if (video.currentTime >= editorOutTime - 0.03) {
-        video.muted = false;
-        stopBleepTone();
-        video.pause();
-        video.removeEventListener('timeupdate', video._selStop);
-        video._selStop = null;
-        return;
-      }
-      const cut = editorCutRanges.find(r =>
-        video.currentTime >= r.start - 0.02 && video.currentTime < r.end - 0.02);
-      if (cut) video.currentTime = Math.min(cut.end + 0.01, editorOutTime);
-      const bleeped = isTimeBleeped(video.currentTime);
-      video.muted = bleeped;
-      if (bleeped) startBleepTone(); else stopBleepTone();
-    };
-    video.addEventListener('timeupdate', video._selStop);
+    _attachSelStop(video);
     video.currentTime = editorInTime;
     video.play().catch(() => {});
   }
@@ -5958,11 +5988,14 @@
     } catch (err) { return ''; }
   }
 
+  function _galleryGroupKey(item) {
+    return _galleryStripExt(item.project_name || item.source_filename || 'Other');
+  }
   async function loadThumbnailGallery() {
     const grid = document.getElementById('thumb-gallery-grid');
     const status = document.getElementById('thumb-gallery-status');
     if (!grid) return;
-    if (status) { status.style.display = 'block'; status.textContent = 'Loading saved thumbnails…'; }
+    if (status) { status.style.display = 'block'; status.textContent = 'Loading saved thumbnails\u2026'; }
     grid.innerHTML = '';
     try {
       const res = await fetch(BACKEND + '/thumbnails/list');
@@ -5973,46 +6006,91 @@
       return;
     }
     if (!_thumbGalleryItems.length) {
-      if (status) { status.style.display = 'block'; status.textContent = 'No saved thumbnails yet. Build one in the composer and click “Save Draft” — it will show up here.'; }
+      if (status) { status.style.display = 'block'; status.textContent = 'No saved thumbnails yet. Build one in the composer and click \u201cSave Draft\u201d \u2014 it will show up here.'; }
       return;
     }
     if (status) status.style.display = 'none';
     try { await document.fonts.ready; } catch (_) {}
+
+    // Group by project, preserving the newest-first order the backend returned.
+    const groups = [];
+    const byKey = {};
     for (let i = 0; i < _thumbGalleryItems.length; i++) {
-      const item = _thumbGalleryItems[i];
-      const card = document.createElement('div');
-      card.style.cssText = 'border:1px solid var(--border);border-radius:10px;overflow:hidden;background:var(--surface);display:flex;flex-direction:column;';
-      const imgWrap = document.createElement('div');
-      imgWrap.style.cssText = 'background:#111;aspect-ratio:' + _galleryRatio(item.target_format) + ';display:flex;align-items:center;justify-content:center;overflow:hidden;cursor:pointer;';
-      imgWrap.title = 'Open in composer';
-      imgWrap.onclick = function() { openThumbnailFromGallery(i); };
-      const img = document.createElement('img');
-      img.alt = item.source_filename || 'Saved thumbnail';
-      img.style.cssText = 'width:100%;height:100%;object-fit:contain;display:block;';
-      img.src = await _renderGalleryPreview(item.draft);
-      imgWrap.appendChild(img);
-      const body = document.createElement('div');
-      body.style.cssText = 'padding:10px 12px;display:flex;flex-direction:column;gap:8px;';
-      const title = document.createElement('div');
-      title.style.cssText = 'font-size:12.5px;font-weight:600;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;';
-      title.textContent = _galleryStripExt(item.source_filename || item.project_name || 'Thumbnail');
-      const meta = document.createElement('div');
-      meta.style.cssText = 'font-size:11px;color:var(--muted);';
-      const dateStr = _galleryDate(item.updated_at);
-      meta.textContent = [dateStr, item.target_format].filter(Boolean).join(' · ');
-      const btnRow = document.createElement('div');
-      btnRow.style.cssText = 'display:flex;gap:8px;';
-      const openBtn = document.createElement('button');
-      openBtn.className = 'btn-ghost btn-sm'; openBtn.type = 'button'; openBtn.textContent = 'Open';
-      openBtn.onclick = function() { openThumbnailFromGallery(i); };
-      const dlBtn = document.createElement('button');
-      dlBtn.className = 'btn-ghost btn-sm'; dlBtn.type = 'button'; dlBtn.textContent = 'Download';
-      dlBtn.onclick = function() { downloadThumbnailFromGallery(i); };
-      btnRow.appendChild(openBtn); btnRow.appendChild(dlBtn);
-      body.appendChild(title); body.appendChild(meta); body.appendChild(btnRow);
-      card.appendChild(imgWrap); card.appendChild(body);
-      grid.appendChild(card);
+      const key = _galleryGroupKey(_thumbGalleryItems[i]);
+      if (!byKey[key]) { byKey[key] = []; groups.push(key); }
+      byKey[key].push(i);
     }
+
+    // One CSS grid; project headers span the full row (grid-column:1/-1).
+    grid.style.gridTemplateColumns = 'repeat(auto-fill,minmax(170px,1fr))';
+    for (const key of groups) {
+      const idxs = byKey[key];
+      const header = document.createElement('div');
+      header.style.cssText = 'grid-column:1/-1;display:flex;align-items:baseline;gap:8px;margin-top:6px;padding-bottom:4px;border-bottom:1px solid var(--border);';
+      header.innerHTML = '<span style="font-size:13px;font-weight:700;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">' +
+        escHtml(key) + '</span><span style="font-size:11px;color:var(--muted);">' +
+        idxs.length + (idxs.length === 1 ? ' thumbnail' : ' thumbnails') + '</span>';
+      grid.appendChild(header);
+
+      for (const i of idxs) {
+        const item = _thumbGalleryItems[i];
+        const card = document.createElement('div');
+        card.style.cssText = 'border:1px solid var(--border);border-radius:10px;overflow:hidden;background:var(--surface);display:flex;flex-direction:column;';
+        const imgWrap = document.createElement('div');
+        imgWrap.style.cssText = 'background:#111;aspect-ratio:' + _galleryRatio(item.target_format) + ';display:flex;align-items:center;justify-content:center;overflow:hidden;cursor:pointer;';
+        imgWrap.title = 'Open in composer';
+        imgWrap.onclick = (function(ix){ return function(){ openThumbnailFromGallery(ix); }; })(i);
+        const img = document.createElement('img');
+        img.alt = item.source_filename || 'Saved thumbnail';
+        img.style.cssText = 'width:100%;height:100%;object-fit:contain;display:block;';
+        img.src = await _renderGalleryPreview(item.draft);
+        imgWrap.appendChild(img);
+        const body = document.createElement('div');
+        body.style.cssText = 'padding:10px 12px;display:flex;flex-direction:column;gap:8px;';
+        const title = document.createElement('div');
+        title.style.cssText = 'font-size:12.5px;font-weight:600;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;';
+        title.textContent = _galleryStripExt(item.source_filename || item.project_name || 'Thumbnail');
+        const meta = document.createElement('div');
+        meta.style.cssText = 'font-size:11px;color:var(--muted);';
+        const dateStr = _galleryDate(item.updated_at);
+        meta.textContent = [dateStr, item.target_format].filter(Boolean).join(' \u00b7 ');
+        const btnRow = document.createElement('div');
+        btnRow.style.cssText = 'display:flex;gap:6px;flex-wrap:wrap;';
+        const openBtn = document.createElement('button');
+        openBtn.className = 'btn-ghost btn-sm'; openBtn.type = 'button'; openBtn.textContent = 'Open';
+        openBtn.onclick = (function(ix){ return function(){ openThumbnailFromGallery(ix); }; })(i);
+        const dlBtn = document.createElement('button');
+        dlBtn.className = 'btn-ghost btn-sm'; dlBtn.type = 'button'; dlBtn.textContent = 'Download';
+        dlBtn.onclick = (function(ix){ return function(){ downloadThumbnailFromGallery(ix); }; })(i);
+        const delBtn = document.createElement('button');
+        delBtn.className = 'btn-ghost btn-sm'; delBtn.type = 'button'; delBtn.textContent = 'Delete';
+        delBtn.style.cssText = 'color:#c0392b;';
+        delBtn.onclick = (function(ix){ return function(){ deleteThumbnailFromGallery(ix); }; })(i);
+        btnRow.appendChild(openBtn); btnRow.appendChild(dlBtn); btnRow.appendChild(delBtn);
+        body.appendChild(title); body.appendChild(meta); body.appendChild(btnRow);
+        card.appendChild(imgWrap); card.appendChild(body);
+        grid.appendChild(card);
+      }
+    }
+  }
+
+  async function deleteThumbnailFromGallery(i) {
+    const item = _thumbGalleryItems[i];
+    if (!item) return;
+    if (!confirm('Delete this saved thumbnail? This removes the saved draft from the project. The video itself is not affected.')) return;
+    try {
+      const res = await fetch(BACKEND + '/thumbnails/delete', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ project_id: item.project_id, draft_id: item.draft_id })
+      });
+      const data = await res.json().catch(function(){ return {}; });
+      if (!res.ok || !data.success) { alert('Could not delete that thumbnail' + (data.error ? ': ' + data.error : '.')); return; }
+    } catch (err) {
+      alert('Could not reach the backend to delete that thumbnail.');
+      return;
+    }
+    loadThumbnailGallery();
   }
 
   async function openThumbnailFromGallery(i) {
@@ -10309,7 +10387,7 @@
     preset: 'bold_pop', font: 'Arial Black', emphasis_color: '#F5A623',
     mode: 'karaoke', all_caps: true, emphasis_caps: true, group_size: 4,
     pop: true, pos_bottom: 0.12, show: true,
-    size_scale: 1.0,           // 0.5-3.0 multiplier on the base caption size
+    size_scale: 2.0,           // 0.5-3.0 multiplier on the base caption size
     outline_on: true,          // letter outline (burns + preview)
     outline_width: 3,          // 0-10 thickness level
     letter_spacing: 2,         // 0-20 (% of font size)
@@ -11251,7 +11329,7 @@
 
 <dialog id="dialog-thumb">
   <div class="dialog-header">
-    <h2>Create Thumbnail <span style="font-size:10px;font-weight:500;color:var(--muted);vertical-align:middle;">build 6-18f</span></h2>
+    <h2>Create Thumbnail <span style="font-size:10px;font-weight:500;color:var(--muted);vertical-align:middle;">build 6-18g</span></h2>
     <div class="dialog-header-actions">
       <button class="dialog-icon-btn" id="btn-thumb-expand" onclick="toggleThumbDialogExpand()">Expand &#x2197;</button>
       <button class="dialog-icon-btn" onclick="closeThumbDialog()">&#x2715; Close</button>

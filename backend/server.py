@@ -62,7 +62,7 @@ CORS(app)
 
 # Bump this whenever the frontend/backend contract changes (the frontend
 # carries a matching EXPECTED_BACKEND_BUILD and warns when they differ).
-BACKEND_BUILD = "2026-06-17-coverproof"
+BACKEND_BUILD = "2026-06-18-thumbdelete"
 
 CREATE_NO_WINDOW = 0x08000000 if platform.system() == 'Windows' else 0
 
@@ -1351,6 +1351,35 @@ def list_thumbnails():
     except Exception as exc:
         logger.exception('[thumbnails] Failed to list thumbnails')
         return jsonify({'error': str(exc), 'thumbnails': []}), 500
+
+
+@app.route('/thumbnails/delete', methods=['POST'])
+def delete_thumbnail():
+    """Remove a single saved thumbnail draft from its project (does not touch
+    the source video or any exported clips)."""
+    try:
+        data = request.get_json(force=True) or {}
+        pid = (data.get('project_id') or '').strip()
+        draft_id = (data.get('draft_id') or '').strip()
+        if not pid or not re.match(r'^[A-Za-z0-9_\-]+$', pid):
+            return jsonify({'error': 'invalid project_id'}), 400
+        if not draft_id:
+            return jsonify({'error': 'draft_id is required'}), 400
+        with project_store_lock:
+            project = load_project(pid)
+            if not project:
+                return jsonify({'error': 'project not found'}), 404
+            drafts = project.get('thumbnail_drafts') or []
+            kept = [d for d in drafts if (d.get('draft_id') or '') != draft_id]
+            if len(kept) == len(drafts):
+                return jsonify({'error': 'thumbnail not found'}), 404
+            project['thumbnail_drafts'] = kept
+            save_project(project)
+        logger.info('[thumbnails] Deleted draft %s from project %s', draft_id, pid)
+        return jsonify({'success': True})
+    except Exception as exc:
+        logger.exception('[thumbnails] delete failed')
+        return jsonify({'error': str(exc)}), 500
 
 
 @app.route('/projects/delete', methods=['POST'])
