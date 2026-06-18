@@ -62,7 +62,7 @@ CORS(app)
 
 # Bump this whenever the frontend/backend contract changes (the frontend
 # carries a matching EXPECTED_BACKEND_BUILD and warns when they differ).
-BACKEND_BUILD = "2026-06-18-thumbdelete"
+BACKEND_BUILD = "2026-06-18-igcaption"
 
 CREATE_NO_WINDOW = 0x08000000 if platform.system() == 'Windows' else 0
 
@@ -849,6 +849,7 @@ def normalize_thumbnail_draft(payload):
             'width': (payload.get('logo') or {}).get('width'),
         },
         'suggested_titles': suggested_titles[:12],
+        'ig_caption': (payload.get('ig_caption') or ''),
         'available_frames': available_frames[:12],
         'video_info': payload.get('video_info') or {},
         # June 11, 2026: these were silently dropped before, losing shapes/
@@ -2107,49 +2108,80 @@ def thumbnail():
 @app.route('/thumbnail_titles', methods=['POST'])
 def thumbnail_titles():
     """
-    Lightweight title-only generation for the manual thumbnail flow
-    (June 10, 2026): frames are now picked by hand from the video, so only
-    the 8 AI title suggestions need the backend.
-    Accepts JSON: { "clip_transcript": "..." }
-    Returns:      { "titles": [...] }  (empty list if no transcript / failure)
+    Title + Instagram-caption generation for the manual thumbnail flow.
+    Accepts JSON: { "clip_transcript": "...", "broader_transcript": "..." }
+    Returns:      { "titles": [...], "caption": "..." }
+    Forgiving: returns whatever it can ([] / "") on failure.
     """
     try:
         data = request.get_json(force=True) or {}
         clip_transcript = (data.get('clip_transcript') or '').strip()[:3000]
+        broader_transcript = (data.get('broader_transcript') or '').strip()[:9000]
         if not clip_transcript:
-            return jsonify({'titles': []})
+            return jsonify({'titles': [], 'caption': ''})
 
-        thumb_logger.info('[titles] Generating titles from %s chars of transcript', len(clip_transcript))
+        thumb_logger.info('[titles] Generating titles+caption (%s clip / %s broader chars)',
+                          len(clip_transcript), len(broader_transcript))
         client = anthropic.Anthropic(api_key=read_api_key())
-        title_msg = client.messages.create(
+        context_block = ''
+        if broader_transcript:
+            context_block = (
+                "\n\nBroader context — transcript around / from the FULL source video, for "
+                "understanding the overall topic only. The caption must be about the CLIP:\n"
+                + broader_transcript
+            )
+        msg = client.messages.create(
             model="claude-sonnet-4-6",
-            max_tokens=800,
+            max_tokens=1100,
             messages=[{"role": "user", "content": (
                 "The Candler Foundry produces faith-based video content for clergy, scholars, "
-                "and the spiritually curious public. The best thumbnail titles are short, surprising, "
-                "and emotionally resonant — a question or statement that makes someone stop scrolling. "
-                "Avoid jargon, church-speak, or academic language. Aim for human, honest, direct.\n\n"
-                "Generate exactly 8 title options. Rules:\n"
-                "- MAX 60 characters each — strip any over 60 chars\n"
-                "- Short, punchy, emotionally direct: a provocative question or bold statement\n"
-                "- No filler phrases, no colons that only pad length\n"
-                "Return ONLY a JSON array of 8 strings, no markdown.\n\n"
-                f"Clip transcript ({len(clip_transcript)} chars):\n{clip_transcript}"
+                "and the spiritually curious public. Voice: human, honest, direct. "
+                "Avoid jargon, church-speak, or academic language.\n\n"
+                "From the CLIP transcript below, produce two things:\n\n"
+                "1) titles: exactly 8 thumbnail title options.\n"
+                "   - MAX 60 characters each\n"
+                "   - Short, punchy, emotionally direct: a provocative question or bold statement\n"
+                "   - No filler phrases, no colons that only pad length\n\n"
+                "2) caption: ONE Instagram caption for a Reel of this clip.\n"
+                "   - SHORT and punchy (about 1-3 sentences), built to drive engagement\n"
+                "   - Open with a scroll-stopping hook in the first line\n"
+                "   - Use natural, searchable language and the words a viewer would actually "
+                "care about or type, so the caption aids discovery on Instagram\n"
+                "   - Minimal, tasteful emoji (zero to two)\n"
+                "   - Where it fits naturally, end with a genuine question the audience can "
+                "answer in the comments (a light call-to-action is also fine; neither is mandatory)\n"
+                "   - NO hashtags anywhere. Do not wrap the whole caption in quotation marks.\n\n"
+                "Return ONLY a JSON object, no markdown, of this exact shape:\n"
+                '{"titles": ["..."], "caption": "..."}\n\n'
+                f"CLIP transcript ({len(clip_transcript)} chars):\n{clip_transcript}"
+                + context_block
             )}]
         )
-        raw = title_msg.content[0].text.strip()
-        s = raw.find('['); e = raw.rfind(']')
-        titles = []
-        if s != -1 and e != -1:
-            parsed = json.loads(raw[s:e+1])
-            titles = [str(t) for t in parsed if len(str(t)) <= 60][:8]
-            if len(titles) < 5:
-                titles = [str(t)[:60] for t in parsed[:8]]
-        thumb_logger.info('[titles] Generated %s titles', len(titles))
-        return jsonify({'titles': titles})
+        raw = msg.content[0].text.strip()
+        titles, caption = [], ''
+        st = raw.find('{'); en = raw.rfind('}')
+        if st != -1 and en != -1:
+            try:
+                obj = json.loads(raw[st:en + 1])
+                parsed = obj.get('titles') or []
+                titles = [str(t) for t in parsed if len(str(t)) <= 60][:8]
+                if len(titles) < 5:
+                    titles = [str(t)[:60] for t in parsed[:8]]
+                caption = str(obj.get('caption') or '').strip()
+            except Exception as pe:
+                thumb_logger.warning('[titles] JSON object parse failed: %s', pe)
+        if not titles:   # fallback: a bare JSON array of titles
+            a = raw.find('['); b = raw.rfind(']')
+            if a != -1 and b != -1:
+                try:
+                    titles = [str(t)[:60] for t in json.loads(raw[a:b + 1])][:8]
+                except Exception:
+                    pass
+        thumb_logger.info('[titles] Generated %s titles, caption=%s chars', len(titles), len(caption))
+        return jsonify({'titles': titles, 'caption': caption})
     except Exception as exc:
-        thumb_logger.warning('[titles] Title generation failed: %s', exc)
-        return jsonify({'titles': []})
+        thumb_logger.warning('[titles] Title/caption generation failed: %s', exc)
+        return jsonify({'titles': [], 'caption': ''})
 
 
 @app.route('/caption_emphasis', methods=['POST'])
@@ -2584,6 +2616,7 @@ def export_clip():
         captions_srt    = request.form.get("captions_srt",    "")
         captions_spec_raw = request.form.get("captions_spec",  "").strip()
         cover_frame     = request.form.get("cover_frame",     "").strip() in {"1", "true", "yes"}
+        ig_caption      = request.form.get("ig_caption",      "").strip()
     except (ValueError, TypeError) as e:
         return jsonify({"error": f"Invalid parameters: {e}"}), 400
 
@@ -2889,6 +2922,8 @@ def export_clip():
             fields["Thumbnail - Dropbox URL"] = thumb_url
         if clip_transcript:
             fields["Clip Transcript"] = clip_transcript
+        if ig_caption:
+            fields["IG Social Media Caption"] = ig_caption
         if source_record_id:
             fields[source_link_field] = [source_record_id]
 

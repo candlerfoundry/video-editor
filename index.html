@@ -2998,7 +2998,7 @@
   // Must match BACKEND_BUILD in server.py — bumped together whenever the
   // frontend/backend contract changes. A mismatch means the user is running
   // an old backend (launcher not restarted after a deploy).
-  const EXPECTED_BACKEND_BUILD = '2026-06-18-thumbdelete';
+  const EXPECTED_BACKEND_BUILD = '2026-06-18-igcaption';
   if (document.fonts && document.fonts.load) { document.fonts.load("700 64px 'Handmade Sans'").catch(function(){}); }
   let _staleBackendWarned = false;
   function showStaleBackendBanner(stale) {
@@ -5820,6 +5820,7 @@
       selected_text_box_id: textBoxes[0].id,
       text_boxes: textBoxes,
       suggested_titles: options.suggestedTitles || [],
+      ig_caption: options.igCaption || '',
       available_frames: options.frames || [],
       video_info: options.videoInfo || null,
       logo: normalizeThumbnailLogo(options.logo, targetFormat),
@@ -8308,34 +8309,83 @@
     dlgBuildHeroState();
     dlgOpenEditor();
     dlgOpenFramePicker();
-    fetchThumbTitles(_sharedThumbnailDraft?.clip_start, _sharedThumbnailDraft?.clip_end)
-      .then(titles => {
-        if (titles.length) {
-          _thumbTitles = titles;
-          if (_sharedThumbnailDraft) _sharedThumbnailDraft.suggested_titles = titles;
+    fetchTitlesAndCaption(_sharedThumbnailDraft?.clip_start, _sharedThumbnailDraft?.clip_end)
+      .then(r => {
+        if (r.titles && r.titles.length) {
+          _thumbTitles = r.titles;
+          if (_sharedThumbnailDraft) _sharedThumbnailDraft.suggested_titles = r.titles;
           dlgBuildHeroState();
         }
+        // Only auto-fill the caption when the draft doesn't already have one
+        // (don't clobber a caption the user has edited / a reopened draft).
+        if (r.caption && !(_sharedThumbnailDraft && _sharedThumbnailDraft.ig_caption)) dlgApplyCaption(r.caption);
       });
   }
 
-  // Lightweight AI titles for the manual thumbnail flow.
-  async function fetchThumbTitles(startT, endT) {
-    if (!backendOnline || !_wordsData) return [];
-    if (startT == null || endT == null || startT >= endT) return [];
+  // AI titles + Instagram caption for the manual thumbnail flow.
+  // The caption is built from the EDITED clip transcript (cuts removed) plus a
+  // broader window of the source transcript for context.
+  function _broaderTranscriptText(startT, endT, maxChars = 9000) {
+    if (!_wordsData) return '';
+    const pad = 240; // ~4 min of surrounding context on each side
+    const lo = startT - pad, hi = endT + pad;
+    let txt = _wordsData
+      .filter(w => (w.start ?? 0) < hi && (w.end ?? w.start ?? 0) >= lo)
+      .map(w => w.word).join(' ').trim();
+    if (!txt) txt = _wordsData.map(w => w.word).join(' ').trim();
+    return txt.slice(0, maxChars);
+  }
+  async function fetchTitlesAndCaption(startT, endT) {
+    if (!backendOnline || !_wordsData) return { titles: [], caption: '' };
+    if (startT == null || endT == null || startT >= endT) return { titles: [], caption: '' };
     const clip_transcript = _wordsData
       .filter(w => (w.start ?? 0) < endT && (w.end ?? w.start ?? 0) >= startT)
       .filter(w => !isWordCut(w))
       .map(w => w.word).join(' ').trim().slice(0, 3000);
-    if (!clip_transcript) return [];
+    if (!clip_transcript) return { titles: [], caption: '' };
+    const broader_transcript = _broaderTranscriptText(startT, endT);
     try {
       const res  = await fetch(BACKEND + '/thumbnail_titles', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ clip_transcript }),
+        body: JSON.stringify({ clip_transcript, broader_transcript }),
       });
       const data = await res.json();
-      return data.titles || [];
-    } catch (_) { return []; }
+      return { titles: data.titles || [], caption: data.caption || '' };
+    } catch (_) { return { titles: [], caption: '' }; }
+  }
+  async function fetchThumbTitles(startT, endT) {
+    return (await fetchTitlesAndCaption(startT, endT)).titles;
+  }
+  // ── Instagram caption field helpers ──
+  function dlgApplyCaption(caption) {
+    if (caption == null) return;
+    if (_sharedThumbnailDraft) _sharedThumbnailDraft.ig_caption = caption;
+    const ta = document.getElementById('dlg-ig-caption');
+    if (ta) ta.value = caption;
+  }
+  function dlgOnCaptionInput(v) {
+    if (_sharedThumbnailDraft) _sharedThumbnailDraft.ig_caption = v;
+  }
+  function dlgSyncCaptionField() {
+    const ta = document.getElementById('dlg-ig-caption');
+    if (ta) ta.value = (_sharedThumbnailDraft && _sharedThumbnailDraft.ig_caption) || '';
+  }
+  async function dlgRegenerateCaption() {
+    if (!_thumbFile || !backendOnline) return;
+    const btn = document.getElementById('dlg-btn-redo-caption');
+    const status = document.getElementById('dlg-ig-caption-status');
+    let orig = '';
+    if (btn) { orig = btn.innerHTML; btn.disabled = true; btn.textContent = 'Writing\u2026'; }
+    if (status) status.textContent = 'Generating caption\u2026';
+    const r = await fetchTitlesAndCaption(_sharedThumbnailDraft?.clip_start, _sharedThumbnailDraft?.clip_end);
+    if (r.caption) {
+      dlgApplyCaption(r.caption);
+      if (status) status.textContent = 'Caption updated. Edit freely \u2014 this saves to Airtable.';
+    } else if (status) {
+      status.textContent = 'Could not generate a caption (need a clip transcript and a running backend).';
+    }
+    if (btn) { btn.disabled = false; btn.innerHTML = orig; }
   }
 
   function dlgBuildHeroState() {
@@ -8529,6 +8579,7 @@
   }
 
   function dlgOpenEditor() {
+    dlgSyncCaptionField();
     const box = getActiveThumbnailTextBox();
     _dlgFontFamily = box?.font_family || 'Handmade Sans';
     _dlgFontSize = box?.font_size || 64;
@@ -11072,6 +11123,8 @@
         .map(w => w.word).join(' ').trim();
       if (clipWords) form.append('clip_transcript', clipWords);
     }
+    const _igCap = (_sharedThumbnailDraft && _sharedThumbnailDraft.ig_caption || '').trim();
+    if (_igCap) form.append('ig_caption', _igCap);
 
     try {
       const res  = await fetch(BACKEND + '/export_clip', { method: 'POST', body: form });
@@ -11371,7 +11424,7 @@
 
 <dialog id="dialog-thumb">
   <div class="dialog-header">
-    <h2>Create Thumbnail <span style="font-size:10px;font-weight:500;color:var(--muted);vertical-align:middle;">build 6-18h</span></h2>
+    <h2>Create Thumbnail <span style="font-size:10px;font-weight:500;color:var(--muted);vertical-align:middle;">build 6-18i</span></h2>
     <div class="dialog-header-actions">
       <button class="dialog-icon-btn" id="btn-thumb-expand" onclick="toggleThumbDialogExpand()">Expand &#x2197;</button>
       <button class="dialog-icon-btn" onclick="closeThumbDialog()">&#x2715; Close</button>
@@ -11467,7 +11520,7 @@
           </div>
 
           <div class="card">
-            <div class="thumb-editor-label">AI Title Suggestions</div>
+            <div class="thumb-editor-label">AI Titles &amp; Caption</div>
             <div id="dlg-titles-grid" class="thumb-chip-row"></div>
             <div class="thumb-inline-row" style="margin-top:12px;">
               <button class="btn-ghost btn-sm" id="dlg-btn-redo-titles" onclick="dlgRedoTitles()">
@@ -11475,6 +11528,15 @@
                 Redo Titles
               </button>
             </div>
+            <div class="thumb-editor-label" style="margin-top:18px;display:flex;align-items:center;justify-content:space-between;gap:8px;">
+              <span>Instagram Caption</span>
+              <button class="btn-ghost btn-sm" id="dlg-btn-redo-caption" type="button" onclick="dlgRegenerateCaption()">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 .49-3.2"/></svg>
+                Regenerate
+              </button>
+            </div>
+            <textarea id="dlg-ig-caption" rows="5" oninput="dlgOnCaptionInput(this.value)" placeholder="Your AI caption appears here once a transcript is loaded. Edit freely \u2014 this is what saves to Airtable (IG Social Media Caption)." style="width:100%;box-sizing:border-box;margin-top:6px;padding:10px 12px;border:1px solid var(--border);border-radius:10px;background:var(--surface);color:var(--text);font-family:inherit;font-size:13px;line-height:1.5;resize:vertical;"></textarea>
+            <div id="dlg-ig-caption-status" style="font-size:11px;color:var(--muted);margin-top:4px;"></div>
           </div>
         </div>
 
