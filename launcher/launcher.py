@@ -274,6 +274,8 @@ class LauncherApp:
             except Exception as exc:
                 self._log_line(f'[launcher] pip warning: {exc}')
 
+        # Ensure no orphaned/old backend is still holding port 5000.
+        self._free_stale_backend()
         self._log_line('[launcher] Starting backend...')
         try:
             self._reset_backend_log()
@@ -328,6 +330,40 @@ class LauncherApp:
         for line in self._read_backend_log_tail():
             self._log_line(line)
         self._show_copy_error_btn()
+
+    def _free_stale_backend(self):
+        """A previous backend left running on port 5000 would otherwise keep
+        serving an OLD build (the new process can't bind the port, and the
+        health check passes against the stale one). Kill any process holding
+        port 5000 so the freshly-synced server.py always wins."""
+        try:
+            if sys.platform.startswith('win'):
+                out = subprocess.run(
+                    ['netstat', '-ano', '-p', 'tcp'],
+                    capture_output=True, text=True, creationflags=0x08000000,
+                ).stdout
+                pids = set()
+                for line in out.splitlines():
+                    if ':5000' in line and 'LISTENING' in line:
+                        parts = line.split()
+                        if parts and parts[-1].isdigit() and parts[-1] != '0':
+                            pids.add(parts[-1])
+                for pid in pids:
+                    self._log_line(f'[launcher] Stopping stale backend (pid {pid}) on port 5000')
+                    subprocess.run(['taskkill', '/F', '/PID', pid],
+                                   capture_output=True, creationflags=0x08000000)
+                if pids:
+                    time.sleep(1.0)
+            else:
+                out = subprocess.run(['lsof', '-ti', 'tcp:5000'],
+                                     capture_output=True, text=True).stdout
+                for pid in [x for x in out.split() if x.isdigit()]:
+                    self._log_line(f'[launcher] Stopping stale backend (pid {pid}) on port 5000')
+                    subprocess.run(['kill', '-9', pid], capture_output=True)
+                if out.strip():
+                    time.sleep(1.0)
+        except Exception as exc:
+            self._log_line(f'[launcher] Could not check port 5000: {exc}')
 
     def _find_server(self):
         if getattr(sys, 'frozen', False):
