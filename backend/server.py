@@ -62,7 +62,7 @@ CORS(app)
 
 # Bump this whenever the frontend/backend contract changes (the frontend
 # carries a matching EXPECTED_BACKEND_BUILD and warns when they differ).
-BACKEND_BUILD = "2026-06-18-igcaption"
+BACKEND_BUILD = "2026-06-18-clipcaption"
 
 CREATE_NO_WINDOW = 0x08000000 if platform.system() == 'Windows' else 0
 
@@ -1554,6 +1554,7 @@ def update_project():
                     'caption_overrides': dict(list((payload.get('caption_overrides') or {}).items())[:60]),
                     'caption_emphasis': dict(list((payload.get('caption_emphasis') or {}).items())[:60]),
                     'caption_breaks': [int(b) for b in (payload.get('caption_breaks') or [])[:200] if isinstance(b, (int, float))],
+                    'ig_caption': (payload.get('ig_caption') or '')[:3000],
                     'updated_at': iso_now(),
                 }
                 # Key by hook_line so re-editing the same clip UPDATES the entry

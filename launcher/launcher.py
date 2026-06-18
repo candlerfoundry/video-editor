@@ -1,5 +1,5 @@
 """
-App Launcher - Desktop Launcher
+Video Editor Launcher - Desktop Launcher
 Starts the local backend silently, then opens the web app in the browser.
 Double-click this script (or the compiled .exe) to use.
 """
@@ -61,7 +61,7 @@ class LauncherApp:
         self.root.after(0, self._launch_sequence)
 
     def _build_window(self):
-        self.root.title('App Launcher')
+        self.root.title('Video Editor Launcher')
         try:
             _icon = _resource_path('rocket.ico')
             if os.path.isfile(_icon):
@@ -98,22 +98,13 @@ class LauncherApp:
             c.create_line(cx + 44, dy, cx + 58, dy, fill='#3A3A3A', width=3)
 
     def _build_ui(self):
-        self._build_rocket()
         tk.Label(
             self.root,
-            text='App Launcher',
+            text='Video Editor Launcher',
             bg=BG,
             fg=WHITE,
             font=('Arial', 18, 'bold')
-        ).pack(pady=(8, 2))
-
-        tk.Label(
-            self.root,
-            text='Mission control \u2014 prepping for launch',
-            bg=BG,
-            fg=MUTED,
-            font=('Arial', 11)
-        ).pack()
+        ).pack(pady=(42, 6))
 
         status_row = tk.Frame(self.root, bg=BG)
         status_row.pack(pady=(40, 0))
@@ -130,7 +121,7 @@ class LauncherApp:
             1, 1, 11, 11, fill=DOT_GRAY, outline=''
         )
 
-        self._status_var = tk.StringVar(value='Fueling up\u2026')
+        self._status_var = tk.StringVar(value='Starting\u2026')
         self._status_label = tk.Label(
             status_row,
             textvariable=self._status_var,
@@ -146,7 +137,7 @@ class LauncherApp:
 
         self._btn = tk.Button(
             btn_frame,
-            text='Launch \U0001F680',
+            text='Launch App',
             bg=ORANGE,
             fg=WHITE,
             activebackground=ORANGE_HOV,
@@ -316,7 +307,7 @@ class LauncherApp:
             try:
                 with urllib.request.urlopen(HEALTH_URL, timeout=1) as resp:
                     if resp.status == 200:
-                        self._set_status('Cleared for launch', DOT_GREEN)
+                        self._set_status('Ready', DOT_GREEN)
                         self._log_line('[launcher] Backend ready')
                         self._enable_btn()
                         return

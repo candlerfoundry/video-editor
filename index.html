@@ -2526,6 +2526,17 @@
                 </div>
               </div>
                 <div id="clip-cuts-list" class="clip-cuts-list" style="display:none;"></div>
+                <div id="clip-ig-caption-card" class="clip-cuts-list" style="margin-top:12px;">
+                  <div class="cuts-title" style="display:flex;align-items:center;justify-content:space-between;gap:8px;text-transform:none;letter-spacing:0;font-size:12px;">
+                    <span>Instagram caption \u2014 auto-written from this clip, saved with it, sent to Airtable on export</span>
+                    <button type="button" class="btn-ghost btn-sm" id="clip-btn-redo-caption" onclick="regenerateIgCaption()" title="Write a fresh caption from the current edit">
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 .49-3.2"/></svg>
+                      Regenerate
+                    </button>
+                  </div>
+                  <textarea id="clip-ig-caption" rows="7" oninput="igCaptionInput(this.value)" placeholder="A caption is written automatically when you create the thumbnail for this clip. Edit it freely here \u2014 it saves with the clip and loads into the Airtable &quot;IG Social Media Caption&quot; field on export." style="width:100%;box-sizing:border-box;margin-top:8px;padding:10px 12px;border:1px solid var(--border);border-radius:8px;background:var(--surface);color:var(--text);font-family:inherit;font-size:13px;line-height:1.55;resize:vertical;"></textarea>
+                  <div id="clip-ig-caption-status" style="font-size:11px;color:var(--muted);margin-top:4px;"></div>
+                </div>
             </div><!-- /.editor-right-zone -->
 
           </div><!-- /.editor-two-col -->
@@ -2998,7 +3009,7 @@
   // Must match BACKEND_BUILD in server.py — bumped together whenever the
   // frontend/backend contract changes. A mismatch means the user is running
   // an old backend (launcher not restarted after a deploy).
-  const EXPECTED_BACKEND_BUILD = '2026-06-18-igcaption';
+  const EXPECTED_BACKEND_BUILD = '2026-06-18-clipcaption';
   if (document.fonts && document.fonts.load) { document.fonts.load("700 64px 'Handmade Sans'").catch(function(){}); }
   let _staleBackendWarned = false;
   function showStaleBackendBanner(stale) {
@@ -4710,9 +4721,11 @@
   function restoreSavedClipEdits(hookLine) {
     // If this clip was edited before (same hook line), restore trims + word
     // edits from the project store.
+    resetClipIgCaption('');   // clear the previous clip's caption; restored below if saved
     const saved = (activeProject?.edited_clips || []).find(c =>
       hookLine && c.hook_line === hookLine);
     if (!saved) return false;
+    if (saved.ig_caption) { _clipIgCaption = saved.ig_caption; syncIgCaptionFields(); }
     if (saved.start_time != null) editorInTime  = saved.start_time;
     if (saved.end_time   != null) editorOutTime = saved.end_time;
     editorCutRanges   = (saved.cut_ranges   || []).map(r => ({ start: r.start, end: r.end }));
@@ -8123,7 +8136,8 @@
   function _buildClipEditPayload() {
     return { start_time: editorInTime, end_time: editorOutTime, hook_line: _editCandidate ? (_editCandidate.hook_line || '') : '',
       mode: (_editCandidate && _editCandidate.part != null) ? 'split' : 'viral', cut_ranges: editorCutRanges, bleep_ranges: editorBleepRanges,
-      caption_style: editorCaptionStyle, caption_overrides: editorCaptionOverrides, caption_emphasis: editorCaptionEmphasis, caption_breaks: editorCaptionBreaks || [] };
+      caption_style: editorCaptionStyle, caption_overrides: editorCaptionOverrides, caption_emphasis: editorCaptionEmphasis, caption_breaks: editorCaptionBreaks || [],
+      ig_caption: getClipIgCaption() };
   }
   async function clipEditorBack() {
     const btn = document.querySelector('.stage3-back');
@@ -8307,19 +8321,19 @@
     if (!_thumbFile) return;
     dlgShowState('editor');
     dlgBuildHeroState();
+    _clipCaptionBusy = true;          // claim caption gen so dlgOpenEditor won't double-fetch
     dlgOpenEditor();
     dlgOpenFramePicker();
-    fetchTitlesAndCaption(_sharedThumbnailDraft?.clip_start, _sharedThumbnailDraft?.clip_end)
-      .then(r => {
-        if (r.titles && r.titles.length) {
-          _thumbTitles = r.titles;
-          if (_sharedThumbnailDraft) _sharedThumbnailDraft.suggested_titles = r.titles;
-          dlgBuildHeroState();
-        }
-        // Only auto-fill the caption when the draft doesn't already have one
-        // (don't clobber a caption the user has edited / a reopened draft).
-        if (r.caption && !(_sharedThumbnailDraft && _sharedThumbnailDraft.ig_caption)) dlgApplyCaption(r.caption);
-      });
+    try {
+      const r = await fetchTitlesAndCaption(_sharedThumbnailDraft?.clip_start, _sharedThumbnailDraft?.clip_end);
+      if (r.titles && r.titles.length) {
+        _thumbTitles = r.titles;
+        if (_sharedThumbnailDraft) _sharedThumbnailDraft.suggested_titles = r.titles;
+        dlgBuildHeroState();
+      }
+      // Auto-fill the caption unless the user has already written/edited one.
+      if (r.caption && !_clipIgCaption) { applyIgCaption(r.caption); _igSetStatus('Caption ready. Edit freely \u2014 saved with the clip; written to Airtable on export.'); try { autosaveClipEdits(); } catch (_) {} }
+    } finally { _clipCaptionBusy = false; }
   }
 
   // AI titles + Instagram caption for the manual thumbnail flow.
@@ -8357,36 +8371,64 @@
   async function fetchThumbTitles(startT, endT) {
     return (await fetchTitlesAndCaption(startT, endT)).titles;
   }
-  // ── Instagram caption field helpers ──
-  function dlgApplyCaption(caption) {
-    if (caption == null) return;
-    if (_sharedThumbnailDraft) _sharedThumbnailDraft.ig_caption = caption;
-    const ta = document.getElementById('dlg-ig-caption');
-    if (ta) ta.value = caption;
+  // ── Instagram caption: ONE source of truth, shared by the clip editor and the
+  // thumbnail composer, auto-generated with the titles, persisted WITH the clip
+  // edit, and written to Airtable on export. ──
+  let _clipIgCaption = '';
+  let _clipCaptionBusy = false;
+  function _igSetFields(v) {
+    const d = document.getElementById('dlg-ig-caption');  if (d && d.value !== v) d.value = v;
+    const c = document.getElementById('clip-ig-caption'); if (c && c.value !== v) c.value = v;
   }
-  function dlgOnCaptionInput(v) {
-    if (_sharedThumbnailDraft) _sharedThumbnailDraft.ig_caption = v;
+  function _igSetStatus(msg) {
+    const a = document.getElementById('dlg-ig-caption-status');  if (a) a.textContent = msg;
+    const b = document.getElementById('clip-ig-caption-status'); if (b) b.textContent = msg;
   }
-  function dlgSyncCaptionField() {
-    const ta = document.getElementById('dlg-ig-caption');
-    if (ta) ta.value = (_sharedThumbnailDraft && _sharedThumbnailDraft.ig_caption) || '';
+  function getClipIgCaption() { return _clipIgCaption || ''; }
+  function applyIgCaption(v) {
+    _clipIgCaption = v || '';
+    if (_sharedThumbnailDraft) _sharedThumbnailDraft.ig_caption = _clipIgCaption;
+    _igSetFields(_clipIgCaption);
   }
-  async function dlgRegenerateCaption() {
-    if (!_thumbFile || !backendOnline) return;
-    const btn = document.getElementById('dlg-btn-redo-caption');
-    const status = document.getElementById('dlg-ig-caption-status');
-    let orig = '';
-    if (btn) { orig = btn.innerHTML; btn.disabled = true; btn.textContent = 'Writing\u2026'; }
-    if (status) status.textContent = 'Generating caption\u2026';
-    const r = await fetchTitlesAndCaption(_sharedThumbnailDraft?.clip_start, _sharedThumbnailDraft?.clip_end);
-    if (r.caption) {
-      dlgApplyCaption(r.caption);
-      if (status) status.textContent = 'Caption updated. Edit freely \u2014 this saves to Airtable.';
-    } else if (status) {
-      status.textContent = 'Could not generate a caption (need a clip transcript and a running backend).';
-    }
-    if (btn) { btn.disabled = false; btn.innerHTML = orig; }
+  function igCaptionInput(v) {            // typed into either textarea
+    _clipIgCaption = v || '';
+    if (_sharedThumbnailDraft) _sharedThumbnailDraft.ig_caption = _clipIgCaption;
+    _igSetFields(_clipIgCaption);
+    try { autosaveClipEdits(); } catch (_) {}
   }
+  function syncIgCaptionFields() { _igSetFields(_clipIgCaption || ''); }
+  function resetClipIgCaption(v) { _clipIgCaption = v || ''; _igSetFields(_clipIgCaption); _igSetStatus(''); }
+  function _igClipBounds() {
+    const startT = _sharedThumbnailDraft?.clip_start ?? (typeof editorInTime === 'number' ? editorInTime : null);
+    const endT   = _sharedThumbnailDraft?.clip_end   ?? (typeof editorOutTime === 'number' ? editorOutTime : null);
+    return { startT, endT };
+  }
+  async function regenerateIgCaption() {  // manual button (clip editor + composer)
+    if (!backendOnline) { _igSetStatus('Backend offline \u2014 the caption needs the local server running.'); return; }
+    const { startT, endT } = _igClipBounds();
+    _igSetStatus('Generating caption\u2026');
+    const r = await fetchTitlesAndCaption(startT, endT);
+    if (r.caption) { applyIgCaption(r.caption); _igSetStatus('Caption updated. Saved with the clip; written to Airtable on export.'); try { autosaveClipEdits(); } catch (_) {} }
+    else _igSetStatus('Could not generate a caption (need a clip transcript and a running backend).');
+  }
+  async function ensureIgCaption() {      // auto-generate once, only when empty
+    if (_clipIgCaption || _clipCaptionBusy || !backendOnline) return;
+    const { startT, endT } = _igClipBounds();
+    if (startT == null || endT == null || startT >= endT) return;
+    _clipCaptionBusy = true;
+    _igSetStatus('Writing caption\u2026');
+    try {
+      const r = await fetchTitlesAndCaption(startT, endT);
+      if (r.caption) { applyIgCaption(r.caption); _igSetStatus('Caption ready. Edit freely \u2014 saved with the clip; written to Airtable on export.'); try { autosaveClipEdits(); } catch (_) {} }
+      else _igSetStatus('');
+      if (r.titles && r.titles.length && !(_thumbTitles && _thumbTitles.length)) { _thumbTitles = r.titles; if (_sharedThumbnailDraft) _sharedThumbnailDraft.suggested_titles = r.titles; }
+    } finally { _clipCaptionBusy = false; }
+  }
+  // Back-compat wrappers used by the composer markup.
+  function dlgOnCaptionInput(v) { igCaptionInput(v); }
+  function dlgRegenerateCaption() { return regenerateIgCaption(); }
+  function dlgApplyCaption(v) { applyIgCaption(v); }
+  function dlgSyncCaptionField() { syncIgCaptionFields(); }
 
   function dlgBuildHeroState() {
     syncDraftFromDialogState();
@@ -8579,7 +8621,8 @@
   }
 
   function dlgOpenEditor() {
-    dlgSyncCaptionField();
+    syncIgCaptionFields();
+    ensureIgCaption();
     const box = getActiveThumbnailTextBox();
     _dlgFontFamily = box?.font_family || 'Handmade Sans';
     _dlgFontSize = box?.font_size || 64;
@@ -11123,7 +11166,7 @@
         .map(w => w.word).join(' ').trim();
       if (clipWords) form.append('clip_transcript', clipWords);
     }
-    const _igCap = (_sharedThumbnailDraft && _sharedThumbnailDraft.ig_caption || '').trim();
+    const _igCap = (getClipIgCaption() || (_sharedThumbnailDraft && _sharedThumbnailDraft.ig_caption) || '').trim();
     if (_igCap) form.append('ig_caption', _igCap);
 
     try {
@@ -11424,7 +11467,7 @@
 
 <dialog id="dialog-thumb">
   <div class="dialog-header">
-    <h2>Create Thumbnail <span style="font-size:10px;font-weight:500;color:var(--muted);vertical-align:middle;">build 6-18i</span></h2>
+    <h2>Create Thumbnail <span style="font-size:10px;font-weight:500;color:var(--muted);vertical-align:middle;">build 6-18j</span></h2>
     <div class="dialog-header-actions">
       <button class="dialog-icon-btn" id="btn-thumb-expand" onclick="toggleThumbDialogExpand()">Expand &#x2197;</button>
       <button class="dialog-icon-btn" onclick="closeThumbDialog()">&#x2715; Close</button>
