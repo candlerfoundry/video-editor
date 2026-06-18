@@ -9041,55 +9041,82 @@
     if (document.getElementById('dlg-state-editor').style.display !== 'none') dlgDrawCanvas();
   }
 
-  // ── Manual frame picker ──
+  // ── Manual frame picker (pop-out dialog) ──
   let _dlgPickVideoEl = null;
+  let _dlgPickLastTime = null;   // remember the scrub position between opens
+
+  function _dlgApplyPickBounds(vidEl, seekTo) {
+    const scrub = document.getElementById('dlg-pick-scrub');
+    const clipStart = _sharedThumbnailDraft?.clip_start;
+    const clipEnd   = _sharedThumbnailDraft?.clip_end;
+    const start = (clipStart != null && clipStart > 0) ? clipStart : 0;
+    const end   = (clipEnd   != null && clipEnd   > 0) ? clipEnd   : (vidEl.duration || 0);
+    let t = (seekTo != null && !isNaN(seekTo)) ? seekTo : start;
+    t = Math.max(start, Math.min(end || t, t));
+    if (scrub) { scrub.min = start; scrub.max = end; scrub.value = t; }
+    try { vidEl.currentTime = t; } catch (_) {}
+    dlgUpdatePickTimecode();
+  }
 
   function dlgOpenFramePicker() {
     const panel = document.getElementById('dlg-frame-picker');
     if (!panel) return;
-    panel.style.display = 'block';
     const vidEl = document.getElementById('dlg-pick-video');
     if (!vidEl) return;
     _dlgPickVideoEl = vidEl;
-    // Use same source as the editor video
+    if (typeof panel.showModal === 'function') { if (!panel.open) panel.showModal(); }
+    else panel.style.display = 'block';
     const src = getPlayableVideoUrl('clips') || getPlayableVideoUrl('thumbnails');
+    const seekTo = _dlgPickLastTime;   // null on first open -> falls back to clip start
     if (src && vidEl.src !== src) {
       vidEl.crossOrigin = 'anonymous';
       vidEl.src = src;
       vidEl.load();
+      vidEl.addEventListener('loadedmetadata', function onMeta() {
+        vidEl.removeEventListener('loadedmetadata', onMeta);
+        _dlgApplyPickBounds(vidEl, seekTo);
+      }, { once: true });
+    } else if (vidEl.readyState >= 1) {
+      // Source already loaded — restore position immediately (no reload flicker).
+      _dlgApplyPickBounds(vidEl, seekTo);
+    } else {
+      vidEl.addEventListener('loadedmetadata', function onMeta() {
+        vidEl.removeEventListener('loadedmetadata', onMeta);
+        _dlgApplyPickBounds(vidEl, seekTo);
+      }, { once: true });
     }
-    vidEl.addEventListener('loadedmetadata', function onMeta() {
-      vidEl.removeEventListener('loadedmetadata', onMeta);
-      const scrub = document.getElementById('dlg-pick-scrub');
-      if (scrub) {
-        const clipStart = _sharedThumbnailDraft?.clip_start;
-        const clipEnd   = _sharedThumbnailDraft?.clip_end;
-        const start = (clipStart != null && clipStart > 0) ? clipStart : 0;
-        const end   = (clipEnd   != null && clipEnd   > 0) ? clipEnd   : vidEl.duration;
-        scrub.min = start;
-        scrub.max = end;
-        scrub.value = start;
-        vidEl.currentTime = start;
-      }
-      dlgUpdatePickTimecode();
-    }, { once: true });
-    document.getElementById('dlg-btn-pick-frame').disabled = true;
+    const pb = document.getElementById('dlg-btn-pick-frame'); if (pb) pb.disabled = true;
   }
 
   function dlgCloseFramePicker() {
-    const panel = document.getElementById('dlg-frame-picker');
-    if (panel) panel.style.display = 'none';
     const vidEl = document.getElementById('dlg-pick-video');
-    if (vidEl) { vidEl.pause(); vidEl.src = ''; }
+    if (vidEl) { if (!isNaN(vidEl.currentTime)) _dlgPickLastTime = vidEl.currentTime; vidEl.pause(); }
+    const panel = document.getElementById('dlg-frame-picker');
+    if (panel) { if (typeof panel.close === 'function' && panel.open) panel.close(); panel.style.display = 'none'; }
     const btn = document.getElementById('dlg-btn-pick-frame');
     if (btn) btn.disabled = false;
     _dlgPickVideoEl = null;
+  }
+
+  function dlgNudgePickFrame(dir) {
+    const vidEl = document.getElementById('dlg-pick-video');
+    const scrub = document.getElementById('dlg-pick-scrub');
+    if (!vidEl) return;
+    const lo = scrub ? parseFloat(scrub.min) : 0;
+    const hi = scrub ? parseFloat(scrub.max) : (vidEl.duration || 0);
+    let t = (vidEl.currentTime || 0) + dir * (1 / 30);
+    t = Math.max(lo, Math.min(hi || t, t));
+    vidEl.currentTime = t;
+    _dlgPickLastTime = t;
+    if (scrub) scrub.value = t;
+    dlgUpdatePickTimecode();
   }
 
   function dlgPickVideoScrub(val) {
     const vidEl = document.getElementById('dlg-pick-video');
     if (!vidEl) return;
     vidEl.currentTime = parseFloat(val);
+    _dlgPickLastTime = vidEl.currentTime;
     dlgUpdatePickTimecode();
   }
 
@@ -9100,7 +9127,8 @@
     const t = vidEl.currentTime || 0;
     const m = Math.floor(t / 60);
     const s = Math.floor(t % 60).toString().padStart(2, '0');
-    span.textContent = m + ':' + s;
+    const d = Math.floor((t % 1) * 10);
+    span.textContent = m + ':' + s + '.' + d;
   }
 
   async function dlgCapturePickedFrame() {
@@ -9978,6 +10006,7 @@
   }
 
   function _dlgBeginTextEdit(bid) {
+    if (_dlgEditingTextId === bid) return;
     if (_sharedThumbnailDraft && _sharedThumbnailDraft.selected_text_box_id !== bid) dlgSelectTextBox(bid);
     const textEl = document.querySelector('.dlg-overlay-text[data-box-id="' + bid + '"]');
     const box = (_sharedThumbnailDraft?.text_boxes || []).find(function(b) { return b.id === bid; });
@@ -10021,6 +10050,7 @@
   // Drag / Resize / Inline-edit for dialog overlay elements
   (function () {
     let dragging = null;
+    let _dlgLastTextClick = null;   // {id, t} for manual double-click detection
 
     // ── Inline text editing ──
     document.addEventListener('dblclick', function(e) {
@@ -10078,6 +10108,18 @@
       if (textEl && textEl.dataset.boxId) {
         if (textEl.classList.contains('editing')) return;
         const bid = textEl.dataset.boxId;
+        // Manual double-click detection. Selecting a box rebuilds the overlay
+        // layer (to move the resize handles), which replaces this DOM node
+        // between the two clicks and suppresses the browser's native dblclick —
+        // so double-click-to-type silently failed. Detect it by id + timing.
+        const _nowClk = Date.now();
+        if (_dlgLastTextClick && _dlgLastTextClick.id === bid && (_nowClk - _dlgLastTextClick.t) < 350) {
+          _dlgLastTextClick = null;
+          e.preventDefault(); e.stopImmediatePropagation();
+          _dlgBeginTextEdit(bid);
+          return;
+        }
+        _dlgLastTextClick = { id: bid, t: _nowClk };
         const px = e.clientX, py = e.clientY;
         // All boxes whose rectangle is under the cursor (top-most last in DOM order).
         const stack = [].slice.call(document.querySelectorAll('.dlg-overlay-text')).filter(function (el) {
@@ -11329,7 +11371,7 @@
 
 <dialog id="dialog-thumb">
   <div class="dialog-header">
-    <h2>Create Thumbnail <span style="font-size:10px;font-weight:500;color:var(--muted);vertical-align:middle;">build 6-18g</span></h2>
+    <h2>Create Thumbnail <span style="font-size:10px;font-weight:500;color:var(--muted);vertical-align:middle;">build 6-18h</span></h2>
     <div class="dialog-header-actions">
       <button class="dialog-icon-btn" id="btn-thumb-expand" onclick="toggleThumbDialogExpand()">Expand &#x2197;</button>
       <button class="dialog-icon-btn" onclick="closeThumbDialog()">&#x2715; Close</button>
@@ -11396,20 +11438,32 @@
                 Saved thumbnails&hellip;
               </button>
             </div>
-            <!-- Frame picker scrub panel -->
-            <div id="dlg-frame-picker" style="display:none;margin-top:12px;border-top:1px solid var(--border);padding-top:12px;">
-              <video id="dlg-pick-video" style="width:100%;border-radius:8px;background:#000;max-height:520px;" muted playsinline preload="metadata"></video>
-              <div style="margin-top:8px;">
-                <input type="range" id="dlg-pick-scrub" min="0" max="100" value="0" step="0.1" style="width:100%;accent-color:var(--orange);" oninput="dlgPickVideoScrub(this.value)">
-              </div>
-              <div class="thumb-inline-row" style="margin-top:8px;justify-content:space-between;align-items:center;">
-                <span id="dlg-pick-timecode" style="font-size:11px;color:var(--muted);">0:00</span>
-                <div class="thumb-inline-row">
-                  <button class="btn-ghost btn-sm" onclick="dlgCloseFramePicker()">Cancel</button>
-                  <button class="btn btn-sm" onclick="dlgCapturePickedFrame()">Use This Frame</button>
+            <!-- Frame picker (pop-out, enlargeable) -->
+            <dialog id="dlg-frame-picker" style="width:min(1150px,95vw);max-width:none;max-height:95vh;border:none;border-radius:14px;padding:0;background:var(--surface);color:var(--text);box-shadow:var(--shadow-md);overflow:hidden;">
+              <div style="display:flex;flex-direction:column;max-height:95vh;">
+                <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;padding:14px 18px;border-bottom:1px solid var(--border);">
+                  <strong style="font-size:15px;">Pick a frame</strong>
+                  <span style="font-size:11.5px;color:var(--muted);">Scrub or step frame-by-frame, then &ldquo;Use This Frame&rdquo;. Reopens where you left off.</span>
+                </div>
+                <div style="padding:16px 18px;overflow:auto;">
+                  <video id="dlg-pick-video" style="width:100%;border-radius:8px;background:#000;max-height:72vh;display:block;margin:0 auto;" muted playsinline preload="metadata"></video>
+                  <div style="margin-top:12px;">
+                    <input type="range" id="dlg-pick-scrub" min="0" max="100" value="0" step="0.05" style="width:100%;accent-color:var(--orange);" oninput="dlgPickVideoScrub(this.value)">
+                  </div>
+                  <div class="thumb-inline-row" style="margin-top:12px;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;">
+                    <div style="display:flex;align-items:center;gap:8px;">
+                      <button class="btn-ghost btn-sm" type="button" onclick="dlgNudgePickFrame(-1)" title="Step back one frame">&#9664; Frame</button>
+                      <span id="dlg-pick-timecode" style="font-size:12px;color:var(--muted);min-width:54px;text-align:center;">0:00</span>
+                      <button class="btn-ghost btn-sm" type="button" onclick="dlgNudgePickFrame(1)" title="Step forward one frame">Frame &#9654;</button>
+                    </div>
+                    <div class="thumb-inline-row">
+                      <button class="btn-ghost btn-sm" onclick="dlgCloseFramePicker()">Cancel</button>
+                      <button class="btn btn-sm" onclick="dlgCapturePickedFrame()">Use This Frame</button>
+                    </div>
+                  </div>
                 </div>
               </div>
-            </div>
+            </dialog>
           </div>
 
           <div class="card">
