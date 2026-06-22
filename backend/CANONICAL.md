@@ -1714,3 +1714,14 @@ Regression risk: Medium (drag/render).
   grayed out (opacity:0.3, pointer-events:none) when boxes.length === 1. The
   Remove button (now id="dlg-textbox-remove-btn") is disabled with an explanatory
   title when it cannot act.
+
+---
+
+## Fix 4: subtitles filter filename= option (June 22, 2026)
+
+**Problem:** Export failed with ffmpeg error "No option name near 'captions.ass'" on stitched (multi-cut) exports with captions. The filter chain `subtitles=captions.ass[vout]` caused ffmpeg to parse `captions.ass[vout]` as the filename instead of treating `[vout]` as the output pad label.
+
+**Fix:** Changed both occurrences of `subtitles=captions.ass` to `subtitles=filename=captions.ass` in `backend/server.py` (lines 663 and 2671). Using the explicit named-option form tells ffmpeg where the filename value ends.
+
+- `server.py:663` — `/caption` endpoint single-filter `-vf` path
+- `server.py:2671` — `caption_filter` variable used by stitched and single-segment export paths

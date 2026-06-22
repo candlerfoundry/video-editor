@@ -660,7 +660,7 @@ def caption():
         cmd = [
             FFMPEG_EXE, "-y",
             "-i", input_path,
-            "-vf", "subtitles=captions.ass",
+            "-vf", "subtitles=filename=captions.ass",
             "-c:a", "copy",
             output_path,
         ]
@@ -2668,7 +2668,7 @@ def export_clip():
             ass_path = os.path.join(tmp_dir, "captions.ass")
             with open(ass_path, "w", encoding="utf-8") as f:
                 f.write(ass_text)
-            caption_filter = ",subtitles=captions.ass"
+            caption_filter = ",subtitles=filename=captions.ass"
 
         # ── Step A: 9:16 vertical reframe ──
         kept_segments = compute_kept_segments(starttime, endtime, cut_ranges_raw)
