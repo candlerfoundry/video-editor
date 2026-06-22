@@ -8474,12 +8474,20 @@
     const boxList = document.getElementById('dlg-textbox-list');
     if (boxList) {
       const boxes = _sharedThumbnailDraft?.text_boxes || [];
+      const canDelete = boxes.length > 1;
       boxList.innerHTML = boxes.map((box, index) => (
         '<button type="button" class="thumb-chip' + (_sharedThumbnailDraft?.selected_text_box_id === box.id ? ' selected' : '') + '" onclick="dlgSelectTextBox(\'' + escHtml(box.id) + '\')">' +
         escHtml(box.text || ('Text Box ' + (index + 1))) +
-        (boxes.length > 1 ? '<span class="thumb-chip-x" title="Delete this text box" onclick="dlgRemoveTextBoxById(\'' + escHtml(box.id) + '\', event)">&times;</span>' : '') +
+        (canDelete
+          ? '<span class="thumb-chip-x" title="Delete this text box" onclick="dlgRemoveTextBoxById(\'' + escHtml(box.id) + '\', event)">&times;</span>'
+          : '<span class="thumb-chip-x" title="Can\'t remove the last text box" style="opacity:0.3;cursor:not-allowed;pointer-events:none;">&times;</span>') +
         '</button>'
       )).join('');
+      const removeBtn = document.getElementById('dlg-textbox-remove-btn');
+      if (removeBtn) {
+        removeBtn.disabled = !canDelete;
+        removeBtn.title = canDelete ? 'Remove the selected text box' : 'Can\'t remove the last text box';
+      }
     }
     const activeBox = getActiveThumbnailTextBox();
     const titleInput = document.getElementById('dlg-title-input');
@@ -9806,12 +9814,20 @@
     const boxList = document.getElementById('dlg-textbox-list');
     if (!boxList || !_sharedThumbnailDraft) return;
     const boxes = _sharedThumbnailDraft.text_boxes || [];
+    const canDelete = boxes.length > 1;
     boxList.innerHTML = boxes.map((box, index) => (
       '<button type="button" class="thumb-chip' + (_sharedThumbnailDraft.selected_text_box_id === box.id ? ' selected' : '') + '" onclick="dlgSelectTextBox(\'' + escHtml(box.id) + '\')">' +
       escHtml(box.text || ('Text Box ' + (index + 1))) +
-      (boxes.length > 1 ? '<span class="thumb-chip-x" title="Delete this text box" onclick="dlgRemoveTextBoxById(\'' + escHtml(box.id) + '\', event)">&times;</span>' : '') +
+      (canDelete
+        ? '<span class="thumb-chip-x" title="Delete this text box" onclick="dlgRemoveTextBoxById(\'' + escHtml(box.id) + '\', event)">&times;</span>'
+        : '<span class="thumb-chip-x" title="Can\'t remove the last text box" style="opacity:0.3;cursor:not-allowed;pointer-events:none;">&times;</span>') +
       '</button>'
     )).join('');
+    const removeBtn = document.getElementById('dlg-textbox-remove-btn');
+    if (removeBtn) {
+      removeBtn.disabled = !canDelete;
+      removeBtn.title = canDelete ? 'Remove the selected text box' : 'Can\'t remove the last text box';
+    }
   }
   // Lightweight selection: no full editor rebuild (which caused the jank / wrong-box bugs).
   function selectTextBoxData(bid) {
@@ -10010,7 +10026,7 @@
       div.style.flexDirection  = 'column';
       div.style.justifyContent = 'center';
       div.style.alignItems     = box.align === 'left' ? 'flex-start' : box.align === 'right' ? 'flex-end' : 'center';
-      div.style.overflow   = 'hidden';
+      // overflow:visible is set by CSS class .dlg-overlay-text; inline hidden clips resize handles
       div.style.whiteSpace = 'normal';
       div.style.wordBreak  = 'break-word';
       div.style.zIndex     = isSelected ? '20' : '1';
@@ -11534,32 +11550,7 @@
                 Saved thumbnails&hellip;
               </button>
             </div>
-            <!-- Frame picker (pop-out, enlargeable) -->
-            <dialog id="dlg-frame-picker" style="width:min(1150px,95vw);max-width:none;max-height:95vh;border:none;border-radius:14px;padding:0;background:var(--surface);color:var(--text);box-shadow:var(--shadow-md);overflow:hidden;">
-              <div style="display:flex;flex-direction:column;max-height:95vh;">
-                <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;padding:14px 18px;border-bottom:1px solid var(--border);">
-                  <strong style="font-size:15px;">Pick a frame</strong>
-                  <span style="font-size:11.5px;color:var(--muted);">Scrub or step frame-by-frame, then &ldquo;Use This Frame&rdquo;. Reopens where you left off.</span>
-                </div>
-                <div style="padding:16px 18px;overflow:auto;">
-                  <video id="dlg-pick-video" style="width:100%;border-radius:8px;background:#000;max-height:72vh;display:block;margin:0 auto;" muted playsinline preload="metadata"></video>
-                  <div style="margin-top:12px;">
-                    <input type="range" id="dlg-pick-scrub" min="0" max="100" value="0" step="0.05" style="width:100%;accent-color:var(--orange);" oninput="dlgPickVideoScrub(this.value)">
-                  </div>
-                  <div class="thumb-inline-row" style="margin-top:12px;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;">
-                    <div style="display:flex;align-items:center;gap:8px;">
-                      <button class="btn-ghost btn-sm" type="button" onclick="dlgNudgePickFrame(-1)" title="Step back one frame">&#9664; Frame</button>
-                      <span id="dlg-pick-timecode" style="font-size:12px;color:var(--muted);min-width:54px;text-align:center;">0:00</span>
-                      <button class="btn-ghost btn-sm" type="button" onclick="dlgNudgePickFrame(1)" title="Step forward one frame">Frame &#9654;</button>
-                    </div>
-                    <div class="thumb-inline-row">
-                      <button class="btn-ghost btn-sm" onclick="dlgCloseFramePicker()">Cancel</button>
-                      <button class="btn btn-sm" onclick="dlgCapturePickedFrame()">Use This Frame</button>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </dialog>
+
           </div>
 
           <div class="card">
@@ -11628,7 +11619,7 @@
               <div class="thumb-editor-label" style="margin-bottom:0;">Text Boxes</div>
               <div class="thumb-inline-row">
                 <button class="btn-ghost btn-sm" type="button" onclick="dlgAddTextBox()">Add Text Box</button>
-                <button class="btn-ghost btn-sm" type="button" onclick="dlgRemoveActiveTextBox()">Remove</button>
+                <button class="btn-ghost btn-sm" type="button" id="dlg-textbox-remove-btn" onclick="dlgRemoveActiveTextBox()" title="Select a text box to remove it">Remove</button>
                 <button class="btn-ghost btn-sm" type="button" onclick="dlgDuplicateActiveTextBox()" title="Duplicate this text box">Duplicate</button>
                 <button class="btn-ghost btn-sm" type="button" onclick="dlgMoveTextBoxLayer('forward')" title="Bring forward">&#9650;</button>
                 <button class="btn-ghost btn-sm" type="button" onclick="dlgMoveTextBoxLayer('backward')" title="Send back">&#9660;</button>
@@ -11898,5 +11889,32 @@
   </div>
 </dialog>
 
+
+<!-- Frame picker lives at document root so showModal() works outside dialog-thumb -->
+<dialog id="dlg-frame-picker" style="width:min(1150px,95vw);max-width:none;max-height:95vh;border:none;border-radius:14px;padding:0;background:var(--surface);color:var(--text);box-shadow:var(--shadow-md);overflow:hidden;">
+  <div style="display:flex;flex-direction:column;max-height:95vh;">
+    <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;padding:14px 18px;border-bottom:1px solid var(--border);">
+      <strong style="font-size:15px;">Pick a frame</strong>
+      <span style="font-size:11.5px;color:var(--muted);">Scrub or step frame-by-frame, then &ldquo;Use This Frame&rdquo;. Reopens where you left off.</span>
+    </div>
+    <div style="padding:16px 18px;overflow:auto;">
+      <video id="dlg-pick-video" style="width:100%;border-radius:8px;background:#000;max-height:72vh;display:block;margin:0 auto;" muted playsinline preload="metadata"></video>
+      <div style="margin-top:12px;">
+        <input type="range" id="dlg-pick-scrub" min="0" max="100" value="0" step="0.05" style="width:100%;accent-color:var(--orange);" oninput="dlgPickVideoScrub(this.value)">
+      </div>
+      <div class="thumb-inline-row" style="margin-top:12px;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;">
+        <div style="display:flex;align-items:center;gap:8px;">
+          <button class="btn-ghost btn-sm" type="button" onclick="dlgNudgePickFrame(-1)" title="Step back one frame">&#9664; Frame</button>
+          <span id="dlg-pick-timecode" style="font-size:12px;color:var(--muted);min-width:54px;text-align:center;">0:00</span>
+          <button class="btn-ghost btn-sm" type="button" onclick="dlgNudgePickFrame(1)" title="Step forward one frame">Frame &#9654;</button>
+        </div>
+        <div class="thumb-inline-row">
+          <button class="btn-ghost btn-sm" onclick="dlgCloseFramePicker()">Cancel</button>
+          <button class="btn btn-sm" onclick="dlgCapturePickedFrame()">Use This Frame</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</dialog>
 </body>
 </html>

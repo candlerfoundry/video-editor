@@ -1694,3 +1694,23 @@ Regression risk: Medium (drag/render).
   restores saved edits first, and a debounced autosaveClipEdits() persists after
   every edit — so edits survive relaunch.
 - renderCandidates sorts edited clips to the top (then by hook_score).
+
+## Thumbnail editor: Pick Frame freeze + resize handle + delete UX fixes (June 22, 2026)
+- Pick Frame freeze: dlg-frame-picker (<dialog>) was nested inside dialog-thumb
+  (also a <dialog> opened via showModal()). Calling showModal() on a nested modal
+  dialog causes the browser to freeze (inner dialog's top-layer promotion inerts
+  its ancestor). Fix: moved dlg-frame-picker to document root (just before
+  </body>) so showModal() has no parent modal to conflict with. No JS changes
+  required — dlgOpenFramePicker/dlgCloseFramePicker still find it by ID.
+- Resize handles clipped: renderDialogOverlayLayer() set div.style.overflow =
+  'hidden' inline, overriding the CSS class .dlg-overlay-text { overflow:visible }.
+  Resize handles use transform:translate(-50%,-50%) so they extend outside the
+  element boundary; overflow:hidden was clipping them in half. Fix: removed the
+  inline assignment (replaced with comment). fitFontSizeToBox ensures text never
+  overflows, so removing the clip is safe.
+- Delete UX for single text box: Remove button silently did nothing (dlgRemoveActiveTextBox
+  guards length <= 1) and the chip showed no × — no user feedback. Fix: both
+  dlgOpenEditor and _refreshTextBoxChips now always render the × on every chip,
+  grayed out (opacity:0.3, pointer-events:none) when boxes.length === 1. The
+  Remove button (now id="dlg-textbox-remove-btn") is disabled with an explanatory
+  title when it cannot act.
