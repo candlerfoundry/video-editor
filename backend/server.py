@@ -62,7 +62,7 @@ CORS(app)
 
 # Bump this whenever the frontend/backend contract changes (the frontend
 # carries a matching EXPECTED_BACKEND_BUILD and warns when they differ).
-BACKEND_BUILD = "2026-06-18-clipcaption"
+BACKEND_BUILD = "2026-06-22-speed"
 
 CREATE_NO_WINDOW = 0x08000000 if platform.system() == 'Windows' else 0
 
@@ -2618,6 +2618,13 @@ def export_clip():
         captions_spec_raw = request.form.get("captions_spec",  "").strip()
         cover_frame     = request.form.get("cover_frame",     "").strip() in {"1", "true", "yes"}
         ig_caption      = request.form.get("ig_caption",      "").strip()
+        # Playback speed (1 / 1.5 / 2x) burned into the export. Clamp to the
+        # speeds the editor offers; 1.0 keeps the original render path untouched.
+        try:
+            speed = float(request.form.get("speed", 1) or 1)
+        except (ValueError, TypeError):
+            speed = 1.0
+        speed = speed if speed in (1.0, 1.5, 2.0) else 1.0
     except (ValueError, TypeError) as e:
         return jsonify({"error": f"Invalid parameters: {e}"}), 400
 
@@ -2670,6 +2677,15 @@ def export_clip():
                 f.write(ass_text)
             caption_filter = ",subtitles=filename=captions.ass"
 
+        # ── Speed (1 / 1.5 / 2x) ───────────────────────
+        # Applied at the END of the video chain (after subtitles) so burned
+        # captions compress in lock-step with the footage — no need to rescale
+        # the ASS timestamps. Audio gets a matching atempo (valid 0.5-2.0, so
+        # 1.5 and 2.0 are single-stage). speed == 1.0 leaves the chains untouched.
+        speed_v_suffix = "" if speed == 1.0 else f",setpts=PTS/{speed:.4f}"
+        if speed != 1.0:
+            logger.info("[export] Speeding clip to %.2fx (video setpts + audio atempo)", speed)
+
         # ── Step A: 9:16 vertical reframe ──
         kept_segments = compute_kept_segments(starttime, endtime, cut_ranges_raw)
         bleep_ranges  = parse_bleep_ranges(starttime, endtime, bleep_ranges_raw)
@@ -2712,13 +2728,17 @@ def export_clip():
             filter_parts.append(
                 f"{concat_pads}concat=n={len(kept_segments)}:v=1:a=1[vcat][acat]"
             )
-            filter_parts.append(f"[vcat]crop=ih*9/16:ih,scale=1080:1920{caption_filter}[vout]")
+            filter_parts.append(f"[vcat]crop=ih*9/16:ih,scale=1080:1920{caption_filter}{speed_v_suffix}[vout]")
+            audio_out = "[acat]"
+            if speed != 1.0:
+                filter_parts.append(f"[acat]atempo={speed:.4f}[aout]")
+                audio_out = "[aout]"
             stitched_cmd = [FFMPEG_EXE, "-y", "-i", input_path]
             if bleep_chain and tone_expr:
                 stitched_cmd += ["-f", "lavfi", "-i", "sine=frequency=1000:sample_rate=48000"]
             stitched_cmd += [
                 "-filter_complex", ";".join(filter_parts),
-                "-map", "[vout]", "-map", "[acat]",
+                "-map", "[vout]", "-map", audio_out,
                 "-c:v", "libx264", "-crf", "18", "-preset", "veryfast",
                 "-c:a", "aac",
                 output_path]
@@ -2743,12 +2763,14 @@ def export_clip():
             bleep_chain = build_bleep_audio_chain(bleep_ranges, time_offset=starttime)
             tone_expr   = build_bleep_tone_expr(bleep_ranges, time_offset=starttime)
             if bleep_chain and tone_expr:
-                # Censor tone: mute the speech and mix in a gated 1 kHz sine
+                # Censor tone: mute the speech and mix in a gated 1 kHz sine.
+                # When sped up, the amix feeds an atempo stage before [aout].
+                amix_tail = "[aout]" if speed == 1.0 else "[amx];[amx]atempo=%.4f[aout]" % speed
                 fc = (
-                    f"[0:v]crop=ih*9/16:ih,scale=1080:1920{caption_filter}[vout];"
+                    f"[0:v]crop=ih*9/16:ih,scale=1080:1920{caption_filter}{speed_v_suffix}[vout];"
                     f"[0:a]{bleep_chain}[mute];"
                     f"[1:a]{tone_expr}[tone];"
-                    f"[mute][tone]amix=inputs=2:duration=first:dropout_transition=0:normalize=0[aout]"
+                    f"[mute][tone]amix=inputs=2:duration=first:dropout_transition=0:normalize=0{amix_tail}"
                 )
                 pass2_cmd = [FFMPEG_EXE, "-y",
                              "-ss", f"{starttime:.3f}", "-t", f"{seg_dur:.3f}", "-i", input_path,
@@ -2761,10 +2783,12 @@ def export_clip():
             else:
                 pass2_cmd = [FFMPEG_EXE, "-y",
                              "-ss", f"{starttime:.3f}", "-t", f"{seg_dur:.3f}", "-i", input_path,
-                             "-vf", f"crop=ih*9/16:ih,scale=1080:1920{caption_filter}",
-                             "-c:v", "libx264", "-crf", "18", "-preset", "veryfast",
-                             "-c:a", "aac",
-                             output_path]
+                             "-vf", f"crop=ih*9/16:ih,scale=1080:1920{caption_filter}{speed_v_suffix}"]
+                if speed != 1.0:
+                    pass2_cmd += ["-af", f"atempo={speed:.4f}"]
+                pass2_cmd += ["-c:v", "libx264", "-crf", "18", "-preset", "veryfast",
+                              "-c:a", "aac",
+                              output_path]
             r2 = subprocess.run(
                 pass2_cmd,
                 capture_output=True, creationflags=CREATE_NO_WINDOW,

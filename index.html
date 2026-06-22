@@ -1543,7 +1543,8 @@
       text-align: center; color: #FFFFFF; font-weight: 700;
       line-height: 1.3; pointer-events: auto; cursor: pointer;
       user-select: none; z-index: 5;
-      text-shadow: -2px -2px 0 #000, 2px -2px 0 #000, -2px 2px 0 #000, 2px 2px 0 #000, 0 3px 6px rgba(0,0,0,0.6);
+      /* text-shadow is applied in JS so the Outline toggle actually changes the
+         preview (it used to be hardcoded here, which made the toggle invisible). */
     }
     #caption-overlay.editing {
       outline: 2px dashed rgba(255,255,255,0.7); border-radius: 6px;
@@ -1555,6 +1556,7 @@
     @keyframes capPop { 0% { transform: scale(0.85); opacity: 0.5; } 100% { transform: scale(1); opacity: 1; } }
     #caption-overlay:not(.editing) { cursor: grab; }
     #caption-overlay.cap-dragging { cursor: grabbing; }
+    .speed-btn.active { background: var(--orange); border-color: var(--orange); color: #fff; }
     #dlg-canvas-wrap.pan-mode { cursor: grab; }
     #dlg-canvas-wrap.pan-mode:active { cursor: grabbing; }
     #dlg-canvas-wrap.pan-mode .dlg-overlay-text,
@@ -2501,6 +2503,13 @@
                   <span style="font-size:10px;font-weight:700;letter-spacing:0.06em;text-transform:uppercase;color:var(--muted);">Letter spacing</span>
                   <input type="range" id="cap-letter-slider" min="0" max="20" value="2" style="width:90px;accent-color:var(--orange);" oninput="setCaptionLetterSpacing(this.value)">
                 </div>
+                <div class="thumb-inline-row" id="clip-speed-row" style="align-items:center;gap:8px;margin-top:8px;">
+                  <span style="font-size:10px;font-weight:700;letter-spacing:0.06em;text-transform:uppercase;color:var(--muted);">Speed</span>
+                  <button type="button" class="btn-ghost btn-sm speed-btn active" id="speed-btn-1" data-speed="1" onclick="setClipSpeed(1)" title="Normal speed">1&#215;</button>
+                  <button type="button" class="btn-ghost btn-sm speed-btn" id="speed-btn-1_5" data-speed="1.5" onclick="setClipSpeed(1.5)" title="1.5&#215; faster (preview &amp; burned into the exported clip)">1.5&#215;</button>
+                  <button type="button" class="btn-ghost btn-sm speed-btn" id="speed-btn-2" data-speed="2" onclick="setClipSpeed(2)" title="2&#215; faster (preview &amp; burned into the exported clip)">2&#215;</button>
+                  <span style="font-size:11px;color:var(--muted);">Applies to the preview and the exported video</span>
+                </div>
                 <p style="font-size:11px;color:var(--muted);margin:6px 0 0;">Burns exactly as shown. <strong>Click a word</strong> to toggle emphasis &#183; <strong>double-click</strong> (or &#9998;) to edit text &#8212; <strong>Enter makes a second line</strong> &#183; <strong>drag</strong> the captions to reposition.</p>
               </div>
             </div><!-- /.editor-left-zone -->
@@ -3009,7 +3018,7 @@
   // Must match BACKEND_BUILD in server.py — bumped together whenever the
   // frontend/backend contract changes. A mismatch means the user is running
   // an old backend (launcher not restarted after a deploy).
-  const EXPECTED_BACKEND_BUILD = '2026-06-18-clipcaption';
+  const EXPECTED_BACKEND_BUILD = '2026-06-22-speed';
   if (document.fonts && document.fonts.load) { document.fonts.load("700 64px 'Handmade Sans'").catch(function(){}); }
   let _staleBackendWarned = false;
   function showStaleBackendBanner(stale) {
@@ -4644,12 +4653,14 @@
     editorBleepRanges = [];
     resetCaptionEdits();
     restoreSavedClipEdits(_editCandidate.hook_line);
+    syncSpeedButtons();   // reflect restored/sticky clip speed in the buttons
 
     const vid = document.getElementById('edit-video');
     vid.src = getPlayableVideoUrl('clips');
     vid.load();
     vid.addEventListener('loadedmetadata', function () {
       vid.currentTime = editorInTime;
+      applyPreviewSpeed();   // playbackRate resets on each load — re-apply the clip speed
       renderTimelineBar();
     }, { once: true });
 
@@ -4663,6 +4674,11 @@
 
     document.getElementById('export-status').style.display = 'none';
     document.getElementById('export-status').innerHTML = '';
+    // Auto-write the Instagram caption for this clip as soon as it's opened, so
+    // it's ready without clicking Regenerate. No-ops if a saved caption was
+    // restored above or one is already in flight; one backend call per clip
+    // (same cost as Regenerate). Deferred so editor bounds/transcript are set.
+    setTimeout(() => { try { ensureIgCaption(); } catch (_) {} }, 0);
     updateProject('clip_selected', _buildClipEditPayload());
     showStage(3);
   }
@@ -4771,6 +4787,7 @@
     origInTime    = editorInTime;   // stored once — never overwritten
     origOutTime   = editorOutTime;
     restoreSavedClipEdits(_editCandidate.hook_line);
+    syncSpeedButtons();   // reflect restored/sticky clip speed in the buttons
     if (editorCaptionStyle.show) setTimeout(() => runAiEmphasis(false), 400);
 
     const vid = document.getElementById('edit-video');
@@ -4778,6 +4795,7 @@
     vid.load();
     vid.addEventListener('loadedmetadata', function () {
       vid.currentTime = editorInTime;
+      applyPreviewSpeed();   // playbackRate resets on each load — re-apply the clip speed
       renderTimelineBar();
     }, { once: true });
 
@@ -4791,6 +4809,11 @@
 
     document.getElementById('export-status').style.display = 'none';
     document.getElementById('export-status').innerHTML = '';
+    // Auto-write the Instagram caption for this clip as soon as it's opened, so
+    // it's ready without clicking Regenerate. No-ops if a saved caption was
+    // restored above or one is already in flight; one backend call per clip
+    // (same cost as Regenerate). Deferred so editor bounds/transcript are set.
+    setTimeout(() => { try { ensureIgCaption(); } catch (_) {} }, 0);
     updateProject('clip_selected', _buildClipEditPayload());
     showStage(3);
   }
@@ -4831,6 +4854,7 @@
       updateAllEditorUI();
       const sizeSel = document.getElementById('caption-group-size');
       if (sizeSel) sizeSel.value = String(editorCaptionStyle.group_size || 4);
+      syncSpeedButtons(); applyPreviewSpeed();   // restore speed UI + preview rate after undo
     } catch (_) {}
   }
   document.addEventListener('keydown', function (e) {
@@ -10540,6 +10564,7 @@
     mode: 'karaoke', all_caps: true, emphasis_caps: true, group_size: 4,
     pop: true, pos_bottom: 0.12, show: true,
     size_scale: 2.0,           // 0.5-3.0 multiplier on the base caption size
+    speed: 1,                  // 1 | 1.5 | 2 — playback speed (preview + burned export)
     outline_on: true,          // letter outline (burns + preview)
     outline_width: 3,          // 0-10 thickness level
     letter_spacing: 2,         // 0-20 (% of font size)
@@ -10774,6 +10799,32 @@
     editorCaptionStyle.outline_on = !!on;
     updateCaptionOverlay(true);
   }
+  // Clip speed (1 / 1.5 / 2x): drives the preview playbackRate now and is
+  // burned into the exported clip while it stays toggled. Persisted with the
+  // clip edit via editorCaptionStyle.
+  const CLIP_SPEEDS = [1, 1.5, 2];
+  function getClipSpeed() {
+    const s = parseFloat(editorCaptionStyle.speed);
+    return CLIP_SPEEDS.includes(s) ? s : 1;
+  }
+  function syncSpeedButtons() {
+    const cur = getClipSpeed();
+    document.querySelectorAll('#clip-speed-row .speed-btn').forEach(b => {
+      b.classList.toggle('active', parseFloat(b.dataset.speed) === cur);
+    });
+  }
+  function applyPreviewSpeed() {
+    const vid = document.getElementById('edit-video');
+    if (vid) { try { vid.playbackRate = getClipSpeed(); } catch (_) {} }
+  }
+  function setClipSpeed(v) {
+    const s = CLIP_SPEEDS.includes(parseFloat(v)) ? parseFloat(v) : 1;
+    pushEditorUndo('speed');
+    editorCaptionStyle.speed = s;
+    syncSpeedButtons();
+    applyPreviewSpeed();
+    try { autosaveClipEdits(); } catch (_) {}
+  }
   function setCaptionOutline(v) {
     editorCaptionStyle.outline_width = Math.max(0, Math.min(10, parseInt(v) || 0));
     if (editorCaptionStyle.outline_width > 0) {
@@ -10870,8 +10921,13 @@
       const _olPx = Math.max(1, Math.round(_capPx * (editorCaptionStyle.outline_width || 0) * 0.02));
       overlay.style.webkitTextStroke = _olPx + 'px #000';
       overlay.style.paintOrder = 'stroke fill';
+      // Hard outline + soft drop shadow (matches the burned ASS border). Driven
+      // here so unticking Outline visibly removes it in the preview.
+      overlay.style.textShadow =
+        '-2px -2px 0 #000, 2px -2px 0 #000, -2px 2px 0 #000, 2px 2px 0 #000, 0 3px 6px rgba(0,0,0,0.6)';
     } else {
       overlay.style.webkitTextStroke = '0px transparent';
+      overlay.style.textShadow = 'none';
     }
     overlay.style.bottom = Math.round((editorCaptionStyle.pos_bottom ?? 0.12) * 100) + '%';
     overlay.dataset.groupIndex = g.index;
@@ -11184,6 +11240,8 @@
     }
     const _igCap = (getClipIgCaption() || (_sharedThumbnailDraft && _sharedThumbnailDraft.ig_caption) || '').trim();
     if (_igCap) form.append('ig_caption', _igCap);
+    // Clip speed (1 / 1.5 / 2x) — burned into the exported video while toggled.
+    form.append('speed', String(getClipSpeed()));
 
     try {
       const res  = await fetch(BACKEND + '/export_clip', { method: 'POST', body: form });

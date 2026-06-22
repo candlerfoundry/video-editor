@@ -1725,3 +1725,26 @@ Regression risk: Medium (drag/render).
 
 - `server.py:663` — `/caption` endpoint single-filter `-vf` path
 - `server.py:2671` — `caption_filter` variable used by stitched and single-segment export paths
+
+---
+
+## Clip speed (1 / 1.5 / 2x) + outline-toggle preview fix + IG caption auto-render (June 22, 2026)
+
+Build bumped to `2026-06-22-speed` (BACKEND_BUILD + EXPECTED_BACKEND_BUILD together, §32) because `/export_clip` gains an optional `speed` form field.
+
+### 1. Clip speed — preview + burned export
+- **Contract:** `/export_clip` accepts optional `speed` in {1.0, 1.5, 2.0}; anything else (or absent) -> 1.0 (original render path untouched, fully backward-compatible).
+- **Frontend (index.html):** speed stored in `editorCaptionStyle.speed` (persists/restores with the clip edit like every other caption-style field). `setClipSpeed(v)` sets it, updates the `#clip-speed-row` 1x/1.5x/2x buttons, calls `applyPreviewSpeed()` (sets `edit-video.playbackRate`), and autosaves. `applyPreviewSpeed()` is re-called in the editor `loadedmetadata` handler because `playbackRate` resets on every `load()`. `syncSpeedButtons()` runs after `restoreSavedClipEdits` and in `editorUndo`. Caption timing in preview is unaffected (driven by `currentTime`, which playbackRate does not remap).
+- **Backend (server.py /export_clip):** speed applied at the END of the video chain — `...{caption_filter}{speed_v_suffix}` where `speed_v_suffix = ",setpts=PTS/{S}"`. Placing `setpts` AFTER the `subtitles` filter compresses burned captions in lock-step with the footage, so the ASS timestamps need no rescaling. Audio gets a matching `atempo={S}` (valid 0.5-2.0, so 1.5 and 2.0 are single-stage). Applies to BOTH render paths:
+  - Stitched (multi-cut): `[vcat]...{speed_v_suffix}[vout]` plus a separate `[acat]atempo={S}[aout]` node, mapping `[aout]`.
+  - Single-segment non-bleep: appended to `-vf` plus `-af atempo={S}`.
+  - Single-segment bleep: `setpts` on `[vout]`; the censor-tone `amix` (which MUST keep `normalize=0`, §35/§36) feeds an extra `[amx]atempo={S}[aout]` stage. The amix normalize=0 invariant is preserved — atempo is added AFTER the mix, never inside it.
+- `speed == 1.0` short-circuits every branch to the exact original command (no setpts/atempo added).
+
+### 2. Outline-toggle preview fix
+- **Bug:** `#caption-overlay` had a hardcoded `text-shadow` (4-way black border + soft drop) in CSS, so the "Outline" checkbox (which only flips `-webkit-text-stroke`) appeared to do nothing in the preview — though the burn already respected it (`Outline=0` when off, §26/§30).
+- **Fix:** removed the static `text-shadow` from CSS; it is now set in JS in the `_olOn` branch of `updateCaptionOverlay` — applied when outline is on, `'none'` when off. Preview now visibly matches the toggle and the burned ASS border.
+
+### 3. IG caption auto-render on clip open
+- **Bug:** `ensureIgCaption()` (auto-writes the Instagram caption, June 18) only fired from `dlgOpenEditor()` (the thumbnail composer). Opening a viral clip in the editor left the caption empty until the user clicked Regenerate.
+- **Fix:** both clip-editor entry paths (viral + split) call `ensureIgCaption()` via `setTimeout(...,0)` after bounds/transcript are set. It no-ops if a saved caption was restored or one is already in flight — one backend call per clip, same cost as Regenerate.
