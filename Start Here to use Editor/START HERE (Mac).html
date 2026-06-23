@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Foundry Video Editor — Mac Setup</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#FFFFFF; --panel:#F7F7F5; --orange:#E8541A; --orange-hov:#C94516;
+    --tint:#FEF0EB; --text:#1A1A1A; --muted:#6B6B6B; --success:#2D6A4F;
+    --error:#CC2200; --border:#ECECE8;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{font-family:'Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;
+    background:var(--panel); color:var(--text); line-height:1.55;
+    -webkit-font-smoothing:antialiased; padding:40px 20px;}
+  .wrap{max-width:720px;margin:0 auto}
+  .card{background:var(--bg); border:1px solid var(--border); border-radius:16px;
+    overflow:hidden; box-shadow:0 1px 3px rgba(0,0,0,.04);}
+  header{background:var(--text); color:#fff; padding:36px 40px 32px; border-top:5px solid var(--orange);}
+  header .kicker{text-transform:uppercase; letter-spacing:.14em; font-size:12px; font-weight:600; color:var(--orange); margin-bottom:10px;}
+  header h1{font-size:30px; font-weight:700; letter-spacing:-.02em}
+  header p{color:#B8B8B8; font-size:15px; margin-top:8px}
+  .body{padding:32px 40px 8px}
+  .note{background:var(--tint); border-left:3px solid var(--orange); border-radius:0 10px 10px 0;
+    padding:13px 16px; font-size:14px; margin:0 0 8px}
+  .note b{color:var(--text)}
+  .section-label{font-size:12px; font-weight:700; text-transform:uppercase; letter-spacing:.1em; color:var(--muted); margin:28px 0 14px;}
+  .step{display:flex; gap:18px; padding:18px 0; border-bottom:1px solid var(--border)}
+  .step:last-child{border-bottom:none}
+  .num{flex:none; width:34px; height:34px; border-radius:50%; background:var(--tint); color:var(--orange);
+    font-weight:700; display:flex; align-items:center; justify-content:center; font-size:15px;}
+  .step.one-time .num{background:var(--text); color:#fff}
+  .step-content{flex:1; min-width:0}
+  .step-title{font-weight:600; font-size:16px; display:flex; align-items:center; gap:10px; flex-wrap:wrap}
+  .badge{font-size:10.5px; font-weight:700; text-transform:uppercase; letter-spacing:.05em;
+    background:#EEF2EE; color:var(--success); padding:2px 8px; border-radius:20px;}
+  .step-desc{color:var(--muted); font-size:14.5px; margin-top:5px}
+  .step-desc b{color:var(--text); font-weight:600}
+  .btn{display:inline-block; margin-top:12px; background:var(--orange); color:#fff; text-decoration:none;
+    font-weight:600; font-size:14px; padding:9px 16px; border-radius:9px;}
+  .btn:hover{background:var(--orange-hov)}
+  code{background:var(--panel); border:1px solid var(--border); border-radius:6px; padding:2px 7px;
+    font-family:'SF Mono',Menlo,'Courier New',monospace; font-size:13px; color:var(--text);}
+  .term{background:#1A1A1A; color:#EDEDED; border-radius:10px; padding:13px 15px; margin-top:12px;
+    font-family:'SF Mono',Menlo,'Courier New',monospace; font-size:12.5px; line-height:1.7; white-space:pre-wrap;}
+  .term .p{color:#8a8a8a}
+  .term .y{color:#ffd140}
+  .filechip{display:inline-flex; align-items:center; gap:11px; margin-top:13px; background:var(--panel);
+    border:1px solid var(--border); border-radius:10px; padding:10px 14px; font-weight:600; font-size:14.5px;}
+  .filechip .ic{font-size:19px}
+  .filechip .pill{color:var(--orange); font-weight:600; font-size:12px; background:#fff; border:1px solid var(--border); padding:3px 9px; border-radius:6px;}
+  .tip{background:var(--tint); border-left:3px solid var(--orange); border-radius:0 10px 10px 0; padding:13px 16px; font-size:14px; margin-top:12px}
+  .tip .tiphead{font-weight:700; color:var(--text); display:block; margin-bottom:3px}
+  .caption{font-size:12px; color:var(--muted); margin-top:8px; font-style:italic}
+  .trouble{background:var(--panel); border-top:1px solid var(--border); padding:28px 40px}
+  .trouble h2{font-size:16px; font-weight:700; margin-bottom:14px}
+  .qa{padding:11px 0; border-bottom:1px solid var(--border)}
+  .qa:last-child{border-bottom:none}
+  .qa .q{font-weight:600; font-size:14.5px}
+  .qa .a{color:var(--muted); font-size:14px; margin-top:3px}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="card">
+    <header>
+      <div class="kicker">The Candler Foundry · macOS</div>
+      <h1>Foundry Video Editor — Mac Setup</h1>
+      <p>Two one-time steps, then it's a double-click forever.</p>
+    </header>
+
+    <div class="body">
+      <div class="note">
+        <b>The Windows app won't run on a Mac</b>, so on a Mac you start the editor with the files
+        below. You run a setup once (it installs everything for you), and after that you just
+        double-click to open the editor.
+      </div>
+
+      <div class="section-label">First time only — set up once</div>
+
+      <div class="step one-time">
+        <div class="num">1</div>
+        <div class="step-content">
+          <div class="step-title">Install Dropbox &amp; sign into Foundry <span class="badge">one time</span></div>
+          <div class="step-desc">
+            Install the Dropbox desktop app and sign in with the <b>Foundry's Dropbox account</b>
+            (credentials are in the <b>PTE folder</b>). Wait until the <b>Foundry Video Editor</b> folder
+            shows a green check mark, which means it has finished downloading.
+          </div>
+          <a class="btn" href="https://www.dropbox.com/desktop" target="_blank" rel="noopener">Get Dropbox ↗</a>
+          <div class="caption">If a second Dropbox account is already on this Mac, the editor still finds the
+            Foundry folder automatically — you just need the Foundry account signed in and synced.</div>
+        </div>
+      </div>
+
+      <div class="step one-time">
+        <div class="num">2</div>
+        <div class="step-content">
+          <div class="step-title">Run the setup, once <span class="badge">one time · ~10 min</span></div>
+          <div class="step-desc">
+            This installs everything the editor needs. Open the <b>Terminal</b> app (press
+            <code>⌘ Space</code>, type “Terminal”, press Return). Then type <code>bash</code> followed by a
+            <b>space</b>, <b>drag the file “Setup (Mac).command” into the Terminal window</b> (it fills in
+            the path), and press Return.
+          </div>
+          <div class="term"><span class="p"># type this (with a space), then drag in the Setup file, then press Return</span>
+bash <span class="y">‹drag “Setup (Mac).command” here›</span></div>
+          <div class="step-desc" style="margin-top:10px">
+            It may ask for the Mac password and will take several minutes — that's normal. When it says
+            <b>“Setup complete,”</b> you're done with setup forever.
+          </div>
+        </div>
+      </div>
+
+      <div class="section-label">Every time you want to edit</div>
+
+      <div class="step">
+        <div class="num">3</div>
+        <div class="step-content">
+          <div class="step-title">Open the app</div>
+          <div class="step-desc">
+            Setup created a launcher at <code>~/Applications/Foundry Editor.command</code>.
+            <b>Double-click it</b> — a small window opens, gets things ready, then the editor opens in your
+            browser automatically. <b>Leave that window open</b> while you work; close it when you're done.
+            <b>Tip:</b> drag that file onto your Dock so it's one click from now on.
+          </div>
+          <div class="filechip"><span class="ic">⚙️</span> ~/Applications/Foundry Editor.command <span class="pill">double-click</span></div>
+          <div class="caption">First launch only: if macOS says “unidentified developer,” right-click the file → <b>Open</b> → <b>Open</b>. This launcher lives outside Dropbox, so it keeps working even after the team updates the editor.</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="trouble">
+      <h2>If something goes wrong</h2>
+      <div class="qa">
+        <div class="q">“…could not be executed because you do not have appropriate access privileges”</div>
+        <div class="a">Dropbox dropped the launcher's “executable” mark (this can happen after the team updates the editor, and macOS gives no way to restore it from Finder). <b>Re-run Setup (Step 2)</b> — it's run with <code>bash</code>, so it works even when the mark is missing, and it reinstalls a permanent launcher at <code>~/Applications/Foundry Editor.command</code> that doesn't have this problem. Launch from that file afterward.</div>
+      </div>
+      <div class="qa">
+        <div class="q">The launcher opens in TextEdit instead of running</div>
+        <div class="a">Setup hasn't finished, or it didn't bless the launcher. Re-run Step 2, or right-click the launcher → Open.</div>
+      </div>
+      <div class="qa">
+        <div class="q">“Could not find server.py”</div>
+        <div class="a">Dropbox hasn't finished syncing the Foundry account. Wait for the green check mark on the Foundry Video Editor folder, then try again.</div>
+      </div>
+      <div class="qa">
+        <div class="q">It warns “ffmpeg not found”</div>
+        <div class="a">Re-run Step 2 (Setup installs ffmpeg).</div>
+      </div>
+      <div class="qa">
+        <div class="q">Browser opens but the editor can't connect</div>
+        <div class="a">Close the window and double-click the launcher again. Make sure nothing else is using port 5000.</div>
+      </div>
+      <div class="qa">
+        <div class="q">Still stuck</div>
+        <div class="a">Send Emily a screenshot of the Terminal window.</div>
+      </div>
+    </div>
+  </div>
+</div>
+</body>
+</html>

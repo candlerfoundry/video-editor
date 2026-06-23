@@ -1748,3 +1748,25 @@ Build bumped to `2026-06-22-speed` (BACKEND_BUILD + EXPECTED_BACKEND_BUILD toget
 ### 3. IG caption auto-render on clip open
 - **Bug:** `ensureIgCaption()` (auto-writes the Instagram caption, June 18) only fired from `dlgOpenEditor()` (the thumbnail composer). Opening a viral clip in the editor left the caption empty until the user clicked Regenerate.
 - **Fix:** both clip-editor entry paths (viral + split) call `ensureIgCaption()` via `setTimeout(...,0)` after bounds/transcript are set. It no-ops if a saved caption was restored or one is already in flight — one backend call per clip, same cost as Regenerate.
+
+---
+
+## Mac launcher files now tracked in the repo + permanent launcher (June 22, 2026)
+
+The Mac launch bundle lives in the repo at `Start Here to use Editor/` (previously it existed only in the Dropbox deploy folder, untracked — which is how a truncated/edited copy could drift unnoticed). Tracked files:
+- `Start Here to use Editor/Launch Editor (Mac).command` — finds `server.py` (globs `$HOME/Dropbox*/...` to handle "Dropbox (Team)" naming), prefers the Setup venv, self-heals ffmpeg-full for the libass `subtitles` filter, starts the backend, waits ≤90s on `/health`, then opens the Netlify URL. Must stay running (it `wait`s on the backend).
+- `Start Here to use Editor/Setup (Mac).command` — one-time install (Homebrew, python, ffmpeg-full force-linked, venv in `~/Library/Application Support/Foundry Video Editor`).
+- `Start Here to use Editor/START HERE (Mac).html` — setup/troubleshooting page.
+
+These are deployed by copying them into the Dropbox `Start Here to use Editor` folder. They are NOT served by the app (the frontend is the Netlify site); they only launch the local backend.
+
+### Dropbox exec-bit gotcha + permanent launcher
+macOS requires a `.command` file to have the Unix executable bit to be double-clickable, and **Dropbox does not carry that bit from Windows → Mac**. So a launcher kept *inside* Dropbox loses its double-click ability whenever the file re-syncs (e.g. after the team edits the code), producing: *"could not be executed because you do not have appropriate access privileges."* macOS offers no Finder way to restore the bit.
+
+Fix (in `Setup (Mac).command` step 4): install a permanent launcher at `~/Applications/Foundry Editor.command` (outside Dropbox) that runs the Dropbox script via `bash` — `bash <file>` does not need the file to be executable, so the in-Dropbox bit no longer matters and the local launcher's own bit is set once and never re-synced away. `START HERE (Mac).html` points users at the `~/Applications` launcher and documents the access-privileges error.
+
+One-time recovery if a user is already stuck (their `Setup`/launcher bit was stripped): run, in Terminal,
+`mkdir -p ~/Applications && printf '#!/bin/bash\nbash "$HOME"/Dropbox*/Scripts/"Foundry Video Editor"/"Start Here to use Editor"/"Launch Editor (Mac).command"\n' > "$HOME/Applications/Foundry Editor.command" && chmod +x "$HOME/Applications/Foundry Editor.command"` — then launch from `~/Applications/Foundry Editor.command`. (Re-running Setup via the `bash <drag file>` method does the same thing.)
+
+### ⚠️ Editing-session note: cloud-mount truncation
+The Dropbox and session "outputs" folders are cloud-synced. Reading or `cp`-ing files through the **shell** on those mounts returns truncated/torn views of larger files (observed: `server.py`, `index.html`, and the launcher files all read short via bash even though the real files are intact). The Read/Edit tools are reliable; the shell is not. Do git work in `/tmp`, author files there, and verify with the Read tool — never trust a bash `cp`/`cat` of a cloud-mount file. This is the most likely original cause of the truncated deployed `server.py`.
