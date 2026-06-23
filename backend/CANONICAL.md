@@ -1770,3 +1770,24 @@ One-time recovery if a user is already stuck (their `Setup`/launcher bit was str
 
 ### ⚠️ Editing-session note: cloud-mount truncation
 The Dropbox and session "outputs" folders are cloud-synced. Reading or `cp`-ing files through the **shell** on those mounts returns truncated/torn views of larger files (observed: `server.py`, `index.html`, and the launcher files all read short via bash even though the real files are intact). The Read/Edit tools are reliable; the shell is not. Do git work in `/tmp`, author files there, and verify with the Read tool — never trust a bash `cp`/`cat` of a cloud-mount file. This is the most likely original cause of the truncated deployed `server.py`.
+
+---
+
+## Backend-offline banner + Mac UX fixes (June 22, 2026)
+
+No build bump: none of these change the frontend/backend contract (the `/health` handshake, request/response shapes are unchanged). They do require redeploying `server.py` + the Netlify frontend to take effect.
+
+### 1. Backend-offline banner (index.html)
+Returning users (those with the `fve_setup_complete` localStorage flag) stay in the app view when the backend isn't running — previously they only saw a subtle "Connecting…" header label while most actions silently no-op'd. Added `showOfflineBanner()` (a fixed top banner, sibling of `showStaleBackendBanner()`): shown after `_healthFailCount >= 2` consecutive failed health polls (debounced so it doesn't flash on momentary blips or first paint), auto-hidden the instant the backend connects. New users are unaffected (they get the setup wizard). The offline and stale banners are mutually exclusive (offline hides stale when shown).
+
+### 2. Mac project persistence (server.py)
+`project_store_dir` previously sat under `LOCALAPPDATA or tempfile.gettempdir()`. `LOCALAPPDATA` is Windows-only, so on macOS projects landed in a temp dir that macOS periodically purges → the recent-projects list vanished. Added `_stable_app_data_root()`: Windows → `%LOCALAPPDATA%`; macOS → `~/Library/Application Support`; Linux → `$XDG_DATA_HOME` or `~/.local/share`; temp only as last resort. A one-time best-effort migration copies any `*.json` projects from the old temp location into the stable store (no-op on Windows, where old == new). Source videos/exported clips were never affected (they live in Dropbox); only local edit-state was at risk.
+
+### 3. /clips and /split read the API key the Mac-aware way (server.py)
+Both endpoints hardcoded `~/Dropbox/Scripts/api_key.txt` and read it without `utf-8-sig`, bypassing `read_api_key()`/`resolve_dropbox_root()`. On a Mac whose Foundry folder syncs to `~/Dropbox (Team Name)`, the key wasn't found and clip-finding/splitting failed. Both now call `read_api_key()` (resolves the real Dropbox root, handles a BOM). This is the same helper every other endpoint already uses.
+
+### 4. Windows-only wording neutralized
+The "Backend is not connected. Make sure start_server.bat is running." alert (meaningless on Mac) now reads "Start the Foundry Video Editor launcher, then try again." Remaining Windows-centric copy in the setup wizard (Step text referencing `start_server.bat`) is a known follow-up — the wizard isn't yet platform-aware.
+
+### Architecture note (multi-user)
+The Netlify site is a static UI only; there is no shared app server. Each user runs their own local backend (`localhost:5000`) and the page talks only to theirs. Projects live in the per-machine app-data store above, so "Recent Projects" is per-user/per-machine and never shared. Shared state is only what lives in the Foundry Dropbox account (source videos, exported clips) and Airtable (clip records); concurrent exports are independent API calls with no cross-user locking.

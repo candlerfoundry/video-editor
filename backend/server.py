@@ -129,12 +129,44 @@ thumbnail_jobs = {}  # {job_id: {status, result, error, created_at}}
 # ── Video path cache (populated by /find_json, reused by /thumbnail) ──
 video_path_cache = {}  # {filename: full_absolute_path}
 project_store_lock = threading.Lock()
-local_app_root = os.path.join(
-    os.environ.get('LOCALAPPDATA') or tempfile.gettempdir(),
-    'Foundry Video Editor',
-)
+def _stable_app_data_root():
+    """Per-OS app-data dir that survives reboots, so saved projects persist.
+    Windows: %LOCALAPPDATA%; macOS: ~/Library/Application Support; Linux:
+    $XDG_DATA_HOME or ~/.local/share. Temp dir only as a last resort.
+    (Pre-fix builds used LOCALAPPDATA-or-tempdir, so on Mac projects landed in
+    a temp folder macOS periodically purges — losing the recent-projects list.)"""
+    sysname = platform.system()
+    if sysname == 'Windows':
+        base = os.environ.get('LOCALAPPDATA')
+    elif sysname == 'Darwin':
+        base = os.path.join(os.path.expanduser('~'), 'Library', 'Application Support')
+    else:
+        base = os.environ.get('XDG_DATA_HOME') or os.path.join(os.path.expanduser('~'), '.local', 'share')
+    if not base:
+        base = tempfile.gettempdir()
+    return os.path.join(base, 'Foundry Video Editor')
+
+local_app_root = _stable_app_data_root()
 project_store_dir = os.path.join(local_app_root, 'projects')
 os.makedirs(project_store_dir, exist_ok=True)
+
+# One-time best-effort migration: if a previous build saved projects in the old
+# temp location, copy them into the stable store so users don't lose them.
+try:
+    _old_projects = os.path.join(
+        os.environ.get('LOCALAPPDATA') or tempfile.gettempdir(), 'Foundry Video Editor', 'projects')
+    if os.path.isdir(_old_projects) and os.path.abspath(_old_projects) != os.path.abspath(project_store_dir):
+        for _name in os.listdir(_old_projects):
+            if not _name.endswith('.json'):
+                continue
+            _dst = os.path.join(project_store_dir, _name)
+            if not os.path.exists(_dst):
+                try:
+                    shutil.copy2(os.path.join(_old_projects, _name), _dst)
+                except Exception:
+                    pass
+except Exception:
+    pass
 
 
 def find_video_in_dropbox(filename):
@@ -2330,10 +2362,7 @@ def find_clips():
         logger.info("[clips] Transcript length: %s chars", len(transcript_text))
         logger.debug("[clips] Preview: %s", transcript_text[:200])
 
-        api_key_path = os.path.join(os.path.expanduser('~'), 'Dropbox', 'Scripts', 'api_key.txt')
-        with open(api_key_path, 'r') as f:
-            api_key = f.read().strip()
-
+        api_key = read_api_key()
         client = anthropic.Anthropic(api_key=api_key)
 
         # Retry loop: require ≥ 3 clips with valid duration (25–95s) before returning
@@ -2402,10 +2431,7 @@ def split_video():
             except (ValueError, TypeError):
                 n_parts = None
 
-        api_key_path = os.path.join(os.path.expanduser('~'), 'Dropbox', 'Scripts', 'api_key.txt')
-        with open(api_key_path, 'r') as f:
-            api_key = f.read().strip()
-
+        api_key = read_api_key()
         client = anthropic.Anthropic(api_key=api_key)
 
         n_instruction = (

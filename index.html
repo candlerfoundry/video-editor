@@ -2983,6 +2983,8 @@
       hdrDot.className = 'dot connected';
       hdrLabel.textContent = 'Backend connected';
       hdrLabel.style.color = '#2D6A4F';
+      _healthFailCount = 0;
+      showOfflineBanner(false);
 
       if (!backendOnline) {
         // First successful connection — one-time setup
@@ -3003,6 +3005,11 @@
       hdrDot.className = 'dot waiting';
       hdrLabel.textContent = 'Connecting\u2026';
       hdrLabel.style.color = '';
+      // After ~2 failed health checks, returning users (who stay in the app view)
+      // get a clear "start the backend" banner. New users already see the wizard.
+      _healthFailCount++;
+      let _setupDone = false; try { _setupDone = !!localStorage.getItem('fve_setup_complete'); } catch (_) {}
+      if (_healthFailCount >= 2 && _setupDone) showOfflineBanner(true);
 
       if (backendOnline) {
         backendOnline = false;
@@ -3033,6 +3040,27 @@
       document.body.appendChild(el);
     }
     el.style.display = 'block';
+  }
+
+  // Offline backend banner: returning users stay in the app view when the
+  // backend isn't running, so without this they'd only see a subtle "Connecting…"
+  // label. Shown after a couple of failed health checks (debounced so it doesn't
+  // flash on momentary blips); auto-hides the moment the backend connects.
+  let _healthFailCount = 0;
+  function showOfflineBanner(offline) {
+    let el = document.getElementById('offline-backend-banner');
+    if (!offline) { if (el) el.style.display = 'none'; return; }
+    if (!el) {
+      el = document.createElement('div');
+      el.id = 'offline-backend-banner';
+      el.style.cssText = 'position:fixed;top:0;left:0;right:0;z-index:9999;background:#B91C1C;color:#fff;' +
+        'font-size:13px;font-weight:600;text-align:center;padding:8px 16px;box-shadow:0 2px 8px rgba(0,0,0,0.25);';
+      el.innerHTML = '\u26A0 The Foundry Video Editor backend isn\u2019t running \u2014 open the Foundry Video Editor launcher to start it. Finding clips, editing, captions, and exporting stay unavailable until it connects (this page reconnects automatically).';
+      document.body.appendChild(el);
+    }
+    el.style.display = 'block';
+    const _stale = document.getElementById('stale-backend-banner');
+    if (_stale) _stale.style.display = 'none';
   }
 
   async function pollHealth() {
@@ -5658,7 +5686,7 @@
 
   async function generateCaptions() {
     if (!_captionFile) { alert('Load an MP4 first.'); return; }
-    if (!backendOnline) { alert('Backend is not connected. Make sure start_server.bat is running.'); return; }
+    if (!backendOnline) { alert('Backend is not connected. Start the Foundry Video Editor launcher, then try again.'); return; }
 
     const statusEl = document.getElementById('caption-status');
     const btn = document.getElementById('btn-generate-captions');
