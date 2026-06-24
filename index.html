@@ -3026,6 +3026,50 @@
   // frontend/backend contract changes. A mismatch means the user is running
   // an old backend (launcher not restarted after a deploy).
   const EXPECTED_BACKEND_BUILD = '2026-06-22-speed';
+
+  // ───────────────────────────────────────────────────────────────────────
+  // TEMP DIAGNOSTIC (June 24, 2026): frame-picker freeze capture. REMOVE once
+  // the cause is identified. Passive + always-on: writes breadcrumbs and a
+  // watchdog heartbeat to localStorage so an INTERMITTENT freeze can be
+  // diagnosed AFTER a reload (the evidence survives the freeze). See CANONICAL
+  // "Frame-picker freeze diagnostic" for the steps to follow on a freeze.
+  (function(){
+    var LOG='fve_freezelog', WD='fve_wd', CLEAN='fve_clean_exit';
+    function bc(msg){
+      try{ var a=JSON.parse(localStorage.getItem(LOG)||'[]');
+        a.push({t:Date.now(),msg:String(msg)}); while(a.length>80) a.shift();
+        localStorage.setItem(LOG, JSON.stringify(a)); }catch(e){}
+    }
+    window._fveBC=bc;
+    try{ setInterval(function(){ try{ localStorage.setItem(WD,String(Date.now())); }catch(e){} }, 250); }catch(e){}
+    try{ window.addEventListener('beforeunload', function(){ try{ localStorage.setItem(CLEAN,'1'); }catch(e){} }); }catch(e){}
+    try{
+      var cleanExit = localStorage.getItem(CLEAN)==='1';
+      var a=JSON.parse(localStorage.getItem(LOG)||'[]');
+      var lastWd=parseInt(localStorage.getItem(WD)||'0',10);
+      localStorage.setItem(CLEAN,'0');
+      if(!cleanExit && a.length){
+        var first=a[0].t, lastBc=a[a.length-1].t, tail=lastWd-lastBc;
+        var blocked = tail < 1500;
+        var report={ verdict: blocked
+            ? 'MAIN-THREAD BLOCKED right after the last breadcrumb (a JS hang we can fix in code)'
+            : 'JS kept running '+tail+'ms after the last breadcrumb -> likely GPU/compositor, not JS',
+          last_action_before_freeze: a[a.length-1].msg,
+          watchdog_tail_ms: tail,
+          breadcrumbs: a.map(function(x){return {rel_ms:x.t-first, msg:x.msg};}) };
+        window.__fveFreezeReport=report;
+        window.fveFreezeReport=function(){ var str=JSON.stringify(report,null,2);
+          try{ if(navigator.clipboard) navigator.clipboard.writeText(str); }catch(e){}
+          console.log(str); return 'Freeze report copied to clipboard — paste it to Claude.'; };
+        console.warn('%c[FVE FREEZE DIAGNOSTIC] Non-clean exit last session — likely a freeze.','color:#E8541A;font-weight:bold;font-size:13px');
+        console.warn('Verdict:', report.verdict);
+        console.warn('Last action before freeze:', report.last_action_before_freeze);
+        console.table(report.breadcrumbs);
+        console.warn('Run  fveFreezeReport()  to copy the full report, then paste it to Claude.');
+      }
+    }catch(e){}
+  })();
+
   if (document.fonts && document.fonts.load) { document.fonts.load("700 64px 'Handmade Sans'").catch(function(){}); }
   let _staleBackendWarned = false;
   function showStaleBackendBanner(stale) {
@@ -8374,7 +8418,9 @@
     dlgShowState('editor');
     dlgBuildHeroState();
     _clipCaptionBusy = true;          // claim caption gen so dlgOpenEditor won't double-fetch
+    if (window._fveBC) _fveBC('gen:before dlgOpenEditor');
     dlgOpenEditor();
+    if (window._fveBC) _fveBC('gen:before dlgOpenFramePicker');
     dlgOpenFramePicker();
     try {
       const r = await fetchTitlesAndCaption(_sharedThumbnailDraft?.clip_start, _sharedThumbnailDraft?.clip_end);
@@ -9200,6 +9246,7 @@
   let _dlgPickLastTime = null;   // remember the scrub position between opens
 
   function _dlgApplyPickBounds(vidEl, seekTo) {
+    if (window._fveBC) _fveBC('applyBounds:start (video metadata loaded)');
     const scrub = document.getElementById('dlg-pick-scrub');
     const clipStart = _sharedThumbnailDraft?.clip_start;
     const clipEnd   = _sharedThumbnailDraft?.clip_end;
@@ -9208,7 +9255,9 @@
     let t = (seekTo != null && !isNaN(seekTo)) ? seekTo : start;
     t = Math.max(start, Math.min(end || t, t));
     if (scrub) { scrub.min = start; scrub.max = end; scrub.value = t; }
+    if (window._fveBC) _fveBC('applyBounds:before-seek t=' + (t||0).toFixed(2));
     try { vidEl.currentTime = t; } catch (_) {}
+    if (window._fveBC) _fveBC('applyBounds:after-seek');
     dlgUpdatePickTimecode();
   }
 
@@ -9218,8 +9267,10 @@
     const vidEl = document.getElementById('dlg-pick-video');
     if (!vidEl) return;
     _dlgPickVideoEl = vidEl;
+    if (window._fveBC) _fveBC('picker:open');
     if (typeof panel.showModal === 'function') { if (!panel.open) panel.showModal(); }
     else panel.style.display = 'block';
+    if (window._fveBC) _fveBC('picker:modal-shown');
     const src = getPlayableVideoUrl('clips') || getPlayableVideoUrl('thumbnails');
     const seekTo = _dlgPickLastTime;   // null on first open -> falls back to clip start
     if (src && vidEl.src !== src) {
