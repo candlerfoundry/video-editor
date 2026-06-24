@@ -1874,3 +1874,33 @@ Interpretation: verdict "MAIN-THREAD BLOCKED" + the last breadcrumb = the exact
 operation that hung (a JS-level hang, fixable in code). Verdict "JS kept
 running … GPU/compositor" means the hang is below JS (different fix: avoid the
 concurrent second `<video>` decode in the picker / reduce GPU load).
+
+## Clip speed slider — continuous 1×–2× (June 24, 2026)
+
+Build bumped to `2026-06-24-speedslider` (BACKEND_BUILD + EXPECTED_BACKEND_BUILD
+together, §32) because `/export_clip`'s `speed` field widens from a 3-value
+whitelist to a continuous range.
+
+- **UI (index.html):** the clip-editor Speed control changed from three buttons
+  (1× / 1.5× / 2×) to a range slider `#clip-speed-slider` (min 1, max 2, step
+  0.05) plus a live readout `#clip-speed-readout`. `oninput="setClipSpeed(...)"`
+  updates live; undo/autosave are safe because `pushEditorUndo('speed')` coalesces
+  within 600ms and `autosaveClipEdits()` debounces 700ms.
+- **Frontend logic:** `CLIP_SPEEDS=[1,1.5,2]` whitelist replaced by
+  `clampClipSpeed(v)` (clamps to 1.0–2.0, rounds to 2 dp). `getClipSpeed()` and
+  `setClipSpeed()` use it; `syncSpeedButtons()` now sets the slider value +
+  readout (name kept; still called from the clip-load handlers and editorUndo).
+  `applyPreviewSpeed()` (sets `edit-video.playbackRate`) is unchanged. The old
+  `.speed-btn` CSS rule is now unused (left in place, harmless).
+- **Backend (server.py /export_clip):** `speed = speed if speed in (1.0,1.5,2.0)`
+  replaced by `speed = max(1.0, min(2.0, round(speed,2)))`. atempo is valid for
+  0.5–2.0 in a single stage, so any value in 1.0–2.0 works without a 2-stage
+  chain; >2.0 is intentionally not allowed. The `speed == 1.0` short-circuit (no
+  setpts/atempo) and the §35/§36 `amix normalize=0` invariant are unchanged —
+  atempo is still applied AFTER the censor-tone mix.
+
+Max is 2× by request (no slow-motion / no >2×). Deploy: push (Netlify frontend)
++ redeploy server.py next to the exe + restart launcher (the handshake banner
+will prompt it) + hard-refresh.
+
+Regression risk: Low-Medium (touches the export speed path + clip-editor UI).

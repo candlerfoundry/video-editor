@@ -62,7 +62,7 @@ CORS(app)
 
 # Bump this whenever the frontend/backend contract changes (the frontend
 # carries a matching EXPECTED_BACKEND_BUILD and warns when they differ).
-BACKEND_BUILD = "2026-06-22-speed"
+BACKEND_BUILD = "2026-06-24-speedslider"
 
 CREATE_NO_WINDOW = 0x08000000 if platform.system() == 'Windows' else 0
 
@@ -2644,13 +2644,13 @@ def export_clip():
         captions_spec_raw = request.form.get("captions_spec",  "").strip()
         cover_frame     = request.form.get("cover_frame",     "").strip() in {"1", "true", "yes"}
         ig_caption      = request.form.get("ig_caption",      "").strip()
-        # Playback speed (1 / 1.5 / 2x) burned into the export. Clamp to the
-        # speeds the editor offers; 1.0 keeps the original render path untouched.
+        # Playback speed burned into the export, from the editor speed slider.
+        # Continuous 1.0-2.0 (clamped); 1.0 keeps the original render path untouched.
         try:
             speed = float(request.form.get("speed", 1) or 1)
         except (ValueError, TypeError):
             speed = 1.0
-        speed = speed if speed in (1.0, 1.5, 2.0) else 1.0
+        speed = max(1.0, min(2.0, round(speed, 2)))  # clip-speed slider: continuous 1.0-2.0 (atempo valid range; >2.0 would need 2-stage)
     except (ValueError, TypeError) as e:
         return jsonify({"error": f"Invalid parameters: {e}"}), 400
 

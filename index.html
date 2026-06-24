@@ -2505,10 +2505,9 @@
                 </div>
                 <div class="thumb-inline-row" id="clip-speed-row" style="align-items:center;gap:8px;margin-top:8px;">
                   <span style="font-size:10px;font-weight:700;letter-spacing:0.06em;text-transform:uppercase;color:var(--muted);">Speed</span>
-                  <button type="button" class="btn-ghost btn-sm speed-btn active" id="speed-btn-1" data-speed="1" onclick="setClipSpeed(1)" title="Normal speed">1&#215;</button>
-                  <button type="button" class="btn-ghost btn-sm speed-btn" id="speed-btn-1_5" data-speed="1.5" onclick="setClipSpeed(1.5)" title="1.5&#215; faster (preview &amp; burned into the exported clip)">1.5&#215;</button>
-                  <button type="button" class="btn-ghost btn-sm speed-btn" id="speed-btn-2" data-speed="2" onclick="setClipSpeed(2)" title="2&#215; faster (preview &amp; burned into the exported clip)">2&#215;</button>
-                  <span style="font-size:11px;color:var(--muted);">Applies to the preview and the exported video</span>
+                  <input type="range" id="clip-speed-slider" min="1" max="2" step="0.05" value="1" style="width:130px;accent-color:var(--orange);" oninput="setClipSpeed(this.value)" title="Clip speed 1&#215;–2&#215; (preview &amp; burned into the exported clip)">
+                  <span id="clip-speed-readout" style="font-size:12px;font-weight:700;color:var(--text);min-width:40px;text-align:center;">1&#215;</span>
+                  <span style="font-size:11px;color:var(--muted);">1&#215;&#8211;2&#215; · applies to preview and export</span>
                 </div>
                 <p style="font-size:11px;color:var(--muted);margin:6px 0 0;">Burns exactly as shown. <strong>Click a word</strong> to toggle emphasis &#183; <strong>double-click</strong> (or &#9998;) to edit text &#8212; <strong>Enter makes a second line</strong> &#183; <strong>drag</strong> the captions to reposition.</p>
               </div>
@@ -3025,7 +3024,7 @@
   // Must match BACKEND_BUILD in server.py — bumped together whenever the
   // frontend/backend contract changes. A mismatch means the user is running
   // an old backend (launcher not restarted after a deploy).
-  const EXPECTED_BACKEND_BUILD = '2026-06-22-speed';
+  const EXPECTED_BACKEND_BUILD = '2026-06-24-speedslider';
 
   // ───────────────────────────────────────────────────────────────────────
   // TEMP DIAGNOSTIC (June 24, 2026): frame-picker freeze capture. REMOVE once
@@ -10878,26 +10877,31 @@
     editorCaptionStyle.outline_on = !!on;
     updateCaptionOverlay(true);
   }
-  // Clip speed (1 / 1.5 / 2x): drives the preview playbackRate now and is
-  // burned into the exported clip while it stays toggled. Persisted with the
-  // clip edit via editorCaptionStyle.
-  const CLIP_SPEEDS = [1, 1.5, 2];
+  // Clip speed (1x-2x slider): drives the preview playbackRate now and is
+  // burned into the exported clip. Persisted with the clip edit via
+  // editorCaptionStyle.speed.
+  const CLIP_SPEED_MIN = 1, CLIP_SPEED_MAX = 2;   // clip speed slider range (1x-2x)
+  function clampClipSpeed(v) {
+    v = parseFloat(v);
+    if (!isFinite(v)) return 1;
+    return Math.max(CLIP_SPEED_MIN, Math.min(CLIP_SPEED_MAX, Math.round(v * 100) / 100));
+  }
   function getClipSpeed() {
-    const s = parseFloat(editorCaptionStyle.speed);
-    return CLIP_SPEEDS.includes(s) ? s : 1;
+    return clampClipSpeed(editorCaptionStyle.speed);
   }
   function syncSpeedButtons() {
     const cur = getClipSpeed();
-    document.querySelectorAll('#clip-speed-row .speed-btn').forEach(b => {
-      b.classList.toggle('active', parseFloat(b.dataset.speed) === cur);
-    });
+    const sl = document.getElementById('clip-speed-slider');
+    if (sl) sl.value = cur;
+    const ro = document.getElementById('clip-speed-readout');
+    if (ro) ro.textContent = (Math.round(cur * 100) / 100) + '\u00d7';
   }
   function applyPreviewSpeed() {
     const vid = document.getElementById('edit-video');
     if (vid) { try { vid.playbackRate = getClipSpeed(); } catch (_) {} }
   }
   function setClipSpeed(v) {
-    const s = CLIP_SPEEDS.includes(parseFloat(v)) ? parseFloat(v) : 1;
+    const s = clampClipSpeed(v);
     pushEditorUndo('speed');
     editorCaptionStyle.speed = s;
     syncSpeedButtons();
