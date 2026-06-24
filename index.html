@@ -10939,7 +10939,14 @@
     overlay.style.display = 'block';
     overlay.style.fontFamily = editorCaptionStyle.font + ', sans-serif';
     const scale = editorCaptionStyle.size_scale || 1;
-    const sizePct = (mode === 'word' ? 0.06 : 0.034) * scale;
+    // WYSIWYG calibration: the burned caption is rendered by ffmpeg/libass, which
+    // draws a given nominal font size ~0.70x smaller than the browser (CSS) does
+    // for the same font (measured: libass Arial Black cap-height ~0.51 of the font
+    // size vs Chrome ~0.72). Multiply the on-screen overlay by this factor so the
+    // preview shows the TRUE burned size (WYSIWYG). Tunable if a future
+    // ffmpeg/font change shifts the ratio.
+    const CAPTION_BURN_CALIBRATION = 0.70;
+    const sizePct = (mode === 'word' ? 0.06 : 0.034) * scale * CAPTION_BURN_CALIBRATION;
     const _capPx = Math.max(13, Math.round(vid.clientHeight * sizePct));
     overlay.style.fontSize = _capPx + 'px';
     overlay.style.letterSpacing = ((editorCaptionStyle.letter_spacing || 0) / 100) + 'em';

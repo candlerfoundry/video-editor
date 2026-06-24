@@ -1791,3 +1791,43 @@ The "Backend is not connected. Make sure start_server.bat is running." alert (me
 
 ### Architecture note (multi-user)
 The Netlify site is a static UI only; there is no shared app server. Each user runs their own local backend (`localhost:5000`) and the page talks only to theirs. Projects live in the per-machine app-data store above, so "Recent Projects" is per-user/per-machine and never shared. Shared state is only what lives in the Foundry Dropbox account (source videos, exported clips) and Airtable (clip records); concurrent exports are independent API calls with no cross-user locking.
+
+## Caption preview WYSIWYG calibration (June 24, 2026)
+
+Frontend-only (index.html); no backend contract change, handshake NOT bumped.
+The burn path (spec_to_ass / srt_to_ass in server.py) is UNCHANGED.
+
+**Symptom (reported on Unstuck selfie clips, not TheoEd):** the in-frame caption
+preview looked much bigger than the burned captions in the saved file.
+
+**Root cause (isolated, measured):** the preview overlay (browser/CSS) and the
+burn (ffmpeg/libass) set the SAME nominal font size (height x 0.034 x size_scale),
+but the two engines render that nominal size at different cap-heights. Measured on
+a real 200% export: size_scale 2.0 -> ASS Fontsize 130 -> libass cap-height ~66px
+on a 1080x1920 frame (cap-ratio ~0.51); Chrome renders the same font at cap-ratio
+~0.72 (canvas measureText). So at identical settings the on-screen caption is
+~1.4x bigger than the burn. This gap exists for EVERY clip, but is only visually
+obvious on 9:16 selfie sources because the editor displays them tall (measured
+element 637x1133), making the oversized preview caption physically large; on 16:9
+TheoEd sources the editor video is short (~640x360) so the same proportional gap
+is a small, unremarkable caption. That is why it shows on Unstuck and not TheoEd.
+(libass's lower cap-ratio is its normal font-sizing model -- it sizes by the
+font's vertical metrics, not the em; sandbox libass measured ~0.63 for DejaVu/
+Liberation, and real Arial Black on Windows ~0.51. The browser sizes by the em.)
+
+**Fix (updateCaptionOverlay):** multiply the overlay font by
+`CAPTION_BURN_CALIBRATION = 0.70` (= libass ~0.51 / Chrome ~0.72, measured from a
+real 200% export) so the preview renders the TRUE burned size for every clip and
+every size_scale. The constant is empirical -- if a future ffmpeg build / font
+changes the libass cap-ratio it can be re-measured (burn cap-height in px on a
+1080x1920 export / (1920 * 0.034 * size_scale * 0.72)).
+
+**Note on absolute size:** with the calibrated preview, the saved-file size is now
+shown accurately. The default size_scale is left at 2.0 (caption size is fully
+controlled by the now-trustworthy size slider); raising the default or the base
+0.034 coefficient is a separate decision because it also affects TheoEd clips.
+
+No build bump: captions_spec contract, routes, request/response shapes unchanged.
+Deploy = Netlify push + hard-refresh; no launcher restart needed.
+
+Regression risk: Low (single preview-only coefficient).
