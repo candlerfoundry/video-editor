@@ -1904,3 +1904,70 @@ Max is 2× by request (no slow-motion / no >2×). Deploy: push (Netlify frontend
 will prompt it) + hard-refresh.
 
 Regression risk: Low-Medium (touches the export speed path + clip-editor UI).
+
+## Mac: double-clickable "Foundry Editor.app" built by Setup (June 25, 2026)
+
+No backend/frontend contract change — this is launcher/setup packaging only, so
+the build handshake is NOT bumped. server.py and index.html are untouched.
+
+Non-technical interns wanted a normal app icon, not a `.command` script. Setup
+now builds a real macOS app so the day-to-day launch is a single double-click.
+
+- **What Setup builds (step 5 of `Start Here to use Editor/Setup (Mac).command`):**
+  a tiny AppleScript app compiled with `osacompile` to `~/Desktop/Foundry Editor.app`.
+  Its only action is to open Terminal and run the existing launcher via
+  `bash "$HOME"/Dropbox*/Scripts/"Foundry Video Editor"/"Start Here to use Editor"/"Launch Editor (Mac).command"`.
+  It deliberately **reuses the maintained launcher** rather than duplicating its
+  logic — the app is just a friendly front door. The Terminal window shows live
+  status and must stay open while editing (the launcher `wait`s on the backend).
+- **Why the Desktop / why an app:** like the permanent `~/Applications` launcher,
+  the app lives **outside Dropbox**, so its icon and Unix exec bit are never
+  stripped by a Dropbox re-sync (the §"Dropbox exec-bit gotcha" problem). Running
+  the in-Dropbox `.command` via `bash` means that file needs no exec bit either.
+  The `~/Applications/Foundry Editor.command` permanent launcher is still
+  installed (step 4) as a backup.
+- **Icon:** `Start Here to use Editor/Foundry Editor.icns` (repo-tracked, built
+  from `brand/foundry-f-orange.png` on a cream squircle). Setup copies it over
+  `Contents/Resources/applet.icns`, deletes the `osacompile`-generated
+  `Assets.car`, and sets `CFBundleIconFile=applet` (the asset catalog would
+  otherwise override the `.icns`).
+- **Signing / Gatekeeper (verified on macOS 26.5.1, June 25 2026):** editing the
+  bundle invalidates `osacompile`'s signature, so Setup re-signs **ad-hoc**
+  (`codesign --force --deep -s -`) — an unsigned-but-modified bundle can be
+  refused as "damaged". The app is otherwise unsigned (no Developer ID).
+  KEY FACT: Gatekeeper only gates files carrying the `com.apple.quarantine`
+  attribute. **The Setup-built app is created locally by `osacompile`, so it has
+  NO quarantine → it double-clicks with NO Gatekeeper prompt, even with
+  Gatekeeper enabled.** This is the primary, intern-friendly path — and it's why
+  Setup building the app (vs. shipping only the zip) matters.
+  The **downloaded zip** is the opposite: the browser stamps quarantine on it, so
+  it IS gated. On **macOS 15 (Sequoia) and 26 (Tahoe)** Apple REMOVED the old
+  Control-click→Open bypass for unsigned/ad-hoc apps — the dialog reads "Apple
+  could not verify … is free of malware" and only offers **Move to Trash / Done**
+  (no Open button). The user must go to **System Settings → Privacy & Security →
+  "Open Anyway"**. So do NOT document "right-click → Open" for modern macOS; tell
+  zip recipients to either run Setup (which builds a clean local copy) or use
+  "Open Anyway". (Older macOS still shows the right-click→Open path; the Setup
+  app sidesteps the whole issue regardless.)
+  NOTE: on a Mac with Gatekeeper assessment disabled (`spctl --global-disable`)
+  no prompt appears at all — don't assume its absence means the app is signed.
+  If a fully promptless downloaded copy is ever required, sign + notarize with an
+  Apple Developer ID ($99/yr); not needed for the Setup-built path.
+- **Distribution zip:** `ditto -c -k --keepParent "Foundry Editor.app" "Foundry Editor.zip"`.
+  Use `ditto` (NOT `zip`) so the bundle's exec bits and resource forks survive the
+  round-trip. The zip only launches the editor; it does **not** install
+  ffmpeg/venv, so Setup must still have been run once on that Mac anyway — and
+  since Setup also builds a clean (un-quarantined, promptless) Desktop copy, the
+  zip is a secondary convenience. A downloaded zip hits the Gatekeeper block
+  above, so prefer the Setup-built app; if using the zip on macOS 15+/26, open it
+  via System Settings → Privacy & Security → "Open Anyway".
+- **Editing-session note:** build/verify the `.app` in a local non-Dropbox path
+  (e.g. `/tmp`, the Desktop) — never inside Dropbox, where the cloud mount strips
+  exec bits and truncates reads (§"cloud-mount truncation").
+
+Deploy: copy the updated `Start Here to use Editor/` files (including
+`Foundry Editor.icns`) into the Dropbox `Start Here to use Editor` folder. Interns
+re-run Setup once to get the Desktop app.
+
+Regression risk: Low (no code path changed; Windows launcher untouched; new Setup
+step is guarded with `|| true` fallbacks to `~/Applications/Foundry Editor.command`).

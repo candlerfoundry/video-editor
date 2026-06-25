@@ -74,7 +74,7 @@ fi
 # runs the Dropbox script via `bash`. `bash <file>` does not require the file to
 # be executable, so the in-Dropbox launcher's stripped bit no longer matters,
 # and this local launcher's own exec bit is set once and never re-synced away.
-echo "[4/4] Installing the launcher..."
+echo "[4/5] Installing the launcher..."
 LOCAL_LAUNCHER="$HOME/Applications/Foundry Editor.command"
 mkdir -p "$HOME/Applications"
 cat > "$LOCAL_LAUNCHER" <<'LAUNCH'
@@ -98,8 +98,63 @@ for p in "$HERE/Launch Editor (Mac).command" "$HOME"/Dropbox*/Scripts/"Foundry V
   fi
 done
 
+# ---------------------------------------------------------------------------
+# 5. build a friendly, double-clickable "Foundry Editor" app on the Desktop
+# ---------------------------------------------------------------------------
+# Non-technical users want a normal app icon, not a .command script. We compile
+# a tiny AppleScript app that opens a Terminal window running the real launcher
+# via `bash` (so it needs no exec bit, same reasoning as the permanent launcher
+# above). The app lives on the Desktop — OUTSIDE Dropbox — so its icon and
+# permissions are never stripped by a Dropbox re-sync. The Terminal window it
+# opens shows startup status and must stay open while the editor is in use.
+echo "[5/5] Creating the 'Foundry Editor' app on your Desktop..."
+APP="$HOME/Desktop/Foundry Editor.app"
+TMP_AS="$(mktemp -t foundryeditor).applescript"
+cat > "$TMP_AS" <<'AS'
+tell application "Terminal"
+	activate
+	do script "clear; bash \"$HOME\"/Dropbox*/Scripts/\"Foundry Video Editor\"/\"Start Here to use Editor\"/\"Launch Editor (Mac).command\""
+end tell
+AS
+rm -rf "$APP"
+if osacompile -o "$APP" "$TMP_AS" >/dev/null 2>&1; then
+  # Brand icon: find the bundled .icns (next to this script, or in Dropbox).
+  ICNS=""
+  for p in "$HERE/Foundry Editor.icns" "$HOME"/Dropbox*/Scripts/"Foundry Video Editor"/"Start Here to use Editor"/"Foundry Editor.icns"; do
+    if [ -f "$p" ]; then ICNS="$p"; break; fi
+  done
+  if [ -n "$ICNS" ]; then
+    cp "$ICNS" "$APP/Contents/Resources/applet.icns"
+    # osacompile may also write an asset catalog that overrides applet.icns;
+    # remove it and point the plist back at the .icns.
+    rm -f "$APP/Contents/Resources/Assets.car"
+    /usr/libexec/PlistBuddy -c "Delete :CFBundleIconName" "$APP/Contents/Info.plist" >/dev/null 2>&1 || true
+    /usr/libexec/PlistBuddy -c "Set :CFBundleIconFile applet" "$APP/Contents/Info.plist" >/dev/null 2>&1 || true
+  fi
+  /usr/libexec/PlistBuddy -c "Add :CFBundleIdentifier string org.candlerfoundry.videoeditor.launcher" "$APP/Contents/Info.plist" >/dev/null 2>&1 || true
+  # Editing the bundle invalidates osacompile's signature; re-sign ad-hoc so
+  # macOS doesn't refuse to open it as "damaged".
+  codesign --remove-signature "$APP" >/dev/null 2>&1 || true
+  codesign --force --deep -s - "$APP" >/dev/null 2>&1 || true
+  xattr -dr com.apple.quarantine "$APP" >/dev/null 2>&1 || true
+  touch "$APP"
+  rm -f "$TMP_AS"
+  echo "    Created: $APP"
+  APP_OK=1
+else
+  rm -f "$TMP_AS"
+  echo "    (Could not build the Desktop app automatically — you can still launch"
+  echo "     from ~/Applications/Foundry Editor.command.)"
+  APP_OK=0
+fi
+
 echo
 echo "Setup complete!"
-echo "Launch the editor from:   ~/Applications/Foundry Editor.command"
-echo "Tip: drag that file onto your Dock so it's one click from now on."
+if [ "${APP_OK:-0}" = "1" ]; then
+  echo "Launch the editor by double-clicking 'Foundry Editor' on your Desktop."
+  echo "(It was built right here on your Mac, so it opens with no security warning.)"
+else
+  echo "Launch the editor from:   ~/Applications/Foundry Editor.command"
+fi
+echo "Keep the Terminal window it opens open while you work."
 read -p "Press Return to close..."

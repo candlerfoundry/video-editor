@@ -109,9 +109,10 @@
           <div class="term"><span class="p"># type this (with a space), then drag in the Setup file, then press Return</span>
 bash <span class="y">‹drag “Setup (Mac).command” here›</span></div>
           <div class="step-desc" style="margin-top:10px">
-            It may ask for the Mac password and will take several minutes — that's normal. When it says
+            It takes several minutes — that's normal. When it says
             <b>“Setup complete,”</b> you're done with setup forever.
           </div>
+          <div class="tip"><span class="tiphead">🔑 If it asks for your Mac password</span>You may see a password box — sometimes just a <b>key icon</b>. Type your Mac login password and <b>press Return</b>. Don't worry that <b>nothing shows up as you type</b> (no dots or letters) — that's normal Mac security, your typing is registering.</div>
         </div>
       </div>
 
@@ -120,15 +121,15 @@ bash <span class="y">‹drag “Setup (Mac).command” here›</span></div>
       <div class="step">
         <div class="num">3</div>
         <div class="step-content">
-          <div class="step-title">Open the app</div>
+          <div class="step-title">Double-click “Foundry Editor” on your Desktop</div>
           <div class="step-desc">
-            Setup created a launcher at <code>~/Applications/Foundry Editor.command</code>.
+            Setup put a <b>Foundry Editor</b> app (orange F icon) right on your <b>Desktop</b>.
             <b>Double-click it</b> — a small window opens, gets things ready, then the editor opens in your
             browser automatically. <b>Leave that window open</b> while you work; close it when you're done.
-            <b>Tip:</b> drag that file onto your Dock so it's one click from now on.
+            <b>Tip:</b> drag the app onto your Dock so it's always one click away.
           </div>
-          <div class="filechip"><span class="ic">⚙️</span> ~/Applications/Foundry Editor.command <span class="pill">double-click</span></div>
-          <div class="caption">First launch only: if macOS says “unidentified developer,” right-click the file → <b>Open</b> → <b>Open</b>. This launcher lives outside Dropbox, so it keeps working even after the team updates the editor.</div>
+          <div class="filechip"><span class="ic">🟠</span> Foundry Editor <span class="pill">on your Desktop · double-click</span></div>
+          <div class="caption">Because Setup builds this app right on your Mac, it opens with <b>no security warning</b> — just double-click. It lives outside Dropbox, so it keeps working even after the team updates the editor. (A backup launcher also exists at <code>~/Applications/Foundry Editor.command</code> if you ever need it.)</div>
         </div>
       </div>
     </div>
@@ -136,8 +137,16 @@ bash <span class="y">‹drag “Setup (Mac).command” here›</span></div>
     <div class="trouble">
       <h2>If something goes wrong</h2>
       <div class="qa">
+        <div class="q">The “Foundry Editor” app is missing, or won't open</div>
+        <div class="a"><b>Re-run Setup (Step 2)</b> — it rebuilds the <b>Foundry Editor</b> app on your Desktop and reinstalls the backup launcher at <code>~/Applications/Foundry Editor.command</code>. The Setup-built app opens with no security warning, so this fixes most issues.</div>
+      </div>
+      <div class="qa">
+        <div class="q">macOS says “Apple could not verify ‘Foundry Editor’ is free of malware”</div>
+        <div class="a">This only happens to a copy you <b>downloaded</b> (e.g. from Slack) — not to the one Setup builds. Easiest fix: run <b>Setup (Step 2)</b> and use the <b>Desktop</b> app it creates. To open the downloaded copy instead: click <b>Done</b>, then go to <b>System Settings → Privacy &amp; Security</b>, scroll to the Security section, and click <b>“Open Anyway”</b> next to Foundry Editor.</div>
+      </div>
+      <div class="qa">
         <div class="q">“…could not be executed because you do not have appropriate access privileges”</div>
-        <div class="a">Dropbox dropped the launcher's “executable” mark (this can happen after the team updates the editor, and macOS gives no way to restore it from Finder). <b>Re-run Setup (Step 2)</b> — it's run with <code>bash</code>, so it works even when the mark is missing, and it reinstalls a permanent launcher at <code>~/Applications/Foundry Editor.command</code> that doesn't have this problem. Launch from that file afterward.</div>
+        <div class="a">This is the old in-Dropbox launcher problem (Dropbox drops the “executable” mark when the team updates the editor). The Desktop <b>Foundry Editor</b> app doesn't have this issue. If you hit it on a <code>.command</code> file, just use the Desktop app instead, or re-run Setup (Step 2).</div>
       </div>
       <div class="qa">
         <div class="q">The launcher opens in TextEdit instead of running</div>
