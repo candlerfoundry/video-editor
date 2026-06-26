@@ -2017,3 +2017,10 @@ return to its prior position each time.
 - FIX: scope the rule to `#dialog-thumb.user-resized[open]` so the resized layout
   applies only while open; on close the dialog reverts to display:none and hides.
   CSS only — no backend or version-handshake change. Do NOT drop `[open]`.
+
+## Clip prompt: open-on-the-hook (June 26, 2026)
+- /clips Claude prompt (_call_clips_claude in server.py) now HARD-requires each clip to
+  OPEN on its strongest line: hook_line must be the clip's first sentence, start_time is
+  trimmed to drop setup/runup, hook_score scores the OPENING line specifically, and a
+  curiosity-gap nudge was added. Output JSON schema UNCHANGED (same fields) — no frontend
+  contract change, no BACKEND_BUILD bump. Goal: more immediate hooks.

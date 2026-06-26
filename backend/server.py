@@ -2306,6 +2306,12 @@ Every clip MUST be between 30 and 90 seconds long (duration = end_time - start_t
 - Clips longer than 90 seconds: DO NOT include — too long for short-form platforms
 - Ideal sweet spot: 45–75 seconds
 
+HARD CONSTRAINT — OPEN ON THE HOOK (non-negotiable):
+The first ~3 seconds decide whether a viewer keeps watching. Choose start_time so the clip OPENS on its single strongest line — the hook_line below must be the FIRST sentence of the clip (at most preceded by one short clause needed for it to make sense).
+- Trim all setup, runup, and throat-clearing before the hook. Never open with "So," "And," "As I was saying," or context the viewer does not yet have.
+- The opening sentence must stand alone as a scroll-stopper: a bold or counterintuitive claim, a provocative question, a raw admission, or a high-stakes statement that creates a curiosity gap the viewer needs resolved.
+- If a segment's best line cannot be moved to the front without losing meaning, pick a different moment. A great line buried later in the clip is NOT usable — the clip must hook immediately.
+
 WHAT PERFORMS WELL ON THESE PLATFORMS for Candler Foundry content:
 - Personal turning points: a moment where someone's faith, perspective, or life changed
 - Surprising or counterintuitive statements about God, Scripture, or spiritual life
@@ -2333,8 +2339,8 @@ Each object must have exactly these fields:
 - start_time: float (copy the timestamp number directly from the transcript)
 - end_time: float (timestamp of the last word in the segment)
 - duration: float (end_time - start_time, rounded to 1 decimal — MUST be 30.0–90.0)
-- hook_score: integer 1-10 (10 = most likely to stop a scroll)
-- hook_line: string (the single most compelling sentence in this segment, quoted verbatim)
+- hook_score: integer 1-10 (score the OPENING line specifically — 10 = the first sentence alone stops a scroll)
+- hook_line: string (the single most compelling sentence, quoted verbatim — and it MUST be the clip's opening line)
 - why_it_works: string (1 sentence — name the specific technique: vulnerability, surprise, strong hook, emotional peak, etc.)
 
 Find 8 clips, all between 30 and 90 seconds. Rank by hook_score descending.
