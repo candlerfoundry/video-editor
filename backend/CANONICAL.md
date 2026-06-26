@@ -2024,3 +2024,14 @@ return to its prior position each time.
   trimmed to drop setup/runup, hook_score scores the OPENING line specifically, and a
   curiosity-gap nudge was added. Output JSON schema UNCHANGED (same fields) — no frontend
   contract change, no BACKEND_BUILD bump. Goal: more immediate hooks.
+
+## Editor preview shown at 9:16 reel size (#7 — June 26, 2026)
+- The clip editor video (#edit-video / .edit-video-wrap) now displays inside a 9:16
+  frame with object-fit:cover, center-cropping exactly like the export
+  (crop=ih*9/16:ih keeps full height, cuts width) — WYSIWYG with the reel, and a tall
+  narrow box instead of a wide landscape one (fixes the thrown-off layout). CSS only;
+  no backend/handshake change; Netlify auto-deploys.
+- Caption WYSIWYG preserved: updateCaptionOverlay sizes _capPx from vid.clientHEIGHT
+  (not width), and object-fit:cover preserves the height->frame relationship, so the
+  caption-to-frame ratio is unchanged. The left/right/bottom % overlay position now
+  maps to the 9:16 frame (matches the burn) — an improvement over the old landscape box.

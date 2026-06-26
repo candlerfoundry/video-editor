@@ -962,9 +962,10 @@
       color: var(--orange-hover);
     }
     #edit-video {
-      width: 100%; max-width: 640px; border-radius: 8px;
-      background: #111; border: 1px solid var(--border);
-      display: block; margin-bottom: 16px;
+      width: 100%; height: 100%;
+      object-fit: cover;             /* center-crop to fill 9:16, mirroring export crop=ih*9/16:ih */
+      display: block; margin: 0;
+      background: #111; border: none; border-radius: 0;
     }
 
     /* Clips empty state */
@@ -1567,7 +1568,17 @@
     .tx-mode-rail .tx-mode-btn {
       border-radius: 10px; padding: 8px 4px; line-height: 1.45; font-size: 11px;
     }
-    .edit-video-wrap { position: relative; max-width: 640px; }
+    .edit-video-wrap {
+      position: relative;
+      aspect-ratio: 9 / 16;          /* editor preview shown as the 9:16 reel (#7) */
+      height: min(60vh, 520px);
+      max-width: 100%;
+      margin: 0 auto 16px;
+      background: #111;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      overflow: hidden;              /* clip the center-cropped video to the 9:16 frame */
+    }
     #caption-overlay {
       position: absolute; left: 4%; right: 4%; bottom: 12%;
       text-align: center; color: #FFFFFF; font-weight: 700;
