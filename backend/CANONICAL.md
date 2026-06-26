@@ -1832,48 +1832,16 @@ Deploy = Netlify push + hard-refresh; no launcher restart needed.
 
 Regression risk: Low (single preview-only coefficient).
 
-## Frame-picker freeze diagnostic — TEMPORARY (June 24, 2026)
+## Frame-picker freeze diagnostic — REMOVED (added June 24, removed June 26, 2026)
 
-Frontend-only (index.html); no backend change, handshake NOT bumped. **REMOVE
-this instrumentation once the freeze cause is identified.**
-
-Context: the thumbnail frame picker intermittently freezes the browser/app (NOT
-the whole computer) when it opens with the source video loaded. Ruled out so far:
-modal/dialog mechanics (tested in isolation), JS infinite loops, a stale frontend
-(deployed copy verified current), and the JS open-flow itself (it ran to
-completion when no video was loaded). So the freeze needs the loaded video and
-lives in a video-load/seek callback that only fires on a real machine. Because it
-is intermittent and may be a silent main-thread block, a passive always-on
-capture was added instead of trying to catch it live.
-
-Mechanism (all in localStorage so it survives the freeze + reload):
-- Watchdog: writes `fve_wd`=Date.now() every 250ms; stops the instant the main
-  thread blocks.
-- Breadcrumbs: `window._fveBC(msg)` appends to `fve_freezelog` (capped 80) at the
-  picker steps: `gen:before dlgOpenEditor`, `gen:before dlgOpenFramePicker`,
-  `picker:open`, `picker:modal-shown`, `applyBounds:start`,
-  `applyBounds:before-seek`, `applyBounds:after-seek`.
-- `fve_clean_exit` (set on beforeunload) distinguishes a freeze (no clean exit)
-  from a normal close.
-- On the NEXT load after a non-clean exit with breadcrumbs, the console prints a
-  `[FVE FREEZE DIAGNOSTIC]` block: a verdict (main-thread blocked vs
-  GPU/compositor, from how long the watchdog kept ticking after the last
-  breadcrumb), the last action before the freeze, and the breadcrumb table.
-
-### WHAT TO DO WHEN A FREEZE HAPPENS
-1. You don't need to do anything during the freeze itself.
-2. Reload the app (hard-refresh, Ctrl+Shift+R).
-3. Open the browser console (F12 → Console). An orange **[FVE FREEZE DIAGNOSTIC]**
-   block from the frozen session will be printed.
-4. Type `fveFreezeReport()` and press Enter — it copies the full report to your
-   clipboard. Paste that to Claude.
-5. The "verdict" + "last action before freeze" pinpoint the cause so the real fix
-   is targeted (not a guess).
-
-Interpretation: verdict "MAIN-THREAD BLOCKED" + the last breadcrumb = the exact
-operation that hung (a JS-level hang, fixable in code). Verdict "JS kept
-running … GPU/compositor" means the hang is below JS (different fix: avoid the
-concurrent second `<video>` decode in the picker / reduce GPU load).
+A passive always-on watchdog + breadcrumb capture (localStorage) was temporarily
+added to index.html to catch the intermittent frame-picker freeze. It did its job:
+the freeze was root-caused to a SECOND concurrent `<video>` decode in the picker
+and fixed — see "Frame-picker freeze fix: release concurrent video decoders". The
+instrumentation (the `window._fveBC` breadcrumbs, the 250ms watchdog interval, the
+`[FVE FREEZE DIAGNOSTIC]` console report, and all `_fveBC(...)` call sites) was
+REMOVED June 26, 2026 now that the cause is fixed. Do not re-add unless a new
+intermittent freeze needs capturing.
 
 ## Clip speed slider — continuous 1×–2× (June 24, 2026)
 
