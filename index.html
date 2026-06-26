@@ -1463,7 +1463,7 @@
 
     /* ─── STAGE 3 TWO-COLUMN EDITOR LAYOUT ─── */
     .editor-two-col {
-      display: grid; grid-template-columns: 1fr 1fr; gap: 24px;
+      display: grid; grid-template-columns: minmax(300px, 360px) minmax(0, 1fr); gap: 24px;
       align-items: start; margin-bottom: 16px;
     }
     @media (max-width: 760px) { .editor-two-col { grid-template-columns: 1fr; } }
@@ -2492,6 +2492,10 @@
                 <span id="playhead-time" class="mono" style="font-size:13px;color:var(--text-2);min-width:84px;" title="Playhead position">0:00.00</span>
               </div>
 
+            </div><!-- /.editor-left-zone -->
+
+            <!-- RIGHT: always-on transcript + edit-mode rail -->
+            <div class="editor-right-zone">
               <!-- In-frame captions: preview + style exactly what will burn -->
               <div class="card" style="padding:10px 14px;margin-bottom:12px;" id="caption-editor-card">
                 <div class="thumb-inline-row" style="align-items:center;gap:10px;">
@@ -2556,10 +2560,6 @@
                 </div>
                 <p style="font-size:11px;color:var(--muted);margin:6px 0 0;">Burns exactly as shown. <strong>Click a word</strong> to toggle emphasis &#183; <strong>double-click</strong> (or &#9998;) to edit text &#8212; <strong>Enter makes a second line</strong> &#183; <strong>drag</strong> the captions to reposition.</p>
               </div>
-            </div><!-- /.editor-left-zone -->
-
-            <!-- RIGHT: always-on transcript + edit-mode rail -->
-            <div class="editor-right-zone">
               <div class="tx-zone-row">
                 <div class="tx-always-wrap" id="tx-always-wrap" style="flex:1;min-width:0;">
                   <span class="tx-always-header" style="display:flex;justify-content:space-between;align-items:center;gap:8px;">
@@ -2579,20 +2579,22 @@
                 </div>
               </div>
                 <div id="clip-cuts-list" class="clip-cuts-list" style="display:none;"></div>
-                <div id="clip-ig-caption-card" class="clip-cuts-list" style="margin-top:12px;">
-                  <div class="cuts-title" style="display:flex;align-items:center;justify-content:space-between;gap:8px;text-transform:none;letter-spacing:0;font-size:12px;">
-                    <span>Instagram caption \u2014 auto-written from this clip, saved with it, sent to Airtable on export</span>
-                    <button type="button" class="btn-ghost btn-sm" id="clip-btn-redo-caption" onclick="regenerateIgCaption()" title="Write a fresh caption from the current edit">
-                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 .49-3.2"/></svg>
-                      Regenerate
-                    </button>
-                  </div>
-                  <textarea id="clip-ig-caption" rows="7" oninput="igCaptionInput(this.value)" placeholder="A caption is written automatically when you create the thumbnail for this clip. Edit it freely here \u2014 it saves with the clip and loads into the Airtable &quot;IG Social Media Caption&quot; field on export." style="width:100%;box-sizing:border-box;margin-top:8px;padding:10px 12px;border:1px solid var(--border);border-radius:8px;background:var(--surface);color:var(--text);font-family:inherit;font-size:13px;line-height:1.55;resize:vertical;"></textarea>
-                  <div id="clip-ig-caption-status" style="font-size:11px;color:var(--muted);margin-top:4px;"></div>
-                </div>
             </div><!-- /.editor-right-zone -->
 
           </div><!-- /.editor-two-col -->
+
+          <!-- Instagram caption: demoted to a full-width row below the editor (layout) -->
+          <div id="clip-ig-caption-card" class="clip-cuts-list" style="margin-top:12px;">
+            <div class="cuts-title" style="display:flex;align-items:center;justify-content:space-between;gap:8px;text-transform:none;letter-spacing:0;font-size:12px;">
+              <span>Instagram caption \u2014 auto-written from this clip, saved with it, sent to Airtable on export</span>
+              <button type="button" class="btn-ghost btn-sm" id="clip-btn-redo-caption" onclick="regenerateIgCaption()" title="Write a fresh caption from the current edit">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 .49-3.2"/></svg>
+                Regenerate
+              </button>
+            </div>
+            <textarea id="clip-ig-caption" rows="7" oninput="igCaptionInput(this.value)" placeholder="A caption is written automatically when you create the thumbnail for this clip. Edit it freely here \u2014 it saves with the clip and loads into the Airtable &quot;IG Social Media Caption&quot; field on export." style="width:100%;box-sizing:border-box;margin-top:8px;padding:10px 12px;border:1px solid var(--border);border-radius:8px;background:var(--surface);color:var(--text);font-family:inherit;font-size:13px;line-height:1.55;resize:vertical;"></textarea>
+            <div id="clip-ig-caption-status" style="font-size:11px;color:var(--muted);margin-top:4px;"></div>
+          </div>
 
           <!-- Done Editing Video -->
           <div class="save-clip-row">

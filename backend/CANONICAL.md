@@ -2035,3 +2035,13 @@ return to its prior position each time.
   (not width), and object-fit:cover preserves the height->frame relationship, so the
   caption-to-frame ratio is unchanged. The left/right/bottom % overlay position now
   maps to the 9:16 frame (matches the burn) — an improvement over the old landscape box.
+
+## Editor layout: caption controls beside the video (June 26, 2026)
+- Stage-3 clip editor regrouped so the video and caption-style controls are visible
+  together (stops scrolling between them). .editor-two-col is now
+  `minmax(300px,360px) minmax(0,1fr)`: narrow LEFT = video + timeline + time-row;
+  wide RIGHT = the caption-style card (#caption-editor-card, MOVED here from the left
+  zone) on top, then transcript + click-mode rail. The Instagram caption
+  (#clip-ig-caption-card) moved to a full-width row below .editor-two-col (demoted).
+  Pure DOM move — all ids/onclick preserved; no JS/backend change, no handshake bump.
+  Transcript is wider as a side effect.
