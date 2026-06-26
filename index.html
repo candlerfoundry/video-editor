@@ -1646,7 +1646,11 @@
     #dialog-thumb { max-width: min(1100px, 96vw); }
     #dialog-thumb.expanded { max-width: 99vw; max-height: 99vh; }
     #dialog-thumb.expanded .dialog-body { max-height: calc(99vh - 120px); }
-    #dialog-thumb.user-resized { max-width: none; max-height: none; display: flex; flex-direction: column; }
+    /* Scope the resized-dialog layout to [open] ONLY. Without [open], this
+       display:flex overrode the native dialog:not([open]){display:none}, so a
+       drag-resized dialog stayed VISIBLE after .close() — a zombie whose Cancel /
+       X Close (which call dialog.close()) became no-ops. (cancel/close bug, Jun 26 2026) */
+    #dialog-thumb.user-resized[open] { max-width: none; max-height: none; display: flex; flex-direction: column; }
     #dialog-thumb.user-resized .dialog-body { max-height: none; flex: 1 1 auto; }
     .dlg-resize-grip { position: absolute; right: 3px; bottom: 3px; width: 18px; height: 18px; display: flex; align-items: flex-end; justify-content: flex-end; color: var(--muted); cursor: nwse-resize; z-index: 60; opacity: 0.6; }
     .dlg-resize-grip:hover { opacity: 1; color: var(--orange); }

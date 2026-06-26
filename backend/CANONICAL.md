@@ -2036,3 +2036,16 @@ return to its prior position each time.
   Frontend/CSS only — NO backend change and NO version-handshake bump (§32).
   Content was already scrollable via `overflow-y:auto`; this only makes the
   control visible. Do not remove these rules when tidying CSS.
+
+## Resized thumbnail dialog stayed visible after close — Cancel/X Close dead (June 26, 2026)
+- SYMPTOM: After drag-resizing the Create Thumbnail dialog (#dialog-thumb gains
+  `.user-resized`), Cancel and the X Close did nothing; Save Draft/Done still
+  worked. Live-console diagnosis showed the dialog with `open=false` but
+  `visible=true`.
+- CAUSE: `#dialog-thumb.user-resized { display:flex }` overrode the native
+  `dialog:not([open]) { display:none }`, so a CLOSED dialog stayed on screen.
+  Cancel / X Close call closeThumbDialog() -> dialog.close(), which is a NO-OP on
+  an already-closed dialog, so the zombie never dismissed.
+- FIX: scope the rule to `#dialog-thumb.user-resized[open]` so the resized layout
+  applies only while open; on close the dialog reverts to display:none and hides.
+  CSS only — no backend or version-handshake change. Do NOT drop `[open]`.
