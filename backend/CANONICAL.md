@@ -2023,3 +2023,16 @@ Regression risk: Medium — touches the `edit-video` / `clips-video` lifecycle
 (Cancel / Use This Frame / Escape / backdrop). Verify in real use: open the frame
 picker, scrub/seek, capture a frame, and Escape-dismiss — the editor video must
 return to its prior position each time.
+
+## Always-visible scrollbars on macOS Chrome (#3 — June 26, 2026)
+- PROBLEM: macOS Chrome uses hidden OVERLAY scrollbars by default, so the primary
+  scroll container `.main-content` (and `.dialog-body`, `.sidebar-nav`) showed NO
+  visible scrollbar on Mac — Windows shows it. In tall views (thumbnail editor,
+  especially 9:16) Mac users could not see/grab the bar to reach lower controls.
+  PC was unaffected. Pure platform-rendering difference; the toggle/clip logic was
+  never involved.
+- FIX: styled `::-webkit-scrollbar` (+ track/thumb/hover) on those three
+  containers forces a persistent, always-visible scrollbar on macOS Chrome too.
+  Frontend/CSS only — NO backend change and NO version-handshake bump (§32).
+  Content was already scrollable via `overflow-y:auto`; this only makes the
+  control visible. Do not remove these rules when tidying CSS.

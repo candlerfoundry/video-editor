@@ -267,6 +267,36 @@
       background: var(--bg);
     }
 
+    /* ─── SCROLLBARS (#3 — June 26, 2026) ───
+       macOS Chrome uses hidden OVERLAY scrollbars by default, so .main-content
+       (the primary scroll container, which holds the thumbnail editor) and the
+       dialog/sidebar scrollers show NO visible bar on Mac, while Windows always
+       shows one. In tall views (thumbnail editor, esp. 9:16) Mac users could not
+       see or grab the bar to reach lower controls. Styling ::-webkit-scrollbar
+       forces a persistent, always-visible scrollbar on macOS Chrome too. Content
+       was already scrollable (overflow-y:auto); this only makes the control
+       visible/grabbable. Do not delete to "tidy" the CSS. */
+    .main-content::-webkit-scrollbar,
+    .dialog-body::-webkit-scrollbar,
+    .sidebar-nav::-webkit-scrollbar { width: 12px; height: 12px; }
+    .main-content::-webkit-scrollbar-track,
+    .dialog-body::-webkit-scrollbar-track,
+    .sidebar-nav::-webkit-scrollbar-track { background: transparent; }
+    .main-content::-webkit-scrollbar-thumb,
+    .dialog-body::-webkit-scrollbar-thumb,
+    .sidebar-nav::-webkit-scrollbar-thumb {
+      background: var(--border-2, #D4D0C6);
+      border-radius: 999px;
+      border: 3px solid transparent;
+      background-clip: padding-box;
+    }
+    .main-content::-webkit-scrollbar-thumb:hover,
+    .dialog-body::-webkit-scrollbar-thumb:hover,
+    .sidebar-nav::-webkit-scrollbar-thumb:hover {
+      background: var(--muted, #6B6B6B);
+      background-clip: padding-box;
+    }
+
     .tab-panel { display: none; }
     .tab-panel.active { display: block; }
 
