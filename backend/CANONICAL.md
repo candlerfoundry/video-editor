@@ -1971,3 +1971,55 @@ re-run Setup once to get the Desktop app.
 
 Regression risk: Low (no code path changed; Windows launcher untouched; new Setup
 step is guarded with `|| true` fallbacks to `~/Applications/Foundry Editor.command`).
+
+## Frame-picker freeze fix: release concurrent video decoders (June 26, 2026)
+
+Frontend-only (`index.html`); no backend contract change, handshake NOT bumped.
+
+Root cause (identified via the §"Frame-picker freeze diagnostic" instrumentation):
+the thumbnail frame picker decodes its source in a SECOND `<video>`
+(`dlg-pick-video`) while the editor's `edit-video` (and sometimes the hidden
+`clips-video`) still hold a decoder for the SAME full-res source. Two concurrent
+full-res hardware decodes can exhaust the GPU/decoder; when the picker then seeks
+(e.g. far into a long clip) the tab freezes. Evidence: the captured breadcrumbs
+end exactly at `applyBounds:after-seek`, and the picker video has NO post-seek JS
+handler (`seeked`/`canplay`/`timeupdate`) — so a JS hang is ruled out, leaving the
+decode/compositor path §1875 predicted. (The watchdog *verdict* was not captured
+this round — the freeze is intermittent and not reproducible on demand.)
+
+Fix (in the manual-frame-picker block of `index.html`):
+- `_dlgReleaseOtherVideoDecoders()` — on picker open, for each of `edit-video` /
+  `clips-video` that has a `src`: save `{src, currentTime}`, `pause()`,
+  `removeAttribute('src')`, `load()` to free the decoder. Gated on
+  `_dlgReleasedVideos.length` so a re-open while already open can't clobber state.
+- `_dlgRestoreOtherVideoDecoders()` — on close, restore each saved `src` and seek
+  back to its prior `currentTime` (once metadata is ready).
+- `_dlgTeardownFramePicker()` — single teardown wired to the dialog's native
+  `close` event (registered once in `dlgOpenFramePicker`). This is the load-bearing
+  part: the picker `<dialog>` can be dismissed with **Escape/backdrop**, which does
+  NOT call `dlgCloseFramePicker()` — only the `close` event fires. Teardown also
+  releases the picker's own decoder (previously leaked after each open) and
+  re-enables `dlg-btn-pick-frame` (previously left disabled on an Escape dismiss).
+- `dlgCloseFramePicker()` now just calls `panel.close()` (→ `close` event →
+  teardown); the capture path still reads the picker video BEFORE close, so
+  clearing its `src` on close is safe.
+
+Respects §13 (videos are `pause()`d before mutation; the `currentlyPlaying`
+reference is untouched) and §21/§18 (the picker's seek + paused-frame capture and
+the `_sharedThumbnailDraft` write are unchanged).
+
+DIAGNOSTIC DELIBERATELY KEPT: contrary to §"Frame-picker freeze diagnostic"'s
+"remove once identified", the breadcrumb/watchdog instrumentation STAYS for now.
+The freeze is intermittent, un-reproducible on demand, and we never captured the
+watchdog verdict — so the instrumentation remains as a safety net to catch any
+recurrence (and confirm this fix held). Remove it only after a sustained stretch
+of real use with no freeze. When reading a future capture, reload the SAME frozen
+tab (do not open a second tab — a second tab's watchdog overwrites `fve_wd` and
+destroys the main-thread-vs-GPU verdict).
+
+Regression risk: Medium — touches the `edit-video` / `clips-video` lifecycle
+(§13 High-risk area). Mitigated by: acting only on videos that currently have a
+`src`, gating the release against double-open, and restoring on EVERY close path
+(Cancel / Use This Frame / Escape / backdrop). Verify in real use: open the frame
+picker, scrub/seek, capture a frame, and Escape-dismiss — the editor video must
+return to its prior position each time.

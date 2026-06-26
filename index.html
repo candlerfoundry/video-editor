@@ -9243,6 +9243,59 @@
   // ── Manual frame picker (pop-out dialog) ──
   let _dlgPickVideoEl = null;
   let _dlgPickLastTime = null;   // remember the scrub position between opens
+  let _dlgReleasedVideos = [];   // editor <video>s whose decoder we freed while picking
+  let _dlgPickerCloseWired = false;
+
+  // Frame-picker freeze fix (CANONICAL "Frame-picker freeze diagnostic", §1875):
+  // the picker's <video> is a SECOND full-res hardware decode running alongside
+  // the editor's edit-video / clips-video. Two concurrent decodes of the same
+  // source can exhaust the GPU/decoder and freeze the tab when the picker seeks.
+  // While the picker is open we free the other decoders so only ONE decode runs,
+  // and restore them — at their prior position — when it closes. The release is
+  // gated so re-opening while already open can't clobber the saved state.
+  function _dlgReleaseOtherVideoDecoders() {
+    if (_dlgReleasedVideos.length) return;            // already released this session
+    ['edit-video', 'clips-video'].forEach(function (id) {
+      const v = document.getElementById(id);
+      const src = v && v.getAttribute('src');
+      if (v && src) {
+        _dlgReleasedVideos.push({ id: id, src: src, time: v.currentTime || 0 });
+        try { v.pause(); } catch (_) {}
+        v.removeAttribute('src');
+        try { v.load(); } catch (_) {}                // frees the decoder / GPU surface
+      }
+    });
+  }
+  function _dlgRestoreOtherVideoDecoders() {
+    const list = _dlgReleasedVideos; _dlgReleasedVideos = [];
+    list.forEach(function (rec) {
+      const v = document.getElementById(rec.id);
+      if (!v) return;
+      v.src = rec.src;
+      try { v.load(); } catch (_) {}
+      const restore = function () { try { v.currentTime = rec.time; } catch (_) {} };
+      if (v.readyState >= 1) restore();
+      else v.addEventListener('loadedmetadata', function onM() {
+        v.removeEventListener('loadedmetadata', onM); restore();
+      }, { once: true });
+    });
+  }
+  // Runs for EVERY close path — Cancel, "Use This Frame", AND the dialog's native
+  // Escape/backdrop dismiss (which does NOT call dlgCloseFramePicker). Restoring
+  // here is what keeps Escape from leaving the editor video black.
+  function _dlgTeardownFramePicker() {
+    const vidEl = document.getElementById('dlg-pick-video');
+    if (vidEl) {
+      if (!isNaN(vidEl.currentTime)) _dlgPickLastTime = vidEl.currentTime;
+      try { vidEl.pause(); } catch (_) {}
+      vidEl.removeAttribute('src');                   // release the picker decoder (no leak)
+      try { vidEl.load(); } catch (_) {}
+    }
+    _dlgRestoreOtherVideoDecoders();
+    const btn = document.getElementById('dlg-btn-pick-frame');
+    if (btn) btn.disabled = false;
+    _dlgPickVideoEl = null;
+  }
 
   function _dlgApplyPickBounds(vidEl, seekTo) {
     if (window._fveBC) _fveBC('applyBounds:start (video metadata loaded)');
@@ -9266,6 +9319,11 @@
     const vidEl = document.getElementById('dlg-pick-video');
     if (!vidEl) return;
     _dlgPickVideoEl = vidEl;
+    if (!_dlgPickerCloseWired) {            // wire teardown to EVERY close path, once
+      _dlgPickerCloseWired = true;
+      panel.addEventListener('close', _dlgTeardownFramePicker);
+    }
+    _dlgReleaseOtherVideoDecoders();        // only one full-res decode while picking
     if (window._fveBC) _fveBC('picker:open');
     if (typeof panel.showModal === 'function') { if (!panel.open) panel.showModal(); }
     else panel.style.display = 'block';
@@ -9293,13 +9351,13 @@
   }
 
   function dlgCloseFramePicker() {
-    const vidEl = document.getElementById('dlg-pick-video');
-    if (vidEl) { if (!isNaN(vidEl.currentTime)) _dlgPickLastTime = vidEl.currentTime; vidEl.pause(); }
     const panel = document.getElementById('dlg-frame-picker');
-    if (panel) { if (typeof panel.close === 'function' && panel.open) panel.close(); panel.style.display = 'none'; }
-    const btn = document.getElementById('dlg-btn-pick-frame');
-    if (btn) btn.disabled = false;
-    _dlgPickVideoEl = null;
+    if (panel && panel.open && typeof panel.close === 'function') {
+      panel.close();             // fires the dialog 'close' event -> _dlgTeardownFramePicker
+    } else {
+      if (panel) panel.style.display = 'none';
+      _dlgTeardownFramePicker();  // non-<dialog> fallback
+    }
   }
 
   function dlgNudgePickFrame(dir) {
