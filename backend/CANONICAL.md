@@ -2045,3 +2045,16 @@ return to its prior position each time.
   (#clip-ig-caption-card) moved to a full-width row below .editor-two-col (demoted).
   Pure DOM move — all ids/onclick preserved; no JS/backend change, no handshake bump.
   Transcript is wider as a side effect.
+
+## Setup/onboarding instructions revamped (June 26, 2026)
+- START HERE pages rewritten with collapsible steps, exact Dropbox paths, clearer install
+  guidance. Mac page now covers the Dropbox folder-picker ('choose all' + make Scripts &
+  Social Media Clips 'available offline' + Full Disk Access fallback) and a prompt-by-prompt
+  Setup walkthrough.
+- The PC page is now TRACKED in the repo as 'Start Here to use Editor/START HERE (PC).html'
+  (previously only an untracked Dropbox file named START HERE.html — drift risk). Deploy
+  replaces the old START HERE.html in Dropbox.
+- Setup (Mac).command: Homebrew install runs with NONINTERACTIVE=1 to drop the 'Press RETURN
+  to continue' prompt. (The macOS Dropbox-access 'Allow' prompt and the sudo password prompt
+  are system dialogs and cannot be scripted away.)
+- Docs/launcher only — no server/frontend contract change, no BACKEND_BUILD bump.

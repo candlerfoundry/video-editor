@@ -1,0 +1,212 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Foundry Video Editor — PC Setup</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#FFFFFF; --panel:#F7F7F5; --orange:#E8541A; --orange-hov:#C94516;
+    --tint:#FEF0EB; --text:#1A1A1A; --muted:#6B6B6B; --success:#2D6A4F;
+    --error:#CC2200; --border:#ECECE8;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{font-family:'Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;
+    background:var(--panel); color:var(--text); line-height:1.55; -webkit-font-smoothing:antialiased; padding:40px 20px;}
+  .wrap{max-width:720px;margin:0 auto}
+  .card{background:var(--bg); border:1px solid var(--border); border-radius:16px; overflow:hidden; box-shadow:0 1px 3px rgba(0,0,0,.04);}
+  header{background:var(--text); color:#fff; padding:36px 40px 32px; border-top:5px solid var(--orange);}
+  header .kicker{text-transform:uppercase; letter-spacing:.14em; font-size:12px; font-weight:600; color:var(--orange); margin-bottom:10px;}
+  header h1{font-size:30px; font-weight:700; letter-spacing:-.02em}
+  header p{color:#B8B8B8; font-size:15px; margin-top:8px}
+  .body{padding:32px 40px 8px}
+  .section-label{font-size:12px; font-weight:700; text-transform:uppercase; letter-spacing:.1em; color:var(--muted); margin:28px 0 6px;}
+  .hint-expand{font-size:12.5px; color:var(--muted); margin:0 0 8px}
+
+  details.step{display:block; border-bottom:1px solid var(--border)}
+  details.step:last-child{border-bottom:none}
+  details.step > summary{list-style:none; cursor:pointer; display:flex; gap:18px; align-items:center; padding:18px 0;}
+  details.step > summary::-webkit-details-marker{display:none}
+  details.step > summary .chev{margin-left:auto; color:var(--muted); font-size:13px; transition:transform .2s; flex:none}
+  details.step[open] > summary .chev{transform:rotate(180deg)}
+  .num{flex:none; width:34px; height:34px; border-radius:50%; background:var(--tint); color:var(--orange);
+    font-weight:700; display:flex; align-items:center; justify-content:center; font-size:15px;}
+  details.step.one-time > summary .num{background:var(--text); color:#fff}
+  .step-title{font-weight:600; font-size:16px; display:flex; align-items:center; gap:10px; flex-wrap:wrap}
+  .badge{font-size:10.5px; font-weight:700; text-transform:uppercase; letter-spacing:.05em; background:#EEF2EE; color:var(--success); padding:2px 8px; border-radius:20px;}
+  .step-body{padding:0 0 22px 52px}
+  .step-desc{color:var(--muted); font-size:14.5px; margin-top:0}
+  .step-desc b{color:var(--text); font-weight:600}
+  .substeps{list-style:none; counter-reset:sub; margin:14px 0 2px}
+  .substeps li{position:relative; padding:8px 0 8px 34px; font-size:14.5px; color:var(--text); border-bottom:1px dashed var(--border)}
+  .substeps li:last-child{border-bottom:none}
+  .substeps li::before{counter-increment:sub; content:counter(sub, lower-alpha); position:absolute; left:0; top:8px; width:22px; height:22px; border-radius:50%;
+    background:var(--panel); border:1px solid var(--border); color:var(--muted); font-weight:700; font-size:12px; display:flex; align-items:center; justify-content:center;}
+  .substeps li b{font-weight:600} .substeps small{color:var(--muted)}
+  .btn{display:inline-block; margin-top:12px; background:var(--orange); color:#fff; text-decoration:none; font-weight:600; font-size:14px; padding:9px 16px; border-radius:9px;}
+  .btn:hover{background:var(--orange-hov)}
+  .btn.ghost{background:#fff; color:var(--orange); border:1.5px solid var(--orange)}
+  .btn.ghost:hover{background:var(--tint)}
+  code{background:var(--panel); border:1px solid var(--border); border-radius:6px; padding:2px 7px; font-family:'Courier New',monospace; font-size:13px; color:var(--text);}
+  .tip{background:var(--tint); border-left:3px solid var(--orange); border-radius:0 10px 10px 0; padding:13px 16px; font-size:14px; margin-top:14px}
+  .tip b{color:var(--text)} .tip .tiphead{font-weight:700; color:var(--text); display:block; margin-bottom:3px}
+  .locator{margin-top:14px; border:1px solid var(--border); border-radius:10px; overflow:hidden}
+  .locator .pathbar{background:var(--panel); padding:10px 14px; font-size:12.5px; color:var(--muted); border-bottom:1px solid var(--border); line-height:1.6; word-break:break-word;}
+  .locator .pathbar .seg{font-weight:600} .locator .pathbar .seg.here{color:var(--orange)} .locator .pathbar .sep{margin:0 5px; color:#bdbdbd}
+  .locator .frow{display:flex; align-items:center; gap:11px; padding:13px 14px; background:#fff}
+  .locator .frow .ic{font-size:20px; line-height:1} .locator .frow .fname{font-weight:600; font-size:15px}
+  .locator .frow .hint{margin-left:auto; font-size:12.5px; color:var(--orange); font-weight:700; white-space:nowrap}
+  .pyshot{margin:16px 0 4px; border-radius:12px; overflow:hidden; border:1px solid #1c3a57; background:#296499; color:#fff; box-shadow:0 4px 14px rgba(0,0,0,.12);}
+  .pyshot .bar{background:#1f4e78; font-size:11px; color:#cfe0ee; padding:7px 14px; display:flex; align-items:center; gap:8px; border-bottom:1px solid #163a5c;}
+  .pyshot .dot{width:9px;height:9px;border-radius:50%;background:#5a86ab}
+  .pyshot .inner{padding:18px 18px 20px}
+  .pyshot .h{font-size:14.5px; font-weight:700; color:#ffd75e; margin-bottom:14px}
+  .py-btn-row{display:flex; align-items:center; gap:12px; flex-wrap:wrap; margin-bottom:14px}
+  .py-btn{background:#ffd140; color:#222; font-weight:700; font-size:13.5px; padding:10px 16px; border-radius:6px; border:1px solid #e0b62f;}
+  .py-line{font-size:14px; color:#eaf2f9; display:flex; align-items:center; gap:10px; flex-wrap:wrap}
+  .py-link{color:#ffe07a; text-decoration:underline; font-weight:600}
+  .mark{font-size:11.5px; font-weight:700; padding:4px 10px; border-radius:20px; white-space:nowrap; display:inline-flex; align-items:center; gap:5px;}
+  .mark.bad{background:#fde2dd; color:#a8240f; border:1px solid #f3b6ab}
+  .mark.good{background:#e4f1e8; color:#1d5a3c; border:1px solid #bfe0cc}
+  .caption{font-size:12px; color:var(--muted); margin-top:8px; font-style:italic}
+  .trouble{background:var(--panel); border-top:1px solid var(--border); padding:28px 40px}
+  .trouble h2{font-size:16px; font-weight:700; margin-bottom:14px}
+  .qa{padding:11px 0; border-bottom:1px solid var(--border)} .qa:last-child{border-bottom:none}
+  .qa .q{font-weight:600; font-size:14.5px} .qa .a{color:var(--muted); font-size:14px; margin-top:3px}
+  footer{padding:22px 40px; font-size:13px; color:var(--muted); text-align:center} footer b{color:var(--text)}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="card">
+    <header>
+      <div class="kicker">The Candler Foundry · Windows PC</div>
+      <h1>Foundry Video Editor — PC Setup</h1>
+      <p>Start here on Windows — you'll be editing in a few minutes.</p>
+    </header>
+
+    <div class="body">
+      <div class="locator" style="margin-top:0">
+        <div class="pathbar">
+          <b>Where these files live:</b> <span class="seg">Dropbox</span><span class="sep">›</span><span class="seg">Scripts</span><span class="sep">›</span><span class="seg">Foundry Video Editor</span><span class="sep">›</span><span class="seg here">Start Here to Use Editor</span>
+        </div>
+      </div>
+
+      <div class="section-label">First time only — set up once</div>
+      <div class="hint-expand">Click each step to expand it.</div>
+
+      <details class="step one-time" open>
+        <summary>
+          <span class="num">1</span>
+          <span class="step-title">Install Python <span class="badge">one time · ~3 min</span></span>
+          <span class="chev">▾</span>
+        </summary>
+        <div class="step-body">
+          <div class="step-desc">This puts Python on <b>your own computer</b>. Follow these exactly:</div>
+          <ol class="substeps">
+            <li>Click <b>Download Python</b> below to open python.org.</li>
+            <li><b>Do NOT click the big yellow “Download Python install manager” button.</b> That installs only a helper tool, not Python itself.</li>
+            <li>Instead, click the link that shows a version number, like <b>“Python 3.14.6”</b>, under <small>“Or get the standalone installer.”</small> See the picture below.</li>
+            <li>Open the file that downloads (it appears at the bottom of your browser).</li>
+            <li>On the installer's first screen, <b>check the box “Add python.exe to PATH”</b> at the bottom, then click <b>Install Now</b>. <small>Keep the default location — don't change it to Dropbox.</small></li>
+            <li>When it says <b>“Setup was successful,”</b> click Close. Done.</li>
+          </ol>
+          <div class="pyshot">
+            <div class="bar"><span class="dot"></span> python.org/downloads</div>
+            <div class="inner">
+              <div class="h">Download the latest version for Windows</div>
+              <div class="py-btn-row"><span class="py-btn">Download Python install manager</span><span class="mark bad">✗ Not this one</span></div>
+              <div class="py-line">Or get the standalone installer for <span class="py-link">Python 3.14.6</span> <span class="mark good">✓ Click this link</span></div>
+            </div>
+          </div>
+          <div class="caption">The version number (e.g. 3.14.6) changes over time — any standalone installer link is fine.</div>
+          <a class="btn" href="https://www.python.org/downloads/" target="_blank" rel="noopener">Download Python ↗</a>
+        </div>
+      </details>
+
+      <details class="step one-time" open>
+        <summary>
+          <span class="num">2</span>
+          <span class="step-title">Install Dropbox <span class="badge">one time</span></span>
+          <span class="chev">▾</span>
+        </summary>
+        <div class="step-body">
+          <div class="step-desc">
+            Install the Dropbox desktop app and sign in with the <b>Foundry's Dropbox account</b> — the login
+            credentials are in the <b>PTE folder</b>. The main Dropbox website doesn't show an obvious install
+            button, so go straight to <b>dropbox.com/install</b>. After it installs, wait until the
+            <b>Foundry Video Editor</b> folder shows a <b>green check mark</b> (finished downloading).
+            <small>Dropbox pulls in videos only as you need them — just this folder has to be synced.</small>
+          </div>
+          <a class="btn ghost" href="https://www.dropbox.com/install" target="_blank" rel="noopener">Install Dropbox ↗</a>
+        </div>
+      </details>
+
+      <details class="step one-time" open>
+        <summary>
+          <span class="num">3</span>
+          <span class="step-title">Make a desktop shortcut <span class="badge">one time</span></span>
+          <span class="chev">▾</span>
+        </summary>
+        <div class="step-body">
+          <div class="step-desc">
+            In Dropbox, open the <b>Foundry Video Editor</b> folder and find <b>Foundry Video Editor.exe</b>
+            (shown below). This is the app you'll open every time. Right-click it and choose
+            <b>Send to → Desktop (create shortcut)</b> so it's easy to find later.
+            <small>On Windows 11 you may need to click “Show more options” first.</small>
+          </div>
+          <div class="locator">
+            <div class="pathbar"><span class="seg">Dropbox</span><span class="sep">›</span><span class="seg">Scripts</span><span class="sep">›</span><span class="seg here">Foundry Video Editor</span></div>
+            <div class="frow"><span class="ic">🚀</span><span class="fname">Foundry Video Editor.exe</span><span class="hint">← right-click → Send to → Desktop</span></div>
+          </div>
+          <div class="caption">Full path: Dropbox\Scripts\Foundry Video Editor\Foundry Video Editor.exe</div>
+          <div class="tip"><span class="tiphead">⚠️ Make a shortcut — don't move or copy the .exe</span>
+            The app only works while it sits in this Dropbox folder next to its other files. A desktop <b>shortcut</b> just points to it. Don't drag the actual .exe out to your desktop.</div>
+        </div>
+      </details>
+
+      <div class="section-label">Every time you want to edit</div>
+
+      <details class="step" open>
+        <summary>
+          <span class="num">4</span>
+          <span class="step-title">Open the app</span>
+          <span class="chev">▾</span>
+        </summary>
+        <div class="step-body">
+          <div class="step-desc">
+            <b>Double-click your “Foundry Video Editor” desktop shortcut.</b> A small window opens and gets the
+            backend ready (the first run can take a few minutes). When it says <b>“Backend running,”</b> click the
+            orange <b>Open Video Editor</b> button — the editor opens in your browser.
+            <small>Leave that small window open while you work.</small>
+          </div>
+        </div>
+      </details>
+
+      <details class="step" open>
+        <summary>
+          <span class="num">5</span>
+          <span class="step-title">Edit</span>
+          <span class="chev">▾</span>
+        </summary>
+        <div class="step-body">
+          <div class="step-desc">Work in the editor tab that opened in your browser. When you're done, <b>close the small launcher window</b> to shut everything down.</div>
+        </div>
+      </details>
+    </div>
+
+    <div class="trouble">
+      <h2>If something goes wrong</h2>
+      <div class="qa"><div class="q">The window says “Python not found”</div><div class="a">Python isn't installed yet — do Step 1, then open the app again.</div></div>
+      <div class="qa"><div class="q">It says “server.py not found” or won't start</div><div class="a">Dropbox hasn't finished syncing. Wait for the green check mark on the Foundry Video Editor folder, then try again. (Also make sure you used a shortcut and didn't move the .exe out of the folder.)</div></div>
+      <div class="qa"><div class="q">The browser opens but the editor can't connect</div><div class="a">Close the launcher window and open the app again. Make sure nothing else is using port 5000.</div></div>
+      <div class="qa"><div class="q">Still stuck</div><div class="a">Send Emily a screenshot of the launcher window.</div></div>
+    </div>
+
+    <footer><b>For IT / advanced users:</b> <code>start_server.bat</code> in the Foundry Video Editor folder runs the backend in a visible terminal window if you need to see error messages.</footer>
+  </div>
+</div>
+</body>
+</html>

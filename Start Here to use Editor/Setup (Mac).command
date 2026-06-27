@@ -18,7 +18,7 @@ HERE="$(cd "$(dirname "$0")" && pwd)"
 # ---------------------------------------------------------------------------
 if ! command -v brew >/dev/null 2>&1 && [ ! -x /opt/homebrew/bin/brew ] && [ ! -x /usr/local/bin/brew ]; then
   echo "[1/4] Installing Homebrew..."
-  /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+  NONINTERACTIVE=1 /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
 else
   echo "[1/4] Homebrew already installed."
 fi
