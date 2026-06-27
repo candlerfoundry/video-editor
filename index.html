@@ -5075,12 +5075,18 @@
   function restoreCutWord(wi, t, tEnd) {
     if (isNaN(wi)) { removeCutRangeAt((t + (isNaN(tEnd) ? t : tEnd)) / 2); return; }
     const b = cutBoundsForWords(wi, wi, t, isNaN(tEnd) ? t + 0.3 : tEnd);
-    const mid = (b.lo + b.hi) / 2;
+    // Clamp to the clip exactly as addCutRange did when the cut was stored, so the
+    // midpoint lands INSIDE the stored range even for the FIRST/last in-clip word —
+    // whose gap-midpoint bound can fall outside [editorInTime, editorOutTime] and used
+    // to make this lookup miss (the "clicking the struck first word won't add it back" bug).
+    const lo = Math.max(b.lo, editorInTime);
+    const hi = Math.min(b.hi, editorOutTime);
+    const mid = (lo + hi) / 2;
     const idx = editorCutRanges.findIndex(r => mid >= r.start && mid < r.end);
     if (idx < 0) { removeCutRangeAt(mid); return; }
     const r = editorCutRanges[idx];
-    const before = { start: r.start, end: Math.max(r.start, b.lo) };
-    const after  = { start: Math.min(r.end, b.hi), end: r.end };
+    const before = { start: r.start, end: Math.max(r.start, lo) };
+    const after  = { start: Math.min(r.end, hi), end: r.end };
     editorCutRanges.splice(idx, 1);
     if (before.end - before.start >= 0.05) editorCutRanges.push(before);
     if (after.end  - after.start  >= 0.05) editorCutRanges.push(after);
@@ -5188,6 +5194,15 @@
     });
   })();
 
+  // First playable moment of the clip: editorInTime advanced past any leading
+  // edited-out (cut) range, so playback starts at the TRIMMED beginning (#6).
+  function clipEffectiveStart() {
+    let t = editorInTime;
+    (editorCutRanges || []).slice().sort((a, b) => a.start - b.start).forEach(r => {
+      if (t >= r.start - 0.001 && t < r.end) t = r.end;
+    });
+    return t;
+  }
   function playSelection() {
     const video = document.getElementById('edit-video');
     if (!video.src) return;
@@ -5201,7 +5216,7 @@
     // and stops exactly at the out-point even after seeks. Matches the
     // togglePreview()/toggleSplitPreview() pattern (CANONICAL section 18).
     _attachSelStop(video);
-    video.currentTime = editorInTime;
+    video.currentTime = clipEffectiveStart();
     video.play().catch(() => {});
   }
 

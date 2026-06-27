@@ -2058,3 +2058,13 @@ return to its prior position each time.
   to continue' prompt. (The macOS Dropbox-access 'Allow' prompt and the sudo password prompt
   are system dialogs and cannot be scripted away.)
 - Docs/launcher only — no server/frontend contract change, no BACKEND_BUILD bump.
+
+## Clip editor: first-word re-add fix + play-from-trimmed-start (June 26, 2026)
+- #1 FIX: restoreCutWord clamps the restore bounds to [editorInTime, editorOutTime]
+  (mirroring addCutRange) before locating the cut range. Previously the gap-midpoint bound
+  for the FIRST (or last) in-clip word fell outside the clip, so the midpoint missed the
+  stored cut and clicking the struck first word didn't restore it (workaround: drag the
+  in-point earlier). Frontend only.
+- #6: playSelection() now seeks to clipEffectiveStart() — editorInTime advanced past any
+  leading edited-out range — so 'Play Selection' plays the clip from its TRIMMED beginning.
+  No contract change, no BACKEND_BUILD bump.
