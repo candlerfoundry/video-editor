@@ -2186,3 +2186,23 @@ return to its prior position each time.
   speed != 1.0, so 1.0x audio is byte-for-byte unchanged. alimiter is in all full ffmpeg builds.
 - Backend behavior change -> BACKEND_BUILD + EXPECTED_BACKEND_BUILD bumped to
   2026-06-29-speedlimiter. Requires server.py redeploy + launcher restart.
+
+## Thumbnail UX audit + consolidation (June 29, 2026 — round 2)
+- AUDIT found the thumbnail flow had THREE reuse UIs and the one I edited the prior round
+  (openPostSaveThumbnailDialog / dialog-post-save-thumbnail) was DEAD CODE — never called. The
+  live reuse UI is the "Save Clip" window (dialog-export-flow) -> export-flow-existing-drafts.
+- FIX (edit = non-destructive): in the live flow the saved-thumbnail card now offers
+  "Edit a copy" (efEditDraft -> duplicateAndEditThumbnailDraft, new draft_id, original kept) as
+  the primary, plus "Use as-is" and "Edit original" (efEditDraftOriginal -> editExistingThumbnailDraft,
+  overwrites). Done in the composer saves whichever draft id is loaded, so editing a copy never
+  touches the original.
+- FIX (no more forced "Choose frame" when editing): exportFlowOpenFullEditor now reopens the
+  in-progress draft directly (reopenThumbDialog, which reuses available_frames) when frames exist
+  for this clip, instead of rebuilding via openThumbDialog whose reusableDraft match required an
+  EXACT float equality on clip_start/clip_end and silently dropped frames -> dlgGenerateThumbnail
+  -> dlgOpenFramePicker. Only a genuine brand-new thumbnail (no frames anywhere) opens the picker.
+- CONSOLIDATION: removed dead openPostSaveThumbnailDialog, renderPostSaveThumbnailChoices,
+  renderThumbnailDraftPreviewDataUrl, startFromLastThumbnail, skipThumbnailForNow,
+  openThumbnailComposerForSavedClip and the dialog-post-save-thumbnail markup + its CSS selector.
+  Shared helpers (attachThumbnailBlobToSavedClip, attach/edit/duplicateExistingThumbnailDraft)
+  kept — used by the live flow. FRONTEND-ONLY -> no build bump; hard-reload only.

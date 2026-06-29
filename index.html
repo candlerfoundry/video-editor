@@ -1702,7 +1702,6 @@
       border-radius: 0 0 var(--r-lg) var(--r-lg); flex-shrink: 0;
     }
     #dialog-export-flow,
-    #dialog-post-save-thumbnail,
     #dialog-project-resume { max-width: min(720px, 95vw); }
     .modal-icon { font-size: 38px; text-align: center; margin-bottom: 12px; }
     .modal-heading {
@@ -7782,8 +7781,9 @@
           info.innerHTML = `<div style="font-size:12px;font-weight:600;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${escHtml(label)}</div>
             <div style="font-size:10px;color:var(--muted);margin-top:2px;">${escHtml(draft.target_format === 'youtube_shorts' ? 'YouTube Shorts 9:16' : 'Instagram 9:16')}</div>
             <div style="display:flex;gap:6px;margin-top:6px;">
-              <button class="btn btn-sm" type="button" onclick="efUseDraft('${escHtml(draft.draft_id)}')">Use This</button>
-              <button class="btn-ghost btn-sm" type="button" onclick="efEditDraft('${escHtml(draft.draft_id)}')">Edit</button>
+              <button class="btn btn-sm" type="button" onclick="efEditDraft('${escHtml(draft.draft_id)}')" title="Opens a copy so your original stays saved">Edit a copy</button>
+              <button class="btn-ghost btn-sm" type="button" onclick="efUseDraft('${escHtml(draft.draft_id)}')">Use as-is</button>
+              <button class="btn-ghost btn-sm" type="button" onclick="efEditDraftOriginal('${escHtml(draft.draft_id)}')" title="Overwrites this saved thumbnail">Edit original</button>
             </div>`;
           card.appendChild(info);
           draftSection.appendChild(card);
@@ -7895,18 +7895,30 @@
   }
 
   function efEditDraft(draftId) {
-    // Close export flow, open thumb editor with that draft
+    // Non-destructive default: edit a COPY so the original stays saved.
+    document.getElementById('dialog-export-flow')?.close();
+    duplicateAndEditThumbnailDraft(draftId);
+  }
+
+  function efEditDraftOriginal(draftId) {
+    // Explicit overwrite of the saved thumbnail.
     document.getElementById('dialog-export-flow')?.close();
     editExistingThumbnailDraft(draftId);
   }
 
   function exportFlowOpenFullEditor() {
-    // Pre-load selected frame into shared composer, open the full thumb editor
+    document.getElementById('dialog-export-flow')?.close();
     if (_efSelectedThumbFrame >= 0 && _efThumbFrames.length) {
       _dlgFrames = _efThumbFrames;
       _dlgSelectedFrame = _efSelectedThumbFrame;
     }
-    document.getElementById('dialog-export-flow')?.close();
+    // If a thumbnail is already in progress for THIS clip (frames present), reopen it
+    // directly so "Edit thumbnail…" never re-prompts the frame picker. Only a genuine
+    // brand-new thumbnail (no frames anywhere) goes through openThumbDialog -> picker.
+    const wip = _sharedThumbnailDraft;
+    const sameClip = wip && wip.source_filename === (_clipFile?.name || '');
+    const haveFrames = (wip?.available_frames?.length) || _dlgFrames.length;
+    if (sameClip && haveFrames) { reopenThumbDialog(); return; }
     openThumbDialog();
   }
 
@@ -8062,94 +8074,6 @@
     confirmExportFolderSelection(picker.value);
   }
 
-  async function renderThumbnailDraftPreviewDataUrl(draft) {
-    const cfg = getThumbTargetConfig(draft?.target_format || 'instagram');
-    const scale = Math.max(0.18, Math.min(0.28, 240 / Math.max(1, cfg.width)));
-    const canvas = document.createElement('canvas');
-    canvas.width = Math.max(216, Math.round(cfg.width * scale));
-    canvas.height = Math.max(270, Math.round(cfg.height * scale));
-    const normalizedDraft = {
-      ...draft,
-      style: normalizeThumbnailLayout(draft?.style || 'lower_third'),
-      text_boxes: ensureDraftTextBoxes(draft?.text_boxes, draft?.style || 'lower_third', draft?.target_format || 'instagram', draft?.title || ''),
-      logo: normalizeThumbnailLogo(draft?.logo, draft?.target_format || 'instagram'),
-    };
-    const rendered = await renderThumbnailDraftToCanvas(canvas, normalizedDraft);
-    if (!rendered) return '';
-    return canvas.toDataURL('image/png');
-  }
-
-  async function renderPostSaveThumbnailChoices() {
-    const list = document.getElementById('post-save-thumbnail-choices');
-    if (!list) return;
-    const drafts = getCurrentProjectThumbnailDrafts();
-    if (!drafts.length) {
-      list.innerHTML = '<div class="sidebar-project-empty">No saved thumbnails are available for this source video yet.</div>';
-      return;
-    }
-
-    list.innerHTML = drafts.map((draft, index) => {
-      const box = (draft.text_boxes || []).find(item => item?.text) || (draft.text_boxes || [])[0] || {};
-      const previewId = 'post-save-thumb-preview-' + index;
-      return (
-        '<div class="post-save-thumb-card">' +
-          '<div class="post-save-thumb-preview-wrap">' +
-            '<div class="post-save-thumb-preview loading" id="' + previewId + '">Loading preview…</div>' +
-          '</div>' +
-          '<div class="post-save-thumb-meta">' +
-            '<div class="recent-project-name">' + escHtml(box.text || draft.source_filename || 'Thumbnail draft') + '</div>' +
-            '<div class="recent-project-date">' + escHtml(formatProjectDate(draft.saved_at)) + '</div>' +
-            '<div class="recent-project-source">' +
-              escHtml((draft.target_format || 'instagram') === 'youtube_shorts' ? 'YouTube Shorts 9:16' : 'Instagram 9:16') +
-              (draft.clip_start !== null && draft.clip_start !== undefined ? '<br>Clip context: ' + escHtml(formatTime(draft.clip_start)) + ' - ' + escHtml(formatTime(draft.clip_end || draft.clip_start)) : '') +
-            '</div>' +
-            '<div class="recent-project-actions">' +
-              '<button type="button" class="btn" onclick="duplicateAndEditThumbnailDraft(\'' + escHtml(draft.draft_id) + '\')" title="Opens a fresh copy (keeps the frame &amp; layout); your original stays saved">Edit a copy</button>' +
-              '<button type="button" class="btn-ghost btn-sm" onclick="attachExistingThumbnailDraft(\'' + escHtml(draft.draft_id) + '\')">Use as-is</button>' +
-              '<button type="button" class="btn-ghost btn-sm" onclick="editExistingThumbnailDraft(\'' + escHtml(draft.draft_id) + '\')" title="Overwrites this saved thumbnail">Edit original</button>' +
-            '</div>' +
-          '</div>' +
-        '</div>'
-      );
-    }).join('');
-
-    await Promise.all(drafts.map(async (draft, index) => {
-      const el = document.getElementById('post-save-thumb-preview-' + index);
-      if (!el) return;
-      try {
-        const dataUrl = await renderThumbnailDraftPreviewDataUrl(draft);
-        if (!dataUrl) {
-          el.textContent = 'Preview unavailable';
-          el.classList.remove('loading');
-          return;
-        }
-        el.innerHTML = '<img src="' + dataUrl + '" alt="Saved thumbnail preview" />';
-        el.classList.remove('loading');
-      } catch (_) {
-        el.textContent = 'Preview unavailable';
-        el.classList.remove('loading');
-      }
-    }));
-  }
-
-  async function openPostSaveThumbnailDialog() {
-    const projectDrafts = getCurrentProjectThumbnailDrafts();
-    const summary = document.getElementById('post-save-thumbnail-summary');
-    const note = document.getElementById('post-save-thumbnail-note');
-    if (summary) {
-      summary.textContent = 'Your clip is saved. Choose a thumbnail next step whenever you are ready.';
-    }
-    if (note) {
-      note.textContent = projectDrafts.length
-        ? 'Saved thumbnails for this source video are below. \u201cEdit a copy\u201d reuses the same frame & layout for this clip while keeping your original \u2014 ideal for 2\u20133 clips off one video.'
-        : 'There are no saved thumbnails for this source video yet, so the next step would be creating one or skipping for now.';
-    }
-    const startLastBtn = document.getElementById('post-save-start-last');
-    if (startLastBtn) startLastBtn.style.display = projectDrafts.length ? '' : 'none';
-    await renderPostSaveThumbnailChoices();
-    document.getElementById('dialog-post-save-thumbnail')?.showModal();
-  }
-
   async function attachThumbnailBlobToSavedClip(blob, mode, draftId = '') {
     if (!_savedClipExport?.filename || !_savedClipExport?.folder_name) {
       alert('Save the clip first before attaching a thumbnail.');
@@ -8210,24 +8134,6 @@
     } catch (err) {
       alert(err.message);
     }
-  }
-
-  function openThumbnailComposerForSavedClip() {
-    document.getElementById('dialog-post-save-thumbnail')?.close();
-    openThumbDialog();
-  }
-
-  // Reuse the most recent saved thumbnail for this source as a fresh COPY (original kept).
-  // Carries the frame + layout, so no need to re-pick a frame for each clip.
-  function startFromLastThumbnail() {
-    const drafts = getCurrentProjectThumbnailDrafts();
-    if (!drafts.length) { alert('No saved thumbnail to start from yet.'); return; }
-    duplicateAndEditThumbnailDraft(drafts[0].draft_id);
-  }
-
-  function skipThumbnailForNow() {
-    document.getElementById('dialog-post-save-thumbnail')?.close();
-    setExportPanelStatus('Clip saved to Dropbox. Thumbnail skipped for now.');
   }
 
   function editExistingThumbnailDraft(draftId) {
@@ -12319,23 +12225,7 @@
   </div>
 </dialog>
 
-<dialog id="dialog-post-save-thumbnail">
-  <div class="dialog-header">
-    <h2>Thumbnail Next Step</h2>
-  </div>
-  <div class="dialog-body">
-    <div class="modal-heading" style="text-align:left;margin-bottom:10px;">Add a thumbnail?</div>
-    <p class="modal-body-text" id="post-save-thumbnail-summary" style="text-align:left;">Your clip is saved. Do you want to add a thumbnail now?</p>
-    <p class="post-save-note" id="post-save-thumbnail-note"></p>
-    <div id="post-save-thumbnail-choices" class="post-save-thumbnail-list"></div>
-    <div id="post-save-thumbnail-status" style="display:none;margin-top:14px;"></div>
-    <div class="post-save-actions">
-      <button class="btn-ghost" type="button" onclick="skipThumbnailForNow()">Skip For Now</button>
-      <button class="btn-ghost" type="button" onclick="openThumbnailComposerForSavedClip()">Create New Thumbnail</button>
-      <button class="btn" type="button" id="post-save-start-last" style="display:none;" onclick="startFromLastThumbnail()" title="Reuse your most recent thumbnail (same frame &amp; layout) as a fresh copy for this clip">Start from last thumbnail</button>
-    </div>
-  </div>
-</dialog>
+
 
 
 <!-- Frame picker lives at document root so showModal() works outside dialog-thumb -->
