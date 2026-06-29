@@ -2264,3 +2264,17 @@ return to its prior position each time.
   object-fit cover) for the editor modal (widened #dialog-saved-thumbs to 840px), and a
   responsive grid of large 9:16 cards (preview 405x720 canvas at full cell width, buttons stacked)
   for the Save-Clip list. FRONTEND-ONLY -> hard-reload.
+
+## Thumbnail PNG saved to Dropbox + Airtable URL re-enabled (June 29, 2026)
+- Re-enabled the previously-built (then disabled) standalone-thumbnail save so the thumbnail can
+  be PREVIEWED before posting (it isn't always visible in the video preview). Two changes:
+  (1) FRONTEND SAVE_THUMBNAIL_PNG flipped false->true, so /export_thumbnail gets save_png=1 plus
+      _savedClipExport.airtable_record_id.
+  (2) BACKEND export_thumbnail already saved the PNG to <clip folder>/Thumbnails/<base> - Thumbnail.png,
+      created a Dropbox shared link, and PATCHed Airtable field "Thumbnail - Dropbox URL"
+      (fldpSrBIdcsCy7FY3, verified to exist) synchronously. Added the clips' background-retry
+      (_background_link_and_patch) as a fallback when the PNG hasn't synced to the cloud yet, so the
+      URL still lands in Airtable once Dropbox finishes uploading.
+- Cover-frame burn is unchanged and independent (save_png is separate from cover_frame).
+- BACKEND_BUILD + EXPECTED_BACKEND_BUILD -> 2026-06-29-thumbpng. Needs server.py redeploy +
+  launcher restart.

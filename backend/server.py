@@ -62,7 +62,7 @@ CORS(app)
 
 # Bump this whenever the frontend/backend contract changes (the frontend
 # carries a matching EXPECTED_BACKEND_BUILD and warns when they differ).
-BACKEND_BUILD = "2026-06-29-speedcfr"
+BACKEND_BUILD = "2026-06-29-thumbpng"
 
 CREATE_NO_WINDOW = 0x08000000 if platform.system() == 'Windows' else 0
 
@@ -3321,6 +3321,12 @@ def export_thumbnail():
                     pass
             except Exception as exc:
                 logger.warning("Airtable thumbnail update failed: %s", exc)
+
+    # If the PNG hadn't finished uploading to the cloud yet, the synchronous link
+    # above comes back empty. Spawn the same background retry the clips use so the
+    # "Thumbnail - Dropbox URL" still lands in Airtable once Dropbox syncs the file.
+    if save_png and thumb_dbx_path and airtable_record_id and not thumb_url:
+        _background_link_and_patch(thumb_dbx_path, airtable_record_id, "Thumbnail - Dropbox URL")
 
     if not save_png:
         try:

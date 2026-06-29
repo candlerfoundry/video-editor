@@ -3101,7 +3101,7 @@
   // Must match BACKEND_BUILD in server.py — bumped together whenever the
   // frontend/backend contract changes. A mismatch means the user is running
   // an old backend (launcher not restarted after a deploy).
-  const EXPECTED_BACKEND_BUILD = '2026-06-29-speedcfr';
+  const EXPECTED_BACKEND_BUILD = '2026-06-29-thumbpng';
 
   if (document.fonts && document.fonts.load) { document.fonts.load("700 64px 'Handmade Sans'").catch(function(){}); }
   let _staleBackendWarned = false;
@@ -7541,7 +7541,7 @@
   // DONE EDITING VIDEO — Modal & Export Flow
   // ══════════════════════════════════════════
 
-  const SAVE_THUMBNAIL_PNG = false;  // June 12: covers only — no PNG files, no Airtable thumb URL
+  const SAVE_THUMBNAIL_PNG = true;   // June 29: save thumbnail PNG to Dropbox + patch "Thumbnail - Dropbox URL" in Airtable so the thumbnail is previewable before posting
   let thumbnailBlob    = null;   // PNG blob captured from dialog canvas
   let thumbnailBlobUrl = null;   // object URL for in-app display
   let _exportThumbnailMode = 'video_only';
