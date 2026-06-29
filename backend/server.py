@@ -62,7 +62,7 @@ CORS(app)
 
 # Bump this whenever the frontend/backend contract changes (the frontend
 # carries a matching EXPECTED_BACKEND_BUILD and warns when they differ).
-BACKEND_BUILD = "2026-06-27-autosplit"
+BACKEND_BUILD = "2026-06-29-speedlimiter"
 
 CREATE_NO_WINDOW = 0x08000000 if platform.system() == 'Windows' else 0
 
@@ -2888,7 +2888,7 @@ def export_clip():
             filter_parts.append(_reframe("[vcat]"))
             audio_out = "[acat]"
             if speed != 1.0:
-                filter_parts.append(f"[acat]atempo={speed:.4f}[aout]")
+                filter_parts.append(f"[acat]atempo={speed:.4f},alimiter=limit=0.97[aout]")
                 audio_out = "[aout]"
             stitched_cmd = [FFMPEG_EXE, "-y", "-i", input_path]
             if bleep_chain and tone_expr:
@@ -2922,7 +2922,7 @@ def export_clip():
             if bleep_chain and tone_expr:
                 # Censor tone: mute the speech and mix in a gated 1 kHz sine.
                 # When sped up, the amix feeds an atempo stage before [aout].
-                amix_tail = "[aout]" if speed == 1.0 else "[amx];[amx]atempo=%.4f[aout]" % speed
+                amix_tail = "[aout]" if speed == 1.0 else "[amx];[amx]atempo=%.4f,alimiter=limit=0.97[aout]" % speed
                 fc = (
                     _reframe("[0:v]") + ";"
                     f"[0:a]{bleep_chain}[mute];"
@@ -2946,7 +2946,7 @@ def export_clip():
                 else:
                     pass2_cmd += ["-vf", f"crop=ih*9/16:ih,scale=1080:1920{caption_filter}{speed_v_suffix}"]
                 if speed != 1.0:
-                    pass2_cmd += ["-af", f"atempo={speed:.4f}"]
+                    pass2_cmd += ["-af", f"atempo={speed:.4f},alimiter=limit=0.97"]
                 pass2_cmd += ["-c:v", "libx264", "-crf", "18", "-preset", "veryfast",
                               "-c:a", "aac",
                               output_path]

@@ -2172,3 +2172,17 @@ return to its prior position each time.
   this source) so 2-3 clips off one video reuse the same frame+layout without re-picking a
   frame. The drafts gallery + per-source filtering (getCurrentProjectThumbnailDrafts) already
   existed; this round makes reuse the easy, safe default.
+
+## Speed-up audio static fix — limiter after atempo (June 29, 2026)
+- BUG: clips exported with speed > 1.0 (e.g. 1.2x) had audible static/crackle; 1.0x clips did
+  not. Root cause: atempo's WSOLA overlap-add can momentarily sum ABOVE 0 dBFS on already-loud
+  source audio (podcast feeds are typically hot), and AAC-encoding those over-full-scale samples
+  produces crackle. At 1.0x there is no atempo stage, hence no overshoot — matching the symptom.
+  Verified in a sandbox: a ~0 dBFS source through atempo=1.2 peaked at +0.008 dB (clipping);
+  atempo=1.2,alimiter=limit=0.97 brought it to -0.22 dB, clean.
+- FIX: append alimiter=limit=0.97 (a transparent ~-0.26 dBFS ceiling) immediately after every
+  atempo stage, in all three export audio paths: stitched multi-cut [acat]atempo (~L2891),
+  the bleep+speed amix tail (~L2925), and the simple -af atempo path (~L2949). Only applied when
+  speed != 1.0, so 1.0x audio is byte-for-byte unchanged. alimiter is in all full ffmpeg builds.
+- Backend behavior change -> BACKEND_BUILD + EXPECTED_BACKEND_BUILD bumped to
+  2026-06-29-speedlimiter. Requires server.py redeploy + launcher restart.
