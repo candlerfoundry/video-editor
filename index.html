@@ -2801,7 +2801,7 @@
             <div style="flex:1;min-width:260px;">
               <div class="thumb-control-label" style="margin-bottom:8px;">Thumbnail Format</div>
               <div class="thumb-format-group">
-                <button type="button" class="thumb-format-btn selected" data-thumb-format-target="main" data-thumb-format="instagram" onclick="setThumbTargetFormat('instagram')">Instagram 4:5</button>
+                <button type="button" class="thumb-format-btn selected" data-thumb-format-target="main" data-thumb-format="instagram" onclick="setThumbTargetFormat('instagram')">Instagram 9:16</button>
                 <button type="button" class="thumb-format-btn" data-thumb-format-target="main" data-thumb-format="youtube_shorts" onclick="setThumbTargetFormat('youtube_shorts')">YouTube Shorts 9:16</button>
               </div>
               <div class="thumb-control-label" style="margin-bottom:8px;">Style</div>
@@ -2860,7 +2860,7 @@
                   <div>
                     <div class="thumb-control-label">Thumbnail Format</div>
                     <div class="thumb-format-group" style="margin-bottom:0;">
-                      <button type="button" class="thumb-format-btn selected" data-thumb-format-target="main" data-thumb-format="instagram" onclick="setThumbTargetFormat('instagram')">Instagram 4:5</button>
+                      <button type="button" class="thumb-format-btn selected" data-thumb-format-target="main" data-thumb-format="instagram" onclick="setThumbTargetFormat('instagram')">Instagram 9:16</button>
                       <button type="button" class="thumb-format-btn" data-thumb-format-target="main" data-thumb-format="youtube_shorts" onclick="setThumbTargetFormat('youtube_shorts')">YouTube Shorts 9:16</button>
                     </div>
                   </div>
@@ -7541,6 +7541,7 @@
   let _dlgFrames         = [];
   let _dlgBrightness     = 100;  // percentage: 100 = normal, 50 = dark, 150 = bright
   let _dlgSelectedFrame  = 0;
+  let _dlgPickSessionCount = 0;  // frames explicitly Added this picker session
   let _dlgTextColor      = '#ffffff';
   let _dlgBackgroundColor = '#111111';
   let _dlgShadowOn       = true;
@@ -7551,11 +7552,11 @@
   const THUMB_TARGET_FORMATS = {
     instagram: {
       label: 'Instagram',
-      ratioLabel: '4:5',
+      ratioLabel: '9:16',
       width: 1080,
-      height: 1350,
-      displayWidth: 440,
-      displayHeight: 550,
+      height: 1920,
+      displayWidth: 372,
+      displayHeight: 661,
     },
     youtube_shorts: {
       label: 'YouTube Shorts',
@@ -7779,7 +7780,7 @@
           info.style.cssText = 'flex:1;min-width:0;';
           const label = (draft.text_boxes?.[0]?.text || draft.source_filename || 'Thumbnail draft').slice(0, 50);
           info.innerHTML = `<div style="font-size:12px;font-weight:600;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${escHtml(label)}</div>
-            <div style="font-size:10px;color:var(--muted);margin-top:2px;">${escHtml(draft.target_format === 'youtube_shorts' ? 'YouTube Shorts 9:16' : 'Instagram 4:5')}</div>
+            <div style="font-size:10px;color:var(--muted);margin-top:2px;">${escHtml(draft.target_format === 'youtube_shorts' ? 'YouTube Shorts 9:16' : 'Instagram 9:16')}</div>
             <div style="display:flex;gap:6px;margin-top:6px;">
               <button class="btn btn-sm" type="button" onclick="efUseDraft('${escHtml(draft.draft_id)}')">Use This</button>
               <button class="btn-ghost btn-sm" type="button" onclick="efEditDraft('${escHtml(draft.draft_id)}')">Edit</button>
@@ -8099,13 +8100,13 @@
             '<div class="recent-project-name">' + escHtml(box.text || draft.source_filename || 'Thumbnail draft') + '</div>' +
             '<div class="recent-project-date">' + escHtml(formatProjectDate(draft.saved_at)) + '</div>' +
             '<div class="recent-project-source">' +
-              escHtml((draft.target_format || 'instagram') === 'youtube_shorts' ? 'YouTube Shorts 9:16' : 'Instagram 4:5') +
+              escHtml((draft.target_format || 'instagram') === 'youtube_shorts' ? 'YouTube Shorts 9:16' : 'Instagram 9:16') +
               (draft.clip_start !== null && draft.clip_start !== undefined ? '<br>Clip context: ' + escHtml(formatTime(draft.clip_start)) + ' - ' + escHtml(formatTime(draft.clip_end || draft.clip_start)) : '') +
             '</div>' +
             '<div class="recent-project-actions">' +
-              '<button type="button" class="btn" onclick="attachExistingThumbnailDraft(\'' + escHtml(draft.draft_id) + '\')">Use This Thumbnail</button>' +
-              '<button type="button" class="btn-ghost btn-sm" onclick="editExistingThumbnailDraft(\'' + escHtml(draft.draft_id) + '\')">Edit</button>' +
-              '<button type="button" class="btn-ghost btn-sm" onclick="duplicateAndEditThumbnailDraft(\'' + escHtml(draft.draft_id) + '\')">Duplicate &amp; Edit</button>' +
+              '<button type="button" class="btn" onclick="duplicateAndEditThumbnailDraft(\'' + escHtml(draft.draft_id) + '\')" title="Opens a fresh copy (keeps the frame &amp; layout); your original stays saved">Edit a copy</button>' +
+              '<button type="button" class="btn-ghost btn-sm" onclick="attachExistingThumbnailDraft(\'' + escHtml(draft.draft_id) + '\')">Use as-is</button>' +
+              '<button type="button" class="btn-ghost btn-sm" onclick="editExistingThumbnailDraft(\'' + escHtml(draft.draft_id) + '\')" title="Overwrites this saved thumbnail">Edit original</button>' +
             '</div>' +
           '</div>' +
         '</div>'
@@ -8140,9 +8141,11 @@
     }
     if (note) {
       note.textContent = projectDrafts.length
-        ? 'Saved thumbnails for this source video are previewed below so you can reuse, edit, or duplicate one directly.'
+        ? 'Saved thumbnails for this source video are below. \u201cEdit a copy\u201d reuses the same frame & layout for this clip while keeping your original \u2014 ideal for 2\u20133 clips off one video.'
         : 'There are no saved thumbnails for this source video yet, so the next step would be creating one or skipping for now.';
     }
+    const startLastBtn = document.getElementById('post-save-start-last');
+    if (startLastBtn) startLastBtn.style.display = projectDrafts.length ? '' : 'none';
     await renderPostSaveThumbnailChoices();
     document.getElementById('dialog-post-save-thumbnail')?.showModal();
   }
@@ -8212,6 +8215,14 @@
   function openThumbnailComposerForSavedClip() {
     document.getElementById('dialog-post-save-thumbnail')?.close();
     openThumbDialog();
+  }
+
+  // Reuse the most recent saved thumbnail for this source as a fresh COPY (original kept).
+  // Carries the frame + layout, so no need to re-pick a frame for each clip.
+  function startFromLastThumbnail() {
+    const drafts = getCurrentProjectThumbnailDrafts();
+    if (!drafts.length) { alert('No saved thumbnail to start from yet.'); return; }
+    duplicateAndEditThumbnailDraft(drafts[0].draft_id);
   }
 
   function skipThumbnailForNow() {
@@ -9378,6 +9389,8 @@
     const vidEl = document.getElementById('dlg-pick-video');
     if (!vidEl) return;
     _dlgPickVideoEl = vidEl;
+    _dlgPickSessionCount = 0;               // fresh "added this session" count per open
+    _dlgRenderPickStrip();                  // show any frames already on the draft
     if (!_dlgPickerCloseWired) {            // wire teardown to EVERY close path, once
       _dlgPickerCloseWired = true;
       panel.addEventListener('close', _dlgTeardownFramePicker);
@@ -9450,35 +9463,86 @@
     span.textContent = m + ':' + s + '.' + d;
   }
 
-  async function dlgCapturePickedFrame() {
+  // Capture the frame currently shown in the picker into _dlgFrames (append, dedupe,
+  // keep most-recent 12). Returns the b64 or null. Does NOT close the dialog.
+  function _dlgPickGrabCurrent() {
     const vidEl = document.getElementById('dlg-pick-video');
-    if (!vidEl) return;
-    try {
-      const cv = document.createElement('canvas');
-      cv.width  = vidEl.videoWidth  || 1280;
-      cv.height = vidEl.videoHeight || 720;
-      const ctx2 = cv.getContext('2d');
-      ctx2.drawImage(vidEl, 0, 0, cv.width, cv.height);
-      // Downscale for consistency with backend-extracted frames
-      const out = document.createElement('canvas');
-      const scale = Math.min(1, 1600 / Math.max(cv.width, cv.height));
-      out.width  = Math.round(cv.width  * scale);
-      out.height = Math.round(cv.height * scale);
-      out.getContext('2d').drawImage(cv, 0, 0, out.width, out.height);
-      const b64 = out.toDataURL('image/jpeg', 0.92).split(',')[1];
-      // Inject at front of frames array
-      _dlgFrames = [b64, ..._dlgFrames].slice(0, 12);
-      _dlgSelectedFrame = 0;
-      _efThumbFrames = _dlgFrames;
-      if (!_dlgVideoInfo && vidEl.videoWidth) {
-        _dlgVideoInfo = {
-          width: vidEl.videoWidth, height: vidEl.videoHeight, rotation: 0,
-          display_width: vidEl.videoWidth, display_height: vidEl.videoHeight,
-          orientation: vidEl.videoHeight > vidEl.videoWidth ? 'portrait' : 'landscape',
-        };
-        if (_sharedThumbnailDraft) _sharedThumbnailDraft.video_info = _dlgVideoInfo;
+    if (!vidEl || !vidEl.videoWidth) return null;
+    const cv = document.createElement('canvas');
+    cv.width  = vidEl.videoWidth;
+    cv.height = vidEl.videoHeight;
+    cv.getContext('2d').drawImage(vidEl, 0, 0, cv.width, cv.height);
+    const out = document.createElement('canvas');
+    const scale = Math.min(1, 1600 / Math.max(cv.width, cv.height));
+    out.width  = Math.round(cv.width  * scale);
+    out.height = Math.round(cv.height * scale);
+    out.getContext('2d').drawImage(cv, 0, 0, out.width, out.height);
+    const b64 = out.toDataURL('image/jpeg', 0.92).split(',')[1];
+    _dlgFrames = [..._dlgFrames.filter(f => f !== b64), b64].slice(-12);
+    _dlgSelectedFrame = _dlgFrames.indexOf(b64);
+    _efThumbFrames = _dlgFrames;
+    if (!_dlgVideoInfo && vidEl.videoWidth) {
+      _dlgVideoInfo = {
+        width: vidEl.videoWidth, height: vidEl.videoHeight, rotation: 0,
+        display_width: vidEl.videoWidth, display_height: vidEl.videoHeight,
+        orientation: vidEl.videoHeight > vidEl.videoWidth ? 'portrait' : 'landscape',
+      };
+      if (_sharedThumbnailDraft) _sharedThumbnailDraft.video_info = _dlgVideoInfo;
+    }
+    if (_sharedThumbnailDraft) {
+      _sharedThumbnailDraft.available_frames = _dlgFrames;
+      _sharedThumbnailDraft.selected_frame_index = _dlgSelectedFrame;
+    }
+    _dlgPickSessionCount++;
+    return b64;
+  }
+
+  // Strip of captured frames shown inside the picker (visual confirmation + quick re-pick).
+  function _dlgRenderPickStrip() {
+    const strip = document.getElementById('dlg-pick-captured');
+    const hint  = document.getElementById('dlg-pick-captured-hint');
+    const useBtn = document.getElementById('dlg-pick-use-btn');
+    if (strip) {
+      if (!_dlgFrames.length) {
+        strip.innerHTML = '';
+      } else {
+        strip.innerHTML = _dlgFrames.map((b64, i) =>
+          '<img src="data:image/jpeg;base64,' + b64 + '" ' +
+          'style="height:56px;width:auto;border-radius:6px;border:2px solid ' +
+          (i === _dlgSelectedFrame ? 'var(--orange)' : 'transparent') + ';cursor:pointer;flex:0 0 auto;" ' +
+          'onclick="_dlgPickSelectStrip(' + i + ')" title="Frame ' + (i + 1) + ' — click to make this the active one">'
+        ).join('');
       }
-      if (_sharedThumbnailDraft) _sharedThumbnailDraft.available_frames = _dlgFrames;
+    }
+    if (hint) hint.style.display = _dlgFrames.length ? '' : 'none';
+    if (useBtn) useBtn.textContent = _dlgFrames.length > 1 ? ('Use these ' + _dlgFrames.length + ' frames') : 'Use This Frame';
+  }
+
+  function _dlgPickSelectStrip(i) {
+    if (i < 0 || i >= _dlgFrames.length) return;
+    _dlgSelectedFrame = i;
+    if (_sharedThumbnailDraft) _sharedThumbnailDraft.selected_frame_index = i;
+    _dlgRenderPickStrip();
+  }
+
+  // "+ Add frame" — capture the current frame and KEEP the picker open for more.
+  function dlgPickAddFrame() {
+    const b64 = _dlgPickGrabCurrent();
+    if (!b64) { alert('Frame not ready yet — let the video load, then try again.'); return; }
+    _dlgRenderPickStrip();
+    dlgBuildHeroState();
+    const btn = document.getElementById('dlg-pick-add-btn');
+    if (btn) { const t = btn.dataset.label || btn.textContent; btn.dataset.label = t; btn.textContent = 'Added ✓'; setTimeout(() => { btn.textContent = btn.dataset.label; }, 700); }
+  }
+
+  // "Use This Frame" / "Use these N frames" — finish. Grabs the current frame only if
+  // nothing was explicitly Added this session, so a quick single pick still works.
+  async function dlgCapturePickedFrame() {
+    try {
+      if (_dlgPickSessionCount === 0) {
+        const b64 = _dlgPickGrabCurrent();
+        if (!b64) { alert('Frame not ready yet — let the video load, then try again.'); return; }
+      }
       dlgBuildHeroState();
       dlgDrawCanvas();
       dlgCloseFramePicker();
@@ -11961,7 +12025,7 @@
           <div class="card">
             <div class="thumb-editor-label">Thumbnail Format</div>
             <div class="thumb-format-group" style="margin-bottom:0;">
-              <button type="button" class="thumb-format-btn selected" data-thumb-format-target="dialog" data-thumb-format="instagram" onclick="setDlgTargetFormat('instagram')">Instagram 4:5</button>
+              <button type="button" class="thumb-format-btn selected" data-thumb-format-target="dialog" data-thumb-format="instagram" onclick="setDlgTargetFormat('instagram')">Instagram 9:16</button>
               <button type="button" class="thumb-format-btn" data-thumb-format-target="dialog" data-thumb-format="youtube_shorts" onclick="setDlgTargetFormat('youtube_shorts')">YouTube Shorts 9:16</button>
             </div>
           </div>
@@ -12267,7 +12331,8 @@
     <div id="post-save-thumbnail-status" style="display:none;margin-top:14px;"></div>
     <div class="post-save-actions">
       <button class="btn-ghost" type="button" onclick="skipThumbnailForNow()">Skip For Now</button>
-      <button class="btn" type="button" onclick="openThumbnailComposerForSavedClip()">Create New Thumbnail</button>
+      <button class="btn-ghost" type="button" onclick="openThumbnailComposerForSavedClip()">Create New Thumbnail</button>
+      <button class="btn" type="button" id="post-save-start-last" style="display:none;" onclick="startFromLastThumbnail()" title="Reuse your most recent thumbnail (same frame &amp; layout) as a fresh copy for this clip">Start from last thumbnail</button>
     </div>
   </div>
 </dialog>
@@ -12278,7 +12343,7 @@
   <div style="display:flex;flex-direction:column;max-height:95vh;">
     <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;padding:14px 18px;border-bottom:1px solid var(--border);">
       <strong style="font-size:15px;">Pick a frame</strong>
-      <span style="font-size:11.5px;color:var(--muted);">Scrub or step frame-by-frame, then &ldquo;Use This Frame&rdquo;. Reopens where you left off.</span>
+      <span style="font-size:11.5px;color:var(--muted);">Scrub or step frame-by-frame. &ldquo;+ Add frame&rdquo; to stockpile several; &ldquo;Use&rdquo; to finish. Reopens where you left off.</span>
     </div>
     <div style="padding:16px 18px;overflow:auto;">
       <video id="dlg-pick-video" style="width:100%;border-radius:8px;background:#000;max-height:72vh;display:block;margin:0 auto;" muted playsinline preload="metadata"></video>
@@ -12293,9 +12358,12 @@
         </div>
         <div class="thumb-inline-row">
           <button class="btn-ghost btn-sm" onclick="dlgCloseFramePicker()">Cancel</button>
-          <button class="btn btn-sm" onclick="dlgCapturePickedFrame()">Use This Frame</button>
+          <button class="btn-ghost btn-sm" id="dlg-pick-add-btn" type="button" onclick="dlgPickAddFrame()" title="Capture this frame and keep picking more">&#43; Add frame</button>
+          <button class="btn btn-sm" id="dlg-pick-use-btn" onclick="dlgCapturePickedFrame()">Use This Frame</button>
         </div>
       </div>
+      <div id="dlg-pick-captured-hint" style="display:none;font-size:11.5px;color:var(--muted);margin-top:14px;">Captured frames (click one to make it active; manage them in the editor too):</div>
+      <div id="dlg-pick-captured" style="display:flex;gap:8px;overflow-x:auto;margin-top:6px;padding-bottom:4px;"></div>
     </div>
   </div>
 </dialog>

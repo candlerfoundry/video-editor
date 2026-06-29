@@ -2149,3 +2149,26 @@ return to its prior position each time.
   per-clip split choice wins (_splitFromSave); checked=False keeps the POD default. No OpenCV —
   uses the existing Anthropic vision pattern.
 - Backend route added -> BACKEND_BUILD + EXPECTED_BACKEND_BUILD bumped to 2026-06-27-autosplit.
+
+## Thumbnail UX round — 9:16 covers, multi-frame pick, non-destructive reuse (June 29, 2026)
+- SKEW FIX: the thumbnail/cover composer's "Instagram" format is now 9:16 (1080x1920),
+  matching the reel. Previously it was 4:5 (1080x1350); the cover-burn graph forces 9:16
+  (scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920), so a 4:5 cover was
+  scaled-to-fill and side-cropped -> graphics/text shifted off where they were placed. With a
+  9:16 composition that burn is now an identity transform (no crop, no skew). Both format
+  toggle options are 9:16 now; labels updated ("Instagram 9:16"). FRONTEND-ONLY change (no
+  server/route change) -> no build bump; Netlify deploys on push, user just hard-reloads.
+  NOTE: thumbnail drafts saved earlier as 4:5 may have text positioned for the old 1350px
+  canvas and can look offset on the taller 1920px canvas; reposition or remake those.
+- MULTI-FRAME PICK: the "Pick a frame" dialog can now stockpile several frames in one session.
+  "+ Add frame" captures the current frame and keeps the picker open (appends to _dlgFrames,
+  deduped, most-recent-12); a captured strip shows them; "Use This Frame" finishes (and grabs
+  the current frame only if none were explicitly Added this session). Refactored the old
+  single-shot dlgCapturePickedFrame into _dlgPickGrabCurrent + dlgPickAddFrame + the strip.
+- NON-DESTRUCTIVE REUSE: post-save thumbnail choices now default to "Edit a copy"
+  (duplicateAndEditThumbnailDraft -> new draft_id, original preserved) as the primary action;
+  "Use as-is" and a de-emphasized "Edit original" (overwrites) remain. Added a
+  "Start from last thumbnail" button (startFromLastThumbnail -> duplicates the newest draft for
+  this source) so 2-3 clips off one video reuse the same frame+layout without re-picking a
+  frame. The drafts gallery + per-source filtering (getCurrentProjectThumbnailDrafts) already
+  existed; this round makes reuse the easy, safe default.
