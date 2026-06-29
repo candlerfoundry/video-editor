@@ -2800,8 +2800,7 @@
             <div style="flex:1;min-width:260px;">
               <div class="thumb-control-label" style="margin-bottom:8px;">Thumbnail Format</div>
               <div class="thumb-format-group">
-                <button type="button" class="thumb-format-btn selected" data-thumb-format-target="main" data-thumb-format="instagram" onclick="setThumbTargetFormat('instagram')">Instagram 9:16</button>
-                <button type="button" class="thumb-format-btn" data-thumb-format-target="main" data-thumb-format="youtube_shorts" onclick="setThumbTargetFormat('youtube_shorts')">YouTube Shorts 9:16</button>
+                <button type="button" class="thumb-format-btn selected" data-thumb-format-target="main" data-thumb-format="instagram" onclick="setThumbTargetFormat('instagram')">9:16 &middot; Reels &amp; Shorts</button>
               </div>
               <div class="thumb-control-label" style="margin-bottom:8px;">Style</div>
               <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;">
@@ -2859,8 +2858,7 @@
                   <div>
                     <div class="thumb-control-label">Thumbnail Format</div>
                     <div class="thumb-format-group" style="margin-bottom:0;">
-                      <button type="button" class="thumb-format-btn selected" data-thumb-format-target="main" data-thumb-format="instagram" onclick="setThumbTargetFormat('instagram')">Instagram 9:16</button>
-                      <button type="button" class="thumb-format-btn" data-thumb-format-target="main" data-thumb-format="youtube_shorts" onclick="setThumbTargetFormat('youtube_shorts')">YouTube Shorts 9:16</button>
+                      <button type="button" class="thumb-format-btn selected" data-thumb-format-target="main" data-thumb-format="instagram" onclick="setThumbTargetFormat('instagram')">9:16 &middot; Reels &amp; Shorts</button>
                     </div>
                   </div>
 
@@ -4841,6 +4839,13 @@
     // If this clip was edited before (same hook line), restore trims + word
     // edits from the project store.
     resetClipIgCaption('');   // clear the previous clip's caption; restored below if saved
+    // New clip: drop the PREVIOUS clip's in-progress thumbnail so its cover/preview
+    // doesn't bleed into this clip's editor. Saved thumbnails stay reusable via the
+    // Save-Clip "Saved thumbnails" cards (Edit a copy / Use as-is).
+    _sharedThumbnailDraft = null;
+    try { if (thumbnailBlobUrl) URL.revokeObjectURL(thumbnailBlobUrl); } catch (_) {}
+    thumbnailBlob = null; thumbnailBlobUrl = null;
+    { const _tpp = document.getElementById('thumb-preview-panel'); if (_tpp) _tpp.classList.remove('active'); }
     _splitFromSave = false; _editorSplitScreen = _isPodDefault();  // reset split per clip; POD default
     const saved = (activeProject?.edited_clips || []).find(c =>
       hookLine && c.hook_line === hookLine);
@@ -7757,10 +7762,10 @@
 
     // Show existing drafts first
     const draftSection = document.getElementById('export-flow-existing-drafts');
+    // Show every saved thumbnail for THIS source video (any clip/part), so a
+    // thumbnail made for Part 1 can be reused/copied for Part 2 of the series.
     const drafts = getCurrentProjectThumbnailDrafts().filter(d =>
-      (!d.source_filename || d.source_filename === (_clipFile?.name || '')) &&
-      (d.clip_start == null || Math.abs((d.clip_start || 0) - editorInTime) < 1) &&
-      (d.clip_end   == null || Math.abs((d.clip_end   || 0) - editorOutTime) < 1)
+      (!d.source_filename || d.source_filename === (_clipFile?.name || ''))
     );
     if (draftSection) {
       if (drafts.length) {
@@ -11931,8 +11936,7 @@
           <div class="card">
             <div class="thumb-editor-label">Thumbnail Format</div>
             <div class="thumb-format-group" style="margin-bottom:0;">
-              <button type="button" class="thumb-format-btn selected" data-thumb-format-target="dialog" data-thumb-format="instagram" onclick="setDlgTargetFormat('instagram')">Instagram 9:16</button>
-              <button type="button" class="thumb-format-btn" data-thumb-format-target="dialog" data-thumb-format="youtube_shorts" onclick="setDlgTargetFormat('youtube_shorts')">YouTube Shorts 9:16</button>
+              <button type="button" class="thumb-format-btn selected" data-thumb-format-target="dialog" data-thumb-format="instagram" onclick="setDlgTargetFormat('instagram')">9:16 &middot; Reels &amp; Shorts</button>
             </div>
           </div>
 

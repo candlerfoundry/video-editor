@@ -2206,3 +2206,17 @@ return to its prior position each time.
   openThumbnailComposerForSavedClip and the dialog-post-save-thumbnail markup + its CSS selector.
   Shared helpers (attachThumbnailBlobToSavedClip, attach/edit/duplicateExistingThumbnailDraft)
   kept — used by the live flow. FRONTEND-ONLY -> no build bump; hard-reload only.
+
+## Thumbnail: single 9:16 format + series reuse fix (June 29, 2026 — round 3)
+- FORMAT TOGGLE REMOVED: Instagram and YouTube Shorts were both 9:16 (identical) after the
+  earlier skew fix, so the toggle was redundant and a latent source of format mismatch. Removed
+  the "YouTube Shorts" buttons (3 sites) and relabeled the remaining control "9:16 · Reels &
+  Shorts". The youtube_shorts format object is kept in JS for backward-compat with old drafts.
+- SERIES REUSE: the Save-Clip "Saved thumbnails" list filtered drafts to the CURRENT clip's
+  exact start/end (±1s), so a thumbnail made for Part 1 never appeared when editing Part 2.
+  Relaxed the filter to the SAME SOURCE VIDEO (any clip/part), so series parts can reuse/copy
+  one thumbnail. Cards already offer Edit a copy / Use as-is / Edit original.
+- STALE THUMBNAIL BLEED: switching clips left the previous clip's in-progress thumbnail showing
+  as "Thumbnail ready / Re-edit" on the new clip. restoreSavedClipEdits now clears the per-clip
+  thumbnail state (_sharedThumbnailDraft, thumbnailBlob/Url, thumb-preview-panel) on every clip
+  open; saved thumbnails remain reusable via the Save-Clip cards. FRONTEND-ONLY → hard-reload.
