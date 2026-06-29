@@ -2108,3 +2108,19 @@ return to its prior position each time.
 - Color coding to distinguish boxes: transcript (.tx-always-wrap) warm tint (#FFFBF8 /
   #EBD9CD border); IG caption box cool tint (#F5F8FD / #D5E2F2 border, #185FA5 label).
 - Frontend/CSS only; no backend or handshake change.
+
+## Split-screen v2: live canvas preview + manual per-cell framing (June 26, 2026)
+- Replaces the auto left/right edges + useless divider indicator. The clip editor now shows a
+  LIVE canvas (#split-canvas) that composites the two cells by sampling two crop regions from
+  the single <video> via ctx.drawImage each frame (NO second decoder — avoids the freeze).
+- Manual framing per cell: drag a half to pan, Top/Bottom zoom sliders (100-300%). State =
+  _splitRegions {top:{cx,cy,z}, bottom:{cx,cy,z}} (center fractions + zoom), session-sticky and
+  saved per clip (split_regions in _buildClipEditPayload / restoreSavedClipEdits). Swap swaps cells.
+- Export sends split_top/split_bot = {x,y,w,h} fractions of the source. server.py _reframe() uses
+  them (crop=iw*w:ih*h:iw*x:ih*y,scale=1080:960 per cell) when present, else falls back to the auto
+  edges. ffmpeg graph + manual-fraction graph verified to output 1080x1920.
+- Captions: the split graph burns captions ONCE after vstack (verified by frame inspection). If a
+  clip shows DOUBLED captions, the SOURCE was a captioned master (its burned caption lands in both
+  crops) — use the uncaptioned master, same as the standard clip rule.
+- CONTRACT CHANGE: new split_top/split_bot form fields -> BACKEND_BUILD + EXPECTED_BACKEND_BUILD
+  bumped to 2026-06-26-splitmanual (§32). Redeploy server.py + restart launcher.

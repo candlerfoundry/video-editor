@@ -62,7 +62,7 @@ CORS(app)
 
 # Bump this whenever the frontend/backend contract changes (the frontend
 # carries a matching EXPECTED_BACKEND_BUILD and warns when they differ).
-BACKEND_BUILD = "2026-06-26-splitscreen"
+BACKEND_BUILD = "2026-06-26-splitmanual"
 
 CREATE_NO_WINDOW = 0x08000000 if platform.system() == 'Windows' else 0
 
@@ -2659,8 +2659,18 @@ def export_clip():
         speed = max(1.0, min(2.0, round(speed, 2)))  # clip-speed slider: continuous 1.0-2.0 (atempo valid range; >2.0 would need 2-stage)
         split_screen    = request.form.get("split_screen", "").strip() in {"1", "true", "yes"}
         split_swap      = request.form.get("split_swap",   "").strip() in {"1", "true", "yes"}
+        # Manual per-cell crop regions (fractions of the SOURCE frame): {x,y,w,h} in 0..1.
+        # When present they override the auto left/right framing; w/h carry the 9:8 cell aspect.
+        split_top = split_bot = None
+        try:
+            _st = request.form.get("split_top", "").strip()
+            _sb = request.form.get("split_bot", "").strip()
+            if _st: split_top = json.loads(_st)
+            if _sb: split_bot = json.loads(_sb)
+        except Exception as _e:
+            logger.warning("[export] bad split crop regions, using auto: %s", _e)
         if split_screen:
-            logger.info("[export] Split-screen vertical 2-up (swap=%s)", split_swap)
+            logger.info("[export] Split-screen vertical 2-up (swap=%s, manual=%s)", split_swap, bool(split_top and split_bot))
     except (ValueError, TypeError) as e:
         return jsonify({"error": f"Invalid parameters: {e}"}), 400
 
@@ -2730,9 +2740,23 @@ def export_clip():
             # Vertical split-screen: two side-by-side people stacked into 9:16. Each cell
             # is 1080x960 (9:8); crop a 9:8 region at full height anchored to each edge
             # (left side -> top cell, right side -> bottom; swap flips them).
+            def _clip01(v):
+                try: return max(0.0, min(1.0, float(v)))
+                except Exception: return None
+            def _cell(region, fallback):
+                if isinstance(region, dict) and all(k in region for k in ("x", "y", "w", "h")):
+                    x, y, w, h = (_clip01(region[k]) for k in ("x", "y", "w", "h"))
+                    if None not in (x, y, w, h) and w > 0 and h > 0:
+                        # keep the crop inside the frame
+                        x = min(x, 1.0 - w); y = min(y, 1.0 - h)
+                        return (f"crop=iw*{w:.5f}:ih*{h:.5f}:iw*{x:.5f}:ih*{y:.5f},"
+                                f"scale=1080:960,setsar=1")
+                return fallback
             L = "crop=ih*9/8:ih:0:0,scale=1080:960,setsar=1"
             R = "crop=ih*9/8:ih:iw-ih*9/8:0,scale=1080:960,setsar=1"
-            top_src, bot_src = (R, L) if split_swap else (L, R)
+            auto_top, auto_bot = (R, L) if split_swap else (L, R)
+            top_src = _cell(split_top, auto_top)
+            bot_src = _cell(split_bot, auto_bot)
             return (f"{in_label}split=2[ssA][ssB];"
                     f"[ssA]{top_src}[sstop];[ssB]{bot_src}[ssbot];"
                     f"[sstop][ssbot]vstack=inputs=2{caption_filter}{speed_v_suffix}[vout]")

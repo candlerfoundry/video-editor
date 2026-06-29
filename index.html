@@ -1604,15 +1604,16 @@
     @keyframes capPop { 0% { transform: scale(0.85); opacity: 0.5; } 100% { transform: scale(1); opacity: 1; } }
     #caption-overlay:not(.editing) { cursor: grab; }
     #caption-overlay.cap-dragging { cursor: grabbing; }
-    .split-screen-row { display:flex; align-items:center; gap:12px; flex-wrap:wrap; margin-bottom:4px; }
+    .split-screen-row { display:flex; flex-direction:column; gap:6px; margin-bottom:4px; }
     .split-screen-row .ss-toggle { display:flex; align-items:center; gap:6px; font-size:13px; font-weight:600; color:var(--text); cursor:pointer; }
     .split-screen-row .ss-toggle input { accent-color:var(--orange); width:15px; height:15px; cursor:pointer; }
-    .split-screen-row .ss-hint { font-size:11px; color:var(--muted); }
-    #split-preview-overlay { position:absolute; inset:0; pointer-events:none; z-index:6; }
-    #split-preview-overlay::before { content:''; position:absolute; left:0; right:0; top:50%; border-top:2px dashed rgba(255,255,255,0.85); }
-    #split-preview-overlay .ss-cell-label { position:absolute; left:8px; color:#fff; font-size:11px; font-weight:700; background:rgba(0,0,0,0.5); padding:2px 7px; border-radius:6px; letter-spacing:0.03em; }
-    #split-preview-overlay .ss-top { top:8px; }
-    #split-preview-overlay .ss-bot { bottom:8px; }
+    .split-controls { display:flex; align-items:center; gap:12px; flex-wrap:wrap; }
+    .split-controls .ss-ctl { display:flex; align-items:center; gap:5px; }
+    .split-controls .ss-ctl-lbl { font-size:10px; font-weight:700; letter-spacing:0.05em; text-transform:uppercase; color:var(--muted); }
+    .split-controls .ss-ctl input[type=range] { width:84px; accent-color:var(--orange); }
+    .split-controls .ss-ctl-val { font-size:11px; color:var(--text-2); min-width:34px; }
+    .split-controls .ss-hint { font-size:11px; color:var(--muted); }
+    #split-canvas { position:absolute; inset:0; width:100%; height:100%; z-index:4; cursor:move; background:#000; border-radius:8px; }
     .speed-btn.active { background: var(--orange); border-color: var(--orange); color: #fff; }
     #dlg-canvas-wrap.pan-mode { cursor: grab; }
     #dlg-canvas-wrap.pan-mode:active { cursor: grabbing; }
@@ -2459,7 +2460,7 @@
               <div class="edit-video-wrap" id="edit-video-wrap">
                 <video id="edit-video" controls></video>
                 <div id="caption-overlay" style="display:none;"></div>
-                <div id="split-preview-overlay" style="display:none;"></div>
+                <canvas id="split-canvas" width="540" height="960" style="display:none;"></canvas>
               </div>
 
               <!-- Custom draggable timeline bar -->
@@ -2517,12 +2518,16 @@
               </div>
 
               <div class="split-screen-row" id="split-screen-row">
-                <label class="ss-toggle" title="For a wide shot with two people side by side: stack them vertically (top/bottom) in the 9:16 reel. Applied on export.">
+                <label class="ss-toggle" title="For a wide shot with two people side by side: stack them vertically in the 9:16 reel. Frame each person below, then export.">
                   <input type="checkbox" id="split-screen-toggle" onchange="setSplitScreen(this.checked)">
                   Split screen (2 people)
                 </label>
-                <button type="button" class="btn-ghost btn-sm" id="split-swap-btn" onclick="toggleSplitSwap()" disabled title="Swap which person is on top">&#8645; Swap top/bottom</button>
-                <span class="ss-hint" id="split-screen-hint"></span>
+                <div class="split-controls" id="split-controls" style="display:none;">
+                  <span class="ss-ctl"><span class="ss-ctl-lbl">Top zoom</span><input type="range" id="split-zoom-top" min="100" max="300" value="150" oninput="setSplitZoom('top', this.value)"><span id="split-zoom-top-val" class="ss-ctl-val">150%</span></span>
+                  <span class="ss-ctl"><span class="ss-ctl-lbl">Bottom zoom</span><input type="range" id="split-zoom-bottom" min="100" max="300" value="150" oninput="setSplitZoom('bottom', this.value)"><span id="split-zoom-bottom-val" class="ss-ctl-val">150%</span></span>
+                  <button type="button" class="btn-ghost btn-sm" id="split-swap-btn" onclick="swapSplitCells()" title="Swap top/bottom">&#8645; Swap</button>
+                  <span class="ss-hint">Drag each half to reposition.</span>
+                </div>
               </div>
 
             </div><!-- /.editor-left-zone -->
@@ -3094,7 +3099,7 @@
   // Must match BACKEND_BUILD in server.py — bumped together whenever the
   // frontend/backend contract changes. A mismatch means the user is running
   // an old backend (launcher not restarted after a deploy).
-  const EXPECTED_BACKEND_BUILD = '2026-06-26-splitscreen';
+  const EXPECTED_BACKEND_BUILD = '2026-06-26-splitmanual';
 
   if (document.fonts && document.fonts.load) { document.fonts.load("700 64px 'Handmade Sans'").catch(function(){}); }
   let _staleBackendWarned = false;
@@ -4846,7 +4851,7 @@
     editorCutRanges   = (saved.cut_ranges   || []).map(r => ({ start: r.start, end: r.end }));
     editorBleepRanges = (saved.bleep_ranges || []).map(r => ({ start: r.start, end: r.end }));
     if (typeof saved.split_screen === 'boolean') _editorSplitScreen = saved.split_screen;
-    if (typeof saved.split_swap   === 'boolean') _editorSplitSwap   = saved.split_swap;
+    if (saved.split_regions && saved.split_regions.top && saved.split_regions.bottom) _splitRegions = JSON.parse(JSON.stringify(saved.split_regions));
     if (saved.caption_style && typeof saved.caption_style === 'object') {
       editorCaptionStyle = { ...editorCaptionStyle, ...saved.caption_style };
       const presetSel = document.getElementById('caption-preset-select');
@@ -8278,7 +8283,7 @@
     return { start_time: editorInTime, end_time: editorOutTime, hook_line: _editCandidate ? (_editCandidate.hook_line || '') : '',
       mode: (_editCandidate && _editCandidate.part != null) ? 'split' : 'viral', cut_ranges: editorCutRanges, bleep_ranges: editorBleepRanges,
       caption_style: editorCaptionStyle, caption_overrides: editorCaptionOverrides, caption_emphasis: editorCaptionEmphasis, caption_breaks: editorCaptionBreaks || [],
-      split_screen: _editorSplitScreen, split_swap: _editorSplitSwap,
+      split_screen: _editorSplitScreen, split_regions: JSON.parse(JSON.stringify(_splitRegions)),
       ig_caption: getClipIgCaption() };
   }
   async function clipEditorBack() {
@@ -10992,38 +10997,95 @@
   function getClipSpeed() {
     return clampClipSpeed(editorCaptionStyle.speed);
   }
-  // ── Split-screen (2-person vertical stack): session-sticky + saved per clip ──
+  // ── Split-screen (2-person vertical stack): live canvas preview + per-cell pan/zoom ──
+  // Per clip: each cell's crop = center (cx,cy as fractions of the SOURCE) + zoom z (>=1).
   let _editorSplitScreen = false;
-  let _editorSplitSwap   = false;
+  let _splitRegions = { top:{cx:0.28,cy:0.46,z:1.5}, bottom:{cx:0.72,cy:0.46,z:1.5} };
+  let _splitRaf = null;
+  const SPLIT_CELL_AR = 1080/960;
+  function _splitCellCrop(reg, vw, vh) {
+    const z = Math.max(1, (reg && reg.z) || 1);
+    let sh = vh / z, sw = sh * SPLIT_CELL_AR;
+    if (sw > vw) { sw = vw; sh = sw / SPLIT_CELL_AR; }
+    if (sh > vh) { sh = vh; sw = sh * SPLIT_CELL_AR; }
+    let sx = (reg && reg.cx != null ? reg.cx : 0.5) * vw - sw/2;
+    let sy = (reg && reg.cy != null ? reg.cy : 0.5) * vh - sh/2;
+    sx = Math.max(0, Math.min(vw - sw, sx));
+    sy = Math.max(0, Math.min(vh - sh, sy));
+    return { sx, sy, sw, sh };
+  }
+  function _drawSplitCanvas() {
+    const c = document.getElementById('split-canvas');
+    const v = document.getElementById('edit-video');
+    if (!c || !v) return;
+    const vw = v.videoWidth, vh = v.videoHeight;
+    if (!vw || !vh) return;
+    const W = c.width, H = c.height, half = Math.floor(H/2);
+    const ctx = c.getContext('2d');
+    ctx.fillStyle = '#000'; ctx.fillRect(0, 0, W, H);
+    const t = _splitCellCrop(_splitRegions.top, vw, vh);
+    const b = _splitCellCrop(_splitRegions.bottom, vw, vh);
+    try { ctx.drawImage(v, t.sx, t.sy, t.sw, t.sh, 0, 0,    W, half); } catch (_) {}
+    try { ctx.drawImage(v, b.sx, b.sy, b.sw, b.sh, 0, half, W, H - half); } catch (_) {}
+    ctx.strokeStyle = 'rgba(255,255,255,0.9)'; ctx.lineWidth = 2; ctx.setLineDash([9, 6]);
+    ctx.beginPath(); ctx.moveTo(0, half); ctx.lineTo(W, half); ctx.stroke(); ctx.setLineDash([]);
+  }
+  function _splitLoop() { if (!_editorSplitScreen) { _splitRaf = null; return; } _drawSplitCanvas(); _splitRaf = requestAnimationFrame(_splitLoop); }
+  function _wireSplitCanvas() {
+    const c = document.getElementById('split-canvas');
+    if (!c || c._wired) return; c._wired = true;
+    c.addEventListener('mousedown', function (e) {
+      if (!_editorSplitScreen) return;
+      const rect = c.getBoundingClientRect();
+      const cell = ((e.clientY - rect.top) / rect.height) < 0.5 ? 'top' : 'bottom';
+      const reg = _splitRegions[cell];
+      const v = document.getElementById('edit-video'); const vw = v.videoWidth || 1920, vh = v.videoHeight || 1080;
+      const crop = _splitCellCrop(reg, vw, vh);
+      let lx = e.clientX, ly = e.clientY;
+      function mv(ev) {
+        const dx = ev.clientX - lx, dy = ev.clientY - ly; lx = ev.clientX; ly = ev.clientY;
+        reg.cx = Math.max(0, Math.min(1, reg.cx - (dx / rect.width) * (crop.sw / vw)));
+        reg.cy = Math.max(0, Math.min(1, reg.cy - (dy / (rect.height / 2)) * (crop.sh / vh)));
+      }
+      function up() { document.removeEventListener('mousemove', mv); document.removeEventListener('mouseup', up); }
+      document.addEventListener('mousemove', mv); document.addEventListener('mouseup', up);
+      e.preventDefault();
+    });
+  }
   function setSplitScreen(on) {
     _editorSplitScreen = !!on;
-    const sb = document.getElementById('split-swap-btn');
-    if (sb) sb.disabled = !_editorSplitScreen;
-    updateSplitPreview();
+    _wireSplitCanvas();
+    const c = document.getElementById('split-canvas');
+    const ctrls = document.getElementById('split-controls');
+    if (c) c.style.display = _editorSplitScreen ? 'block' : 'none';
+    if (ctrls) ctrls.style.display = _editorSplitScreen ? 'flex' : 'none';
+    if (_editorSplitScreen) { if (!_splitRaf) _splitLoop(); }
+    else if (_splitRaf) { cancelAnimationFrame(_splitRaf); _splitRaf = null; }
   }
-  function toggleSplitSwap() {
+  function swapSplitCells() {
     if (!_editorSplitScreen) return;
-    _editorSplitSwap = !_editorSplitSwap;
-    updateSplitPreview();
+    const t = _splitRegions.top; _splitRegions.top = _splitRegions.bottom; _splitRegions.bottom = t;
+    syncSplitZoomSliders();
+  }
+  function setSplitZoom(cell, pct) {
+    const z = Math.max(1, Math.min(3, (parseFloat(pct) || 100) / 100));
+    if (_splitRegions[cell]) _splitRegions[cell].z = z;
+    const out = document.getElementById('split-zoom-' + cell + '-val'); if (out) out.textContent = Math.round(z * 100) + '%';
+  }
+  function syncSplitZoomSliders() {
+    ['top', 'bottom'].forEach(function (cell) {
+      const sl = document.getElementById('split-zoom-' + cell);
+      const out = document.getElementById('split-zoom-' + cell + '-val');
+      const z = (_splitRegions[cell] && _splitRegions[cell].z) || 1.5;
+      if (sl) sl.value = Math.round(z * 100);
+      if (out) out.textContent = Math.round(z * 100) + '%';
+    });
   }
   function syncSplitScreenUI() {
     const chk = document.getElementById('split-screen-toggle');
     if (chk) chk.checked = _editorSplitScreen;
-    const sb = document.getElementById('split-swap-btn');
-    if (sb) sb.disabled = !_editorSplitScreen;
-    updateSplitPreview();
-  }
-  function updateSplitPreview() {
-    const ov = document.getElementById('split-preview-overlay');
-    const hint = document.getElementById('split-screen-hint');
-    if (!ov) return;
-    if (!_editorSplitScreen) { ov.style.display = 'none'; if (hint) hint.textContent = ''; return; }
-    const top = _editorSplitSwap ? 'Right person' : 'Left person';
-    const bot = _editorSplitSwap ? 'Left person'  : 'Right person';
-    ov.innerHTML = '<span class="ss-cell-label ss-top">TOP \u00b7 ' + top + '</span>' +
-                   '<span class="ss-cell-label ss-bot">BOTTOM \u00b7 ' + bot + '</span>';
-    ov.style.display = 'block';
-    if (hint) hint.textContent = 'Two people stacked vertically on export.';
+    syncSplitZoomSliders();
+    setSplitScreen(_editorSplitScreen);
   }
   function syncSpeedButtons() {
     const cur = getClipSpeed();
@@ -11468,7 +11530,14 @@
     if (_igCap) form.append('ig_caption', _igCap);
     // Clip speed (1 / 1.5 / 2x) — burned into the exported video while toggled.
     form.append('speed', String(getClipSpeed()));
-    if (_editorSplitScreen) { form.append('split_screen', '1'); if (_editorSplitSwap) form.append('split_swap', '1'); }
+    if (_editorSplitScreen) {
+      form.append('split_screen', '1');
+      const _sv = document.getElementById('edit-video');
+      const _vw = _sv.videoWidth || 1920, _vh = _sv.videoHeight || 1080;
+      const _frac = function (reg) { const c = _splitCellCrop(reg, _vw, _vh); return { x:+(c.sx/_vw).toFixed(5), y:+(c.sy/_vh).toFixed(5), w:+(c.sw/_vw).toFixed(5), h:+(c.sh/_vh).toFixed(5) }; };
+      form.append('split_top', JSON.stringify(_frac(_splitRegions.top)));
+      form.append('split_bot', JSON.stringify(_frac(_splitRegions.bottom)));
+    }
 
     try {
       const res  = await fetch(BACKEND + '/export_clip', { method: 'POST', body: form });
