@@ -62,7 +62,7 @@ CORS(app)
 
 # Bump this whenever the frontend/backend contract changes (the frontend
 # carries a matching EXPECTED_BACKEND_BUILD and warns when they differ).
-BACKEND_BUILD = "2026-06-26-splitmanual"
+BACKEND_BUILD = "2026-06-26-captions"
 
 CREATE_NO_WINDOW = 0x08000000 if platform.system() == 'Windows' else 0
 
@@ -2156,6 +2156,16 @@ def thumbnail_titles():
         thumb_logger.info('[titles] Generating titles+caption (%s clip / %s broader chars)',
                           len(clip_transcript), len(broader_transcript))
         client = anthropic.Anthropic(api_key=read_api_key())
+        part_index = data.get('part_index'); part_total = data.get('part_total')
+        today = datetime.date.today()
+        date_str = f"{today.strftime('%B')} {today.day}, {today.year}"
+        series_note = ""
+        try:
+            pi = int(part_index); pt = int(part_total)
+            if pi and pt and pt > 1:
+                series_note = f" This Reel is PART {pi} OF {pt} of a sequential series cut from one longer video."
+        except Exception:
+            pass
         context_block = ''
         if broader_transcript:
             context_block = (
@@ -2169,7 +2179,8 @@ def thumbnail_titles():
             messages=[{"role": "user", "content": (
                 "The Candler Foundry produces faith-based video content for clergy, scholars, "
                 "and the spiritually curious public. Voice: human, honest, direct. "
-                "Avoid jargon, church-speak, or academic language.\n\n"
+                "Avoid jargon, church-speak, or academic language.\n"
+                f"Today's date is {date_str}.{series_note}\n\n"
                 "From the CLIP transcript below, produce two things:\n\n"
                 "1) titles: exactly 8 thumbnail title options.\n"
                 "   - MAX 60 characters each\n"
@@ -2183,7 +2194,9 @@ def thumbnail_titles():
                 "   - Minimal, tasteful emoji (zero to two)\n"
                 "   - Where it fits naturally, end with a genuine question the audience can "
                 "answer in the comments (a light call-to-action is also fine; neither is mandatory)\n"
-                "   - NO hashtags anywhere. Do not wrap the whole caption in quotation marks.\n\n"
+                + ("   - Clearly signal this is Part %d of %d (e.g. \"Part %d/%d\") and invite viewers to watch the other part(s) for the full conversation.\n" % (pi, pt, pi, pt) if series_note else "")
+                + "   - End with 3-5 relevant hashtags on their OWN line at the very end: a couple specific to the clip's topic or theme, one for the show/speaker if apt, and a seasonally-appropriate tag for the current date ONLY if genuinely relevant. Use real, on-brand hashtags; do NOT invent fake or speculative trending tags.\n"
+                + "   - Do not wrap the whole caption in quotation marks.\n\n"
                 "Return ONLY a JSON object, no markdown, of this exact shape:\n"
                 '{"titles": ["..."], "caption": "..."}\n\n'
                 f"CLIP transcript ({len(clip_transcript)} chars):\n{clip_transcript}"

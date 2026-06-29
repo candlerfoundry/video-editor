@@ -2124,3 +2124,14 @@ return to its prior position each time.
   crops) — use the uncaptioned master, same as the standard clip rule.
 - CONTRACT CHANGE: new split_top/split_bot form fields -> BACKEND_BUILD + EXPECTED_BACKEND_BUILD
   bumped to 2026-06-26-splitmanual (§32). Redeploy server.py + restart launcher.
+
+## Captions: part-series labeling + content/seasonal hashtags (June 26, 2026)
+- /thumbnail_titles caption prompt now: (a) for SEQUENTIAL clips, the frontend passes
+  part_index/part_total and the caption marks it 'Part N/M' and invites viewers to the other
+  part(s); (b) ends with 3-5 relevant hashtags = topical/show/speaker + date-aware seasonal
+  (today's date is passed in). Explicitly told NOT to invent fake/trending tags (the backend
+  has no live web access, so real-time trend tags are not reliable).
+- Frontend: fetchTitlesAndCaption sends part_index/part_total when _clipMode==='split';
+  _editCandidate now carries .part.
+- Backend prompt change -> BACKEND_BUILD + EXPECTED_BACKEND_BUILD bumped to 2026-06-26-captions
+  so the stale-backend banner prompts a launcher restart. Redeploy server.py.

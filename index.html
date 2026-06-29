@@ -3099,7 +3099,7 @@
   // Must match BACKEND_BUILD in server.py — bumped together whenever the
   // frontend/backend contract changes. A mismatch means the user is running
   // an old backend (launcher not restarted after a deploy).
-  const EXPECTED_BACKEND_BUILD = '2026-06-26-splitmanual';
+  const EXPECTED_BACKEND_BUILD = '2026-06-26-captions';
 
   if (document.fonts && document.fonts.load) { document.fonts.load("700 64px 'Handmade Sans'").catch(function(){}); }
   let _staleBackendWarned = false;
@@ -4747,6 +4747,7 @@
       hook_score:   null,
       hook_line:    p.hook  ?? p.label ?? '',
       why_it_works: p.label ?? '',
+      part:         p.part ?? null,
     };
     editorInTime  = _editCandidate.start_time;
     editorOutTime = _editCandidate.end_time;
@@ -8506,10 +8507,15 @@
     if (!clip_transcript) return { titles: [], caption: '' };
     const broader_transcript = _broaderTranscriptText(startT, endT);
     try {
+      const _body = { clip_transcript, broader_transcript };
+      if (_clipMode === 'split' && _editCandidate && _editCandidate.part != null) {
+        _body.part_index = _editCandidate.part;
+        _body.part_total = (_splitParts && _splitParts.length) || null;
+      }
       const res  = await fetch(BACKEND + '/thumbnail_titles', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ clip_transcript, broader_transcript }),
+        body: JSON.stringify(_body),
       });
       const data = await res.json();
       return { titles: data.titles || [], caption: data.caption || '' };
