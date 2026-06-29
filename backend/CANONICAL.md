@@ -2255,3 +2255,12 @@ return to its prior position each time.
   speed branches via speed_v_suffix (_reframe + non-split -vf). 1x clips unchanged (suffix empty).
 - BACKEND_BUILD + EXPECTED_BACKEND_BUILD -> 2026-06-29-speedcfr. Needs server.py redeploy +
   launcher restart, then RE-EXPORT the sped clip.
+
+## Thumbnail: larger saved-thumbnail galleries (June 29, 2026 — round 3d)
+- Both saved-thumbnail pickers showed unreadably tiny previews: the Save-Clip "Saved thumbnails"
+  list used 80x45 LANDSCAPE boxes (9:16 thumbnails squished), and the in-editor "Saved thumbnails"
+  modal reused .el-grid with square 108px cells (9:16 image contained to ~60px). Rebuilt both as
+  proper 9:16 galleries: new .thumb-pick-grid/.thumb-pick-cell (minmax 150px, aspect 9/16,
+  object-fit cover) for the editor modal (widened #dialog-saved-thumbs to 840px), and a
+  responsive grid of large 9:16 cards (preview 405x720 canvas at full cell width, buttons stacked)
+  for the Save-Clip list. FRONTEND-ONLY -> hard-reload.
