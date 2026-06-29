@@ -2229,3 +2229,16 @@ return to its prior position each time.
   (dlgEditSelectedTextBox) that edits the box selected via the chips, bypassing canvas
   hit-testing. Chips + Edit text always target the selected box even when boxes overlap.
   FRONTEND-ONLY → hard-reload.
+
+## Thumbnail: explicit line breaks (Enter) in text boxes (June 29, 2026 — round 3c)
+- BUG (the real "text editing goes wacky" trigger): pressing Enter to force a box onto N lines
+  reverted on blur and the box appeared to jump/resize randomly. Root cause: explicit newlines
+  were never preserved. wrapText() split only on spaces (ignored '\n'); _dlgParseRunsFromEl()
+  joined contenteditable text nodes with '' (dropping the <br>/<div> breaks Enter inserts); the
+  overlay div used white-space:normal. So a typed line break was discarded, text re-wrapped, and
+  fitFontSizeToBox re-fit the font -> looked like the box jumped.
+- FIX (full newline pipeline): wrapText splits on '\n' then word-wraps each paragraph; the inline
+  editor captures innerText (newline-preserving) on input/blur; _dlgParseRunsFromEl walks
+  recursively emitting '\n' at BR and DIV/P boundaries (so colored runs keep breaks too); the
+  overlay renders white-space:pre-wrap and converts '\n'->'<br>' in colored runs. Canvas/export
+  render honors '\n' automatically via wrapText, so WYSIWYG holds. FRONTEND-ONLY -> hard-reload.

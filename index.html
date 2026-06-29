@@ -7045,15 +7045,27 @@
       }
       return box.color || '#ffffff';
     }
-    const walker = document.createTreeWalker(el, NodeFilter.SHOW_TEXT, null);
-    let node;
-    while ((node = walker.nextNode())) {
-      const t = node.textContent; if (!t) continue;
-      const c = colorOf(node);
+    function push(t, c) {
+      if (t === '') return;
       if (runs.length && runs[runs.length - 1].color === c) runs[runs.length - 1].text += t;
       else runs.push({ text: t, color: c });
     }
-    box.text = runs.map(function(r){ return r.text; }).join('');
+    // Recursive walk so we can emit '\n' at <br> and block (DIV/P) boundaries —
+    // contenteditable inserts those when the user presses Enter.
+    function walk(node) {
+      const kids = node.childNodes;
+      for (let i = 0; i < kids.length; i++) {
+        const child = kids[i];
+        if (child.nodeType === 3) { push(child.textContent, colorOf(child)); }
+        else if (child.nodeType === 1) {
+          const tag = child.tagName;
+          if (tag === 'BR') { push('\n', box.color || '#ffffff'); }
+          else { if (/^(DIV|P|LI)$/.test(tag) && runs.length) push('\n', box.color || '#ffffff'); walk(child); }
+        }
+      }
+    }
+    walk(el);
+    box.text = runs.map(function(r){ return r.text; }).join('').replace(/\u00a0/g, ' ').replace(/\n+$/, '');
     const distinct = new Set(runs.map(function(r){ return r.color; }));
     if (distinct.size <= 1) { box.runs = null; if (runs[0]) box.color = runs[0].color; }
     else { box.runs = runs; }
@@ -7504,15 +7516,19 @@
 
   // Shared word-wrap helper (still used by dialog canvas code)
   function wrapText(ctx, text, maxW) {
-    const words = (text || '').split(' ');
     const lines = [];
-    let ln = '';
-    for (const w of words) {
-      const test = (ln ? ln + ' ' : '') + w;
-      if (ctx.measureText(test).width > maxW && ln) { lines.push(ln); ln = w; }
-      else ln = test;
+    // Honor explicit line breaks first, then word-wrap each paragraph to width.
+    const paras = String(text || '').split('\n');
+    for (let pi = 0; pi < paras.length; pi++) {
+      const words = paras[pi].split(' ');
+      let ln = '';
+      for (const w of words) {
+        const test = (ln ? ln + ' ' : '') + w;
+        if (ctx.measureText(test).width > maxW && ln) { lines.push(ln); ln = w; }
+        else ln = test;
+      }
+      lines.push(ln);   // paragraph remainder ('' keeps an intentional blank line)
     }
-    if (ln) lines.push(ln);
     return lines;
   }
 
@@ -10206,7 +10222,7 @@
       div.className = 'dlg-overlay-text' + (isSelected ? ' selected' : '');
       div.dataset.boxId = box.id;
       if (box.runs && box.runs.length) {
-        div.innerHTML = box.runs.map(function(r){ return '<span style="color:' + (r.color || (box.color || '#ffffff')) + '">' + escHtml(r.text) + '</span>'; }).join('') || escHtml(box.text || ('Text Box ' + (index + 1)));
+        div.innerHTML = box.runs.map(function(r){ return '<span style="color:' + (r.color || (box.color || '#ffffff')) + '">' + escHtml(r.text).replace(/\n/g, '<br>') + '</span>'; }).join('') || escHtml(box.text || ('Text Box ' + (index + 1)));
       } else {
         div.textContent = box.text || `Text Box ${index + 1}`;
       }
@@ -10231,7 +10247,7 @@
       div.style.justifyContent = 'center';
       div.style.alignItems     = box.align === 'left' ? 'flex-start' : box.align === 'right' ? 'flex-end' : 'center';
       // overflow:visible is set by CSS class .dlg-overlay-text; inline hidden clips resize handles
-      div.style.whiteSpace = 'normal';
+      div.style.whiteSpace = 'pre-wrap';   // preserve explicit line breaks the user typed
       div.style.wordBreak  = 'break-word';
       div.style.zIndex     = isSelected ? '20' : '1';
       div.style.fontFamily = (box.font_family || 'Handmade Sans') + ', sans-serif';
@@ -10332,6 +10348,7 @@
     // Allow the text to overflow the fixed box while typing so nothing is clipped.
     textEl.style.height = 'auto';
     textEl.style.overflow = 'visible';
+    textEl.style.whiteSpace = 'pre-wrap';   // Enter creates a real line break
     textEl.focus();
     const range = document.createRange();
     range.selectNodeContents(textEl);
@@ -10339,7 +10356,7 @@
     sel.removeAllRanges();
     sel.addRange(range);
     function onInput() {
-      box.text = textEl.textContent;
+      box.text = (textEl.innerText || '').replace(/\r/g, '').replace(/\n+$/, '');
       _dlgTitle = box.text;
       dlgDrawCanvas();
     }
