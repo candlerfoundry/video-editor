@@ -10086,6 +10086,18 @@
     dlgOpenEditor();
   }
 
+  // Reliably edit the SELECTED text box's text — independent of canvas hit-testing,
+  // so overlapping boxes can't send your edit to the wrong one.
+  function dlgEditSelectedTextBox() {
+    if (!_sharedThumbnailDraft) return;
+    const bid = _sharedThumbnailDraft.selected_text_box_id
+      || (_sharedThumbnailDraft.text_boxes && _sharedThumbnailDraft.text_boxes[0] && _sharedThumbnailDraft.text_boxes[0].id);
+    if (!bid) { alert('Add or select a text box first.'); return; }
+    if (_sharedThumbnailDraft.selected_text_box_id !== bid) dlgSelectTextBox(bid);
+    else renderDialogOverlayLayer();
+    _dlgBeginTextEdit(bid);
+  }
+
   function dlgDuplicateActiveTextBox() {
     if (!_sharedThumbnailDraft) return;
     const src = getActiveThumbnailTextBox();
@@ -11976,6 +11988,7 @@
               <div class="thumb-editor-label" style="margin-bottom:0;">Text Boxes</div>
               <div class="thumb-inline-row">
                 <button class="btn-ghost btn-sm" type="button" onclick="dlgAddTextBox()">Add Text Box</button>
+                <button class="btn-ghost btn-sm" type="button" onclick="dlgEditSelectedTextBox()" title="Edit the text of the selected box (no need to find it on the canvas)">&#9998; Edit text</button>
                 <button class="btn-ghost btn-sm" type="button" id="dlg-textbox-remove-btn" onclick="dlgRemoveActiveTextBox()" title="Select a text box to remove it">Remove</button>
                 <button class="btn-ghost btn-sm" type="button" onclick="dlgDuplicateActiveTextBox()" title="Duplicate this text box">Duplicate</button>
                 <button class="btn-ghost btn-sm" type="button" onclick="dlgMoveTextBoxLayer('forward')" title="Bring forward">&#9650;</button>
@@ -11983,7 +11996,7 @@
               </div>
             </div>
             <div id="dlg-textbox-list" class="thumb-chip-row" style="margin-top:10px;"></div>
-            <div class="thumb-editor-label" style="margin-top:14px;color:var(--muted);font-weight:400;">Double-click the text on the thumbnail to edit it. Use the chips above to switch boxes; arrow keys nudge, Delete removes.</div>
+            <div class="thumb-editor-label" style="margin-top:14px;color:var(--muted);font-weight:400;">Pick a box with the chips below, then &ldquo;Edit text&rdquo; (or double-click it on the thumbnail). The chips and &ldquo;Edit text&rdquo; always target the selected box, even when boxes overlap. Arrow keys nudge, Delete removes.</div>
             <div class="thumb-editor-grid" style="margin-top:14px;">
               <div>
                 <div class="thumb-editor-label">Font</div>

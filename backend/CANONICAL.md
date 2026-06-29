@@ -2220,3 +2220,12 @@ return to its prior position each time.
   as "Thumbnail ready / Re-edit" on the new clip. restoreSavedClipEdits now clears the per-clip
   thumbnail state (_sharedThumbnailDraft, thumbnailBlob/Url, thumb-preview-panel) on every clip
   open; saved thumbnails remain reusable via the Save-Clip cards. FRONTEND-ONLY → hard-reload.
+
+## Thumbnail: reliable "Edit text" button for the selected box (June 29, 2026 — round 3b)
+- The only way to edit a text box's text was double-clicking it on the canvas; with overlapping
+  boxes the click can land on the topmost (selected, z-index 20) box, so edits/AI titles went to
+  the wrong box ("can't tell which box I'm editing"). The underlying selection logic (June 17)
+  was intact/unchanged. Added an explicit "✎ Edit text" button in the Text Boxes controls
+  (dlgEditSelectedTextBox) that edits the box selected via the chips, bypassing canvas
+  hit-testing. Chips + Edit text always target the selected box even when boxes overlap.
+  FRONTEND-ONLY → hard-reload.
