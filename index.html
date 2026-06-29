@@ -1516,7 +1516,7 @@
 
     /* ─── ALWAYS-ON TRANSCRIPT ─── */
     .tx-always-wrap {
-      background: var(--surface); border: 1px solid var(--border);
+      background: #FFFBF8; border: 1px solid #EBD9CD;
       border-radius: var(--r); padding: 14px 18px;
       max-height: 400px; overflow-y: auto; box-shadow: var(--shadow-sm);
     }
@@ -1546,6 +1546,13 @@
     .tx-mode-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 8px; }
     .clip-cuts-list { margin-top: 12px; border: 1px solid var(--border); border-radius: 8px; padding: 8px 10px; background: var(--surface); }
     .clip-cuts-list .cuts-title { font-size: 12px; font-weight: 700; letter-spacing: 0.07em; text-transform: uppercase; color: var(--muted); margin-bottom: 7px; }
+    .clip-ig-box { margin-top: 12px; border: 1px solid #D5E2F2; border-radius: 8px; padding: 8px 10px; background: #F5F8FD; }
+    .clip-ig-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 5px; }
+    .clip-ig-label { font-size: 11px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: #185FA5; }
+    .clip-ig-textarea { width: 100%; box-sizing: border-box; padding: 8px 10px; border: 1px solid #D5E2F2; border-radius: 7px; background: #fff; color: var(--text); font-family: inherit; font-size: 13px; line-height: 1.5; resize: vertical; max-height: 120px; }
+    .done-row { margin: 8px 0 4px; }
+    .btn-green { background: #2D6A4F; border-color: #2D6A4F; color: #fff; }
+    .btn-green:hover { background: #245741; border-color: #245741; }
     .cut-row { display: flex; align-items: center; gap: 5px; flex-wrap: wrap; font-size: 14.5px; color: var(--text-2); padding: 4px 0; }
     .cut-row .cut-label { font-weight: 600; color: var(--text); }
     .cut-row .cut-t { font-family: monospace; min-width: 66px; text-align: center; }
@@ -2502,6 +2509,13 @@
                 <span id="playhead-time" class="mono" style="font-size:13px;color:var(--text-2);min-width:84px;" title="Playhead position">0:00.00</span>
               </div>
 
+              <div class="done-row">
+                <button class="btn btn-green" id="btn-done-editing" onclick="openDoneEditingModal()" style="font-size:15px;padding:11px 26px;">
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+                  Done Editing - Next
+                </button>
+              </div>
+
               <div class="split-screen-row" id="split-screen-row">
                 <label class="ss-toggle" title="For a wide shot with two people side by side: stack them vertically (top/bottom) in the 9:16 reel. Applied on export.">
                   <input type="checkbox" id="split-screen-toggle" onchange="setSplitScreen(this.checked)">
@@ -2597,33 +2611,23 @@
                   <button type="button" class="tx-mode-btn" onclick="editorUndo()" title="Undo the last edit (Ctrl+Z) — works for cuts, bleeps, caption splits/joins, and text edits">&#8630;<br>Undo</button>
                 </div>
               </div>
+                <div id="clip-ig-caption-card" class="clip-ig-box">
+                  <div class="clip-ig-head">
+                    <span class="clip-ig-label">IG caption</span>
+                    <button type="button" class="btn-ghost btn-sm" id="clip-btn-redo-caption" onclick="regenerateIgCaption()" title="Write a fresh caption from the current edit">
+                      <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 .49-3.2"/></svg>
+                      Regenerate
+                    </button>
+                  </div>
+                  <textarea id="clip-ig-caption" rows="3" oninput="igCaptionInput(this.value)" placeholder="Auto-written from this clip; edit freely. Saved with the clip and sent to Airtable on export." class="clip-ig-textarea"></textarea>
+                  <div id="clip-ig-caption-status" style="font-size:11px;color:var(--muted);margin-top:3px;"></div>
+                </div>
                 <div id="clip-cuts-list" class="clip-cuts-list" style="display:none;"></div>
             </div><!-- /.editor-right-zone -->
 
           </div><!-- /.editor-two-col -->
 
-          <!-- Instagram caption: demoted to a full-width row below the editor (layout) -->
-          <div id="clip-ig-caption-card" class="clip-cuts-list" style="margin-top:12px;">
-            <div class="cuts-title" style="display:flex;align-items:center;justify-content:space-between;gap:8px;text-transform:none;letter-spacing:0;font-size:12px;">
-              <span>Instagram caption \u2014 auto-written from this clip, saved with it, sent to Airtable on export</span>
-              <button type="button" class="btn-ghost btn-sm" id="clip-btn-redo-caption" onclick="regenerateIgCaption()" title="Write a fresh caption from the current edit">
-                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 .49-3.2"/></svg>
-                Regenerate
-              </button>
-            </div>
-            <textarea id="clip-ig-caption" rows="7" oninput="igCaptionInput(this.value)" placeholder="A caption is written automatically when you create the thumbnail for this clip. Edit it freely here \u2014 it saves with the clip and loads into the Airtable &quot;IG Social Media Caption&quot; field on export." style="width:100%;box-sizing:border-box;margin-top:8px;padding:10px 12px;border:1px solid var(--border);border-radius:8px;background:var(--surface);color:var(--text);font-family:inherit;font-size:13px;line-height:1.55;resize:vertical;"></textarea>
-            <div id="clip-ig-caption-status" style="font-size:11px;color:var(--muted);margin-top:4px;"></div>
-          </div>
 
-          <!-- Done Editing Video -->
-          <div class="save-clip-row">
-            <button class="btn" id="btn-done-editing" onclick="openDoneEditingModal()" style="font-size:15px;padding:12px 32px;">
-              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
-                <polyline points="20 6 9 17 4 12"/>
-              </svg>
-              Done Editing - Next
-            </button>
-          </div>
 
           <!-- Thumbnail preview strip (appears after thumbnail captured) -->
           <div id="thumb-preview-panel">

@@ -2096,3 +2096,15 @@ return to its prior position each time.
 - CONTRACT CHANGE: new /export_clip form field, so BACKEND_BUILD + EXPECTED_BACKEND_BUILD were
   bumped together to 2026-06-26-splitscreen (§32). server.py MUST be redeployed next to the
   exe and the launcher restarted, else the stale-backend banner shows.
+
+## Clip editor layout polish (June 26, 2026)
+- Instagram caption: shrunk to a compact box (#clip-ig-caption-card -> .clip-ig-box, rows=3,
+  max-height 120px) placed immediately BELOW the transcript in the right zone; dropped the
+  long metadata header (now just an 'IG caption' label + Regenerate). IDs unchanged
+  (clip-ig-caption / clip-ig-caption-status / clip-btn-redo-caption) so handlers still bind.
+- 'Done Editing - Next' (#btn-done-editing) moved UP into the left zone near Play Selection,
+  styled green (.btn-green = #2D6A4F). Old bottom save-clip-row removed; thumb-preview-panel
+  and #export-status still follow the grid.
+- Color coding to distinguish boxes: transcript (.tx-always-wrap) warm tint (#FFFBF8 /
+  #EBD9CD border); IG caption box cool tint (#F5F8FD / #D5E2F2 border, #185FA5 label).
+- Frontend/CSS only; no backend or handshake change.
