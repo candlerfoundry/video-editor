@@ -2242,3 +2242,16 @@ return to its prior position each time.
   recursively emitting '\n' at BR and DIV/P boundaries (so colored runs keep breaks too); the
   overlay renders white-space:pre-wrap and converts '\n'->'<br>' in colored runs. Canvas/export
   render honors '\n' automatically via wrapText, so WYSIWYG holds. FRONTEND-ONLY -> hard-reload.
+
+## Speed-up crackle (Dropbox player) — lock A/V duration with fps=30 CFR (June 29, 2026)
+- After the limiter fix, a sped clip's FILE measured clean (peak -5.27 dB, flat factor 0, no
+  clipping) yet crackled in the Dropbox web player (and only on sped versions); Airtable/local
+  playback was clean. Root cause: setpts=PTS/speed kept the SOURCE fps, so the video ran ~1-2%
+  longer than the atempo-stretched audio (e.g. 3s clip: video 2.567s vs audio 2.492s). That A/V
+  drift accumulates over a 77s clip (~1s) and makes streaming players stutter/crackle even though
+  the audio samples are fine.
+- FIX: append ',fps=30' to speed_v_suffix so sped video is re-timed to a clean 30fps CFR whose
+  duration matches the audio (verified: video 2.500s == audio 2.492s). One line; propagates to all
+  speed branches via speed_v_suffix (_reframe + non-split -vf). 1x clips unchanged (suffix empty).
+- BACKEND_BUILD + EXPECTED_BACKEND_BUILD -> 2026-06-29-speedcfr. Needs server.py redeploy +
+  launcher restart, then RE-EXPORT the sped clip.

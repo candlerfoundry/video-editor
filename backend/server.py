@@ -62,7 +62,7 @@ CORS(app)
 
 # Bump this whenever the frontend/backend contract changes (the frontend
 # carries a matching EXPECTED_BACKEND_BUILD and warns when they differ).
-BACKEND_BUILD = "2026-06-29-speedlimiter"
+BACKEND_BUILD = "2026-06-29-speedcfr"
 
 CREATE_NO_WINDOW = 0x08000000 if platform.system() == 'Windows' else 0
 
@@ -2810,7 +2810,11 @@ def export_clip():
         # captions compress in lock-step with the footage — no need to rescale
         # the ASS timestamps. Audio gets a matching atempo (valid 0.5-2.0, so
         # 1.5 and 2.0 are single-stage). speed == 1.0 leaves the chains untouched.
-        speed_v_suffix = "" if speed == 1.0 else f",setpts=PTS/{speed:.4f}"
+        # ,fps=30 re-times the sped video to a clean 30fps CFR whose duration MATCHES the
+        # atempo-stretched audio. Without it, setpts kept the source fps and the video ran ~1-2%
+        # longer than the audio, so the A/V drift accumulated and streaming players (Dropbox web)
+        # crackled/stuttered on sped clips even though the audio samples were clean.
+        speed_v_suffix = "" if speed == 1.0 else f",setpts=PTS/{speed:.4f},fps=30"
         if speed != 1.0:
             logger.info("[export] Speeding clip to %.2fx (video setpts + audio atempo)", speed)
 
