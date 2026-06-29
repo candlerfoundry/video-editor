@@ -2079,3 +2079,20 @@ return to its prior position each time.
 - FIX: setDlgTargetFormat writes _sharedThumbnailDraft.target_format = format BEFORE
   applyDraftToDialogState(), so the draft and _dlgTargetFormat agree and the choice persists
   (any later re-sync keeps it). Frontend only; no contract change / no handshake bump.
+
+## Split-screen for 2-person clips (vertical stack) (#15 — June 26, 2026)
+- NEW: clip-editor 'Split screen (2 people)' toggle (+ swap). On export the 9:16 reframe
+  stacks two side-by-side speakers vertically instead of a single center crop: each is a
+  1080x960 cell (9:8) cropped at full height from its edge (left->top, right->bottom; swap
+  flips). Pure ffmpeg split+crop+vstack graph — no OpenCV, honors the PIL-only rule.
+  Auto left/right framing for v1; manual region nudging is a planned follow-up.
+- Backend (server.py /export_clip): reads split_screen / split_swap form fields; the
+  _reframe(in_label) helper builds the reframe segment for ALL THREE export paths (stitched
+  [vcat], single-seg+bleep, single-seg no-bleep — the no-bleep path switches from -vf to
+  -filter_complex when split). Captions (ASS @1080x1920) + speed are appended after vstack,
+  exactly as in the single-crop path.
+- Frontend: toggle + swap + a preview indicator (center divider + top/bottom labels) on the
+  editor video; session-sticky and saved per clip (_buildClipEditPayload / restoreSavedClipEdits).
+- CONTRACT CHANGE: new /export_clip form field, so BACKEND_BUILD + EXPECTED_BACKEND_BUILD were
+  bumped together to 2026-06-26-splitscreen (§32). server.py MUST be redeployed next to the
+  exe and the launcher restarted, else the stale-backend banner shows.

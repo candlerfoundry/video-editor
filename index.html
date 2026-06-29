@@ -1597,6 +1597,15 @@
     @keyframes capPop { 0% { transform: scale(0.85); opacity: 0.5; } 100% { transform: scale(1); opacity: 1; } }
     #caption-overlay:not(.editing) { cursor: grab; }
     #caption-overlay.cap-dragging { cursor: grabbing; }
+    .split-screen-row { display:flex; align-items:center; gap:12px; flex-wrap:wrap; margin-bottom:4px; }
+    .split-screen-row .ss-toggle { display:flex; align-items:center; gap:6px; font-size:13px; font-weight:600; color:var(--text); cursor:pointer; }
+    .split-screen-row .ss-toggle input { accent-color:var(--orange); width:15px; height:15px; cursor:pointer; }
+    .split-screen-row .ss-hint { font-size:11px; color:var(--muted); }
+    #split-preview-overlay { position:absolute; inset:0; pointer-events:none; z-index:6; }
+    #split-preview-overlay::before { content:''; position:absolute; left:0; right:0; top:50%; border-top:2px dashed rgba(255,255,255,0.85); }
+    #split-preview-overlay .ss-cell-label { position:absolute; left:8px; color:#fff; font-size:11px; font-weight:700; background:rgba(0,0,0,0.5); padding:2px 7px; border-radius:6px; letter-spacing:0.03em; }
+    #split-preview-overlay .ss-top { top:8px; }
+    #split-preview-overlay .ss-bot { bottom:8px; }
     .speed-btn.active { background: var(--orange); border-color: var(--orange); color: #fff; }
     #dlg-canvas-wrap.pan-mode { cursor: grab; }
     #dlg-canvas-wrap.pan-mode:active { cursor: grabbing; }
@@ -2443,6 +2452,7 @@
               <div class="edit-video-wrap" id="edit-video-wrap">
                 <video id="edit-video" controls></video>
                 <div id="caption-overlay" style="display:none;"></div>
+                <div id="split-preview-overlay" style="display:none;"></div>
               </div>
 
               <!-- Custom draggable timeline bar -->
@@ -2490,6 +2500,15 @@
                   Play Selection
                 </button>
                 <span id="playhead-time" class="mono" style="font-size:13px;color:var(--text-2);min-width:84px;" title="Playhead position">0:00.00</span>
+              </div>
+
+              <div class="split-screen-row" id="split-screen-row">
+                <label class="ss-toggle" title="For a wide shot with two people side by side: stack them vertically (top/bottom) in the 9:16 reel. Applied on export.">
+                  <input type="checkbox" id="split-screen-toggle" onchange="setSplitScreen(this.checked)">
+                  Split screen (2 people)
+                </label>
+                <button type="button" class="btn-ghost btn-sm" id="split-swap-btn" onclick="toggleSplitSwap()" disabled title="Swap which person is on top">&#8645; Swap top/bottom</button>
+                <span class="ss-hint" id="split-screen-hint"></span>
               </div>
 
             </div><!-- /.editor-left-zone -->
@@ -3071,7 +3090,7 @@
   // Must match BACKEND_BUILD in server.py — bumped together whenever the
   // frontend/backend contract changes. A mismatch means the user is running
   // an old backend (launcher not restarted after a deploy).
-  const EXPECTED_BACKEND_BUILD = '2026-06-24-speedslider';
+  const EXPECTED_BACKEND_BUILD = '2026-06-26-splitscreen';
 
   if (document.fonts && document.fonts.load) { document.fonts.load("700 64px 'Handmade Sans'").catch(function(){}); }
   let _staleBackendWarned = false;
@@ -4729,6 +4748,7 @@
     resetCaptionEdits();
     restoreSavedClipEdits(_editCandidate.hook_line);
     syncSpeedButtons();   // reflect restored/sticky clip speed in the buttons
+    syncSplitScreenUI();  // reflect restored/sticky split-screen choice
 
     const vid = document.getElementById('edit-video');
     vid.src = getPlayableVideoUrl('clips');
@@ -4821,6 +4841,8 @@
     if (saved.end_time   != null) editorOutTime = saved.end_time;
     editorCutRanges   = (saved.cut_ranges   || []).map(r => ({ start: r.start, end: r.end }));
     editorBleepRanges = (saved.bleep_ranges || []).map(r => ({ start: r.start, end: r.end }));
+    if (typeof saved.split_screen === 'boolean') _editorSplitScreen = saved.split_screen;
+    if (typeof saved.split_swap   === 'boolean') _editorSplitSwap   = saved.split_swap;
     if (saved.caption_style && typeof saved.caption_style === 'object') {
       editorCaptionStyle = { ...editorCaptionStyle, ...saved.caption_style };
       const presetSel = document.getElementById('caption-preset-select');
@@ -4863,6 +4885,7 @@
     origOutTime   = editorOutTime;
     restoreSavedClipEdits(_editCandidate.hook_line);
     syncSpeedButtons();   // reflect restored/sticky clip speed in the buttons
+    syncSplitScreenUI();  // reflect restored/sticky split-screen choice
     if (editorCaptionStyle.show) setTimeout(() => runAiEmphasis(false), 400);
 
     const vid = document.getElementById('edit-video');
@@ -8251,6 +8274,7 @@
     return { start_time: editorInTime, end_time: editorOutTime, hook_line: _editCandidate ? (_editCandidate.hook_line || '') : '',
       mode: (_editCandidate && _editCandidate.part != null) ? 'split' : 'viral', cut_ranges: editorCutRanges, bleep_ranges: editorBleepRanges,
       caption_style: editorCaptionStyle, caption_overrides: editorCaptionOverrides, caption_emphasis: editorCaptionEmphasis, caption_breaks: editorCaptionBreaks || [],
+      split_screen: _editorSplitScreen, split_swap: _editorSplitSwap,
       ig_caption: getClipIgCaption() };
   }
   async function clipEditorBack() {
@@ -10964,6 +10988,39 @@
   function getClipSpeed() {
     return clampClipSpeed(editorCaptionStyle.speed);
   }
+  // ── Split-screen (2-person vertical stack): session-sticky + saved per clip ──
+  let _editorSplitScreen = false;
+  let _editorSplitSwap   = false;
+  function setSplitScreen(on) {
+    _editorSplitScreen = !!on;
+    const sb = document.getElementById('split-swap-btn');
+    if (sb) sb.disabled = !_editorSplitScreen;
+    updateSplitPreview();
+  }
+  function toggleSplitSwap() {
+    if (!_editorSplitScreen) return;
+    _editorSplitSwap = !_editorSplitSwap;
+    updateSplitPreview();
+  }
+  function syncSplitScreenUI() {
+    const chk = document.getElementById('split-screen-toggle');
+    if (chk) chk.checked = _editorSplitScreen;
+    const sb = document.getElementById('split-swap-btn');
+    if (sb) sb.disabled = !_editorSplitScreen;
+    updateSplitPreview();
+  }
+  function updateSplitPreview() {
+    const ov = document.getElementById('split-preview-overlay');
+    const hint = document.getElementById('split-screen-hint');
+    if (!ov) return;
+    if (!_editorSplitScreen) { ov.style.display = 'none'; if (hint) hint.textContent = ''; return; }
+    const top = _editorSplitSwap ? 'Right person' : 'Left person';
+    const bot = _editorSplitSwap ? 'Left person'  : 'Right person';
+    ov.innerHTML = '<span class="ss-cell-label ss-top">TOP \u00b7 ' + top + '</span>' +
+                   '<span class="ss-cell-label ss-bot">BOTTOM \u00b7 ' + bot + '</span>';
+    ov.style.display = 'block';
+    if (hint) hint.textContent = 'Two people stacked vertically on export.';
+  }
   function syncSpeedButtons() {
     const cur = getClipSpeed();
     const sl = document.getElementById('clip-speed-slider');
@@ -11407,6 +11464,7 @@
     if (_igCap) form.append('ig_caption', _igCap);
     // Clip speed (1 / 1.5 / 2x) — burned into the exported video while toggled.
     form.append('speed', String(getClipSpeed()));
+    if (_editorSplitScreen) { form.append('split_screen', '1'); if (_editorSplitSwap) form.append('split_swap', '1'); }
 
     try {
       const res  = await fetch(BACKEND + '/export_clip', { method: 'POST', body: form });

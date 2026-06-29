@@ -62,7 +62,7 @@ CORS(app)
 
 # Bump this whenever the frontend/backend contract changes (the frontend
 # carries a matching EXPECTED_BACKEND_BUILD and warns when they differ).
-BACKEND_BUILD = "2026-06-24-speedslider"
+BACKEND_BUILD = "2026-06-26-splitscreen"
 
 CREATE_NO_WINDOW = 0x08000000 if platform.system() == 'Windows' else 0
 
@@ -2657,6 +2657,10 @@ def export_clip():
         except (ValueError, TypeError):
             speed = 1.0
         speed = max(1.0, min(2.0, round(speed, 2)))  # clip-speed slider: continuous 1.0-2.0 (atempo valid range; >2.0 would need 2-stage)
+        split_screen    = request.form.get("split_screen", "").strip() in {"1", "true", "yes"}
+        split_swap      = request.form.get("split_swap",   "").strip() in {"1", "true", "yes"}
+        if split_screen:
+            logger.info("[export] Split-screen vertical 2-up (swap=%s)", split_swap)
     except (ValueError, TypeError) as e:
         return jsonify({"error": f"Invalid parameters: {e}"}), 400
 
@@ -2718,6 +2722,21 @@ def export_clip():
         if speed != 1.0:
             logger.info("[export] Speeding clip to %.2fx (video setpts + audio atempo)", speed)
 
+        def _reframe(in_label):
+            # in_label is the source video pad, e.g. "[0:v]" or "[vcat]". Returns a
+            # filter_complex segment ending in [vout], with captions + speed appended.
+            if not split_screen:
+                return f"{in_label}crop=ih*9/16:ih,scale=1080:1920{caption_filter}{speed_v_suffix}[vout]"
+            # Vertical split-screen: two side-by-side people stacked into 9:16. Each cell
+            # is 1080x960 (9:8); crop a 9:8 region at full height anchored to each edge
+            # (left side -> top cell, right side -> bottom; swap flips them).
+            L = "crop=ih*9/8:ih:0:0,scale=1080:960,setsar=1"
+            R = "crop=ih*9/8:ih:iw-ih*9/8:0,scale=1080:960,setsar=1"
+            top_src, bot_src = (R, L) if split_swap else (L, R)
+            return (f"{in_label}split=2[ssA][ssB];"
+                    f"[ssA]{top_src}[sstop];[ssB]{bot_src}[ssbot];"
+                    f"[sstop][ssbot]vstack=inputs=2{caption_filter}{speed_v_suffix}[vout]")
+
         # ── Step A: 9:16 vertical reframe ──
         kept_segments = compute_kept_segments(starttime, endtime, cut_ranges_raw)
         bleep_ranges  = parse_bleep_ranges(starttime, endtime, bleep_ranges_raw)
@@ -2760,7 +2779,7 @@ def export_clip():
             filter_parts.append(
                 f"{concat_pads}concat=n={len(kept_segments)}:v=1:a=1[vcat][acat]"
             )
-            filter_parts.append(f"[vcat]crop=ih*9/16:ih,scale=1080:1920{caption_filter}{speed_v_suffix}[vout]")
+            filter_parts.append(_reframe("[vcat]"))
             audio_out = "[acat]"
             if speed != 1.0:
                 filter_parts.append(f"[acat]atempo={speed:.4f}[aout]")
@@ -2799,7 +2818,7 @@ def export_clip():
                 # When sped up, the amix feeds an atempo stage before [aout].
                 amix_tail = "[aout]" if speed == 1.0 else "[amx];[amx]atempo=%.4f[aout]" % speed
                 fc = (
-                    f"[0:v]crop=ih*9/16:ih,scale=1080:1920{caption_filter}{speed_v_suffix}[vout];"
+                    _reframe("[0:v]") + ";"
                     f"[0:a]{bleep_chain}[mute];"
                     f"[1:a]{tone_expr}[tone];"
                     f"[mute][tone]amix=inputs=2:duration=first:dropout_transition=0:normalize=0{amix_tail}"
@@ -2814,8 +2833,12 @@ def export_clip():
                              output_path]
             else:
                 pass2_cmd = [FFMPEG_EXE, "-y",
-                             "-ss", f"{starttime:.3f}", "-t", f"{seg_dur:.3f}", "-i", input_path,
-                             "-vf", f"crop=ih*9/16:ih,scale=1080:1920{caption_filter}{speed_v_suffix}"]
+                             "-ss", f"{starttime:.3f}", "-t", f"{seg_dur:.3f}", "-i", input_path]
+                if split_screen:
+                    pass2_cmd += ["-filter_complex", _reframe("[0:v]"),
+                                  "-map", "[vout]", "-map", "0:a?"]
+                else:
+                    pass2_cmd += ["-vf", f"crop=ih*9/16:ih,scale=1080:1920{caption_filter}{speed_v_suffix}"]
                 if speed != 1.0:
                     pass2_cmd += ["-af", f"atempo={speed:.4f}"]
                 pass2_cmd += ["-c:v", "libx264", "-crf", "18", "-preset", "veryfast",
