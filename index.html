@@ -8663,6 +8663,11 @@
         _sharedThumbnailDraft.logo.width = (_sharedThumbnailDraft.logo.width / fromCfg.width) * toCfg.width;
       }
     }
+    // Persist the chosen format to the draft BEFORE applyDraftToDialogState(), which
+    // re-reads _dlgTargetFormat FROM the draft. Without this, the var reverted to the
+    // draft's stale format ('instagram') and the YouTube Shorts toggle never stuck — it
+    // looked like clicking did nothing (the resize re-sync then snapped buttons back). (#2)
+    if (_sharedThumbnailDraft) _sharedThumbnailDraft.target_format = format;
     applyDraftToDialogState();
     updateStyleCardPreviews(_dlgFrames, _dlgSelectedFrame, 'dlg-style-canvas-');
     dlgBuildHeroState();

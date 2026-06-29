@@ -2068,3 +2068,14 @@ return to its prior position each time.
 - #6: playSelection() now seeks to clipEffectiveStart() — editorInTime advanced past any
   leading edited-out range — so 'Play Selection' plays the clip from its TRIMMED beginning.
   No contract change, no BACKEND_BUILD bump.
+
+## Thumbnail dialog: YouTube Shorts toggle now sticks (#2 — June 26, 2026)
+- BUG: setDlgTargetFormat ran syncDlgTargetFormat(format) (correctly setting _dlgTargetFormat
+  + flipping the buttons), but the next call applyDraftToDialogState() RE-READS
+  _dlgTargetFormat from the draft's stale target_format ('instagram'), reverting it. The
+  window 'resize' handler (re-applies syncThumb/DlgTargetFormat from the globals; can fire
+  repeatedly) then re-asserted 'instagram' on the buttons, so clicking YouTube Shorts looked
+  like it did nothing.
+- FIX: setDlgTargetFormat writes _sharedThumbnailDraft.target_format = format BEFORE
+  applyDraftToDialogState(), so the draft and _dlgTargetFormat agree and the choice persists
+  (any later re-sync keeps it). Frontend only; no contract change / no handshake bump.
