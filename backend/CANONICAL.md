@@ -2135,3 +2135,17 @@ return to its prior position each time.
   _editCandidate now carries .part.
 - Backend prompt change -> BACKEND_BUILD + EXPECTED_BACKEND_BUILD bumped to 2026-06-26-captions
   so the stale-backend banner prompts a launcher restart. Redeploy server.py.
+
+## Sequential/viral separation + split-screen auto-toggle (June 27, 2026)
+- #21 FIX: viral candidates and sequential split parts are now stored SEPARATELY in the
+  project (clip_candidates vs split_parts) so the two modes no longer overwrite each other.
+  restoreProjectClipState restores BOTH (legacy projects: split under clip_candidates handled).
+  setClipMode now renders that mode's set or CLEARS the cards, so choosing Sequential Split no
+  longer shows the previously-saved viral clips.
+- #20 split-screen auto-toggle: split-screen is RESET per clip (no more sticky carryover).
+  Default ON when the source item code is POD-* (extractItemCode), else off. Then /detect_speakers
+  (new route) samples one frame and asks Claude Vision if it is a 2-person side-by-side shot; if
+  so it auto-enables split and seeds the two crop centers (left->top, right->bottom). A saved
+  per-clip split choice wins (_splitFromSave); checked=False keeps the POD default. No OpenCV —
+  uses the existing Anthropic vision pattern.
+- Backend route added -> BACKEND_BUILD + EXPECTED_BACKEND_BUILD bumped to 2026-06-27-autosplit.

@@ -62,7 +62,7 @@ CORS(app)
 
 # Bump this whenever the frontend/backend contract changes (the frontend
 # carries a matching EXPECTED_BACKEND_BUILD and warns when they differ).
-BACKEND_BUILD = "2026-06-26-captions"
+BACKEND_BUILD = "2026-06-27-autosplit"
 
 CREATE_NO_WINDOW = 0x08000000 if platform.system() == 'Windows' else 0
 
@@ -1559,10 +1559,16 @@ def update_project():
                 mode = payload.get('mode') or 'viral'
                 project['meta']['last_clip_mode'] = mode
                 candidates = payload.get('candidates') or []
-                project['clip_candidates'] = [
+                compacted = [
                     compact_clip_candidate({**candidate, 'mode': mode})
                     for candidate in candidates[:20]
                 ]
+                # Viral candidates and sequential split parts are stored SEPARATELY so the
+                # two modes never overwrite each other for the same source video.
+                if mode == 'split':
+                    project['split_parts'] = compacted
+                else:
+                    project['clip_candidates'] = compacted
             elif event_type == 'clip_selected':
                 def _clean_ranges(items):
                     out = []
@@ -2228,6 +2234,69 @@ def thumbnail_titles():
     except Exception as exc:
         thumb_logger.warning('[titles] Title/caption generation failed: %s', exc)
         return jsonify({'titles': [], 'caption': ''})
+
+
+@app.route('/detect_speakers', methods=['POST'])
+def detect_speakers():
+    """Sample one frame and ask Claude Vision if it is a 2-person side-by-side shot.
+    Returns {two_speakers, checked, left, right}. checked=False => could not determine
+    (frame/api unavailable) so the frontend keeps its POD default. Forgiving on all errors."""
+    import base64
+    try:
+        data = request.get_json(force=True) or {}
+        filename    = (data.get('filename') or '').strip()
+        source_path = (data.get('source_path') or '').strip()
+        try:
+            t = max(0.0, float(data.get('timestamp') or 0))
+        except Exception:
+            t = 0.0
+        path = source_path if (source_path and os.path.isfile(source_path)) else (find_video_in_dropbox(filename) or '')
+        if not path or not os.path.isfile(path) or not FFMPEG_EXE:
+            return jsonify({'two_speakers': False, 'checked': False})
+        tmp = tempfile.mkdtemp()
+        fp = os.path.join(tmp, 'f.jpg')
+        subprocess.run([FFMPEG_EXE, '-y', '-ss', f'{t:.2f}', '-i', path,
+                        '-frames:v', '1', '-vf', 'scale=640:-1', '-q:v', '4', fp],
+                       capture_output=True, creationflags=CREATE_NO_WINDOW)
+        if not os.path.isfile(fp):
+            shutil.rmtree(tmp, ignore_errors=True)
+            return jsonify({'two_speakers': False, 'checked': False})
+        with open(fp, 'rb') as fh:
+            b64 = base64.b64encode(fh.read()).decode()
+        shutil.rmtree(tmp, ignore_errors=True)
+        key = read_api_key()
+        if not key:
+            return jsonify({'two_speakers': False, 'checked': False})
+        client = anthropic.Anthropic(api_key=key)
+        msg = client.messages.create(
+            model="claude-sonnet-4-6", max_tokens=150,
+            messages=[{"role": "user", "content": [
+                {"type": "image", "source": {"type": "base64", "media_type": "image/jpeg", "data": b64}},
+                {"type": "text", "text": (
+                    "This is one frame from a video. Are there EXACTLY TWO people seated SIDE BY SIDE "
+                    "(a two-person interview / podcast two-shot, both roughly facing the camera)? "
+                    "A single speaker, an audience, or a solo stage talk is NOT two side-by-side people. "
+                    "If yes, estimate each person's horizontal CENTER as a fraction of the frame width "
+                    "(0.0 = left edge, 1.0 = right edge). "
+                    "Reply with ONLY JSON: {\"two\": true, \"left\": 0.30, \"right\": 0.70} or {\"two\": false}.")}
+            ]}])
+        raw = msg.content[0].text.strip()
+        st = raw.find('{'); en = raw.rfind('}')
+        out = {'two_speakers': False, 'checked': True}
+        if st != -1 and en != -1:
+            obj = json.loads(raw[st:en + 1])
+            if obj.get('two'):
+                try:
+                    lx = min(0.95, max(0.05, float(obj.get('left', 0.30))))
+                    rx = min(0.95, max(0.05, float(obj.get('right', 0.70))))
+                except Exception:
+                    lx, rx = 0.30, 0.70
+                out = {'two_speakers': True, 'checked': True, 'left': lx, 'right': rx}
+        logger.info("[detect_speakers] %s -> %s", filename or os.path.basename(path), out)
+        return jsonify(out)
+    except Exception as exc:
+        logger.warning("[detect_speakers] %s", exc)
+        return jsonify({'two_speakers': False, 'checked': False})
 
 
 @app.route('/caption_emphasis', methods=['POST'])

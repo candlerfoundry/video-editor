@@ -3099,7 +3099,7 @@
   // Must match BACKEND_BUILD in server.py — bumped together whenever the
   // frontend/backend contract changes. A mismatch means the user is running
   // an old backend (launcher not restarted after a deploy).
-  const EXPECTED_BACKEND_BUILD = '2026-06-26-captions';
+  const EXPECTED_BACKEND_BUILD = '2026-06-27-autosplit';
 
   if (document.fonts && document.fonts.load) { document.fonts.load("700 64px 'Handmade Sans'").catch(function(){}); }
   let _staleBackendWarned = false;
@@ -3548,35 +3548,25 @@
   }
 
   function restoreProjectClipState(project) {
-    const savedCandidates = project?.clip_candidates || [];
-    if (!savedCandidates.length || !_clipFile || !_wordsData || !_wordsData.length) return false;
+    const viral = project?.clip_candidates || [];
+    let   split = project?.split_parts   || [];
+    const mode  = project?.meta?.last_clip_mode || 'viral';
+    // Legacy projects stored split parts under clip_candidates with last_clip_mode='split'.
+    let viralList = viral, splitList = split;
+    if (mode === 'split' && !split.length && viral.length) { splitList = viral; viralList = []; }
+    if ((!viralList.length && !splitList.length) || !_clipFile || !_wordsData || !_wordsData.length) return false;
 
-    const mode = project?.meta?.last_clip_mode || 'viral';
     document.getElementById('summary-filename').textContent = _clipFile.name;
-    if (mode === 'split') {
-      _splitParts = savedCandidates.map(item => ({
-        part: item.part,
-        start: item.start_time,
-        end: item.end_time,
-        duration: item.duration,
-        label: item.label,
-        hook: item.hook_line,
-      }));
-      setClipMode('split');
-      renderParts(_splitParts);
-    } else {
-      _candidates = savedCandidates.map(item => ({
-        start_time: item.start_time,
-        end_time: item.end_time,
-        duration: item.duration,
-        hook_score: item.hook_score,
-        hook_line: item.hook_line,
-        why_it_works: item.why_it_works,
-      }));
-      _candidates.sort((a, b) => (b.hook_score ?? 0) - (a.hook_score ?? 0));
-      setClipMode('viral');
-      renderCandidates(_candidates);
-    }
+    _candidates = viralList.map(item => ({
+      start_time: item.start_time, end_time: item.end_time, duration: item.duration,
+      hook_score: item.hook_score, hook_line: item.hook_line, why_it_works: item.why_it_works,
+    }));
+    _candidates.sort((a, b) => (b.hook_score ?? 0) - (a.hook_score ?? 0));
+    _splitParts = splitList.map(item => ({
+      part: item.part, start: item.start_time, end: item.end_time,
+      duration: item.duration, label: item.label, hook: item.hook_line,
+    }));
+    setClipMode(mode === 'split' && _splitParts.length ? 'split' : 'viral');
     showStage(2);
     return true;
   }
@@ -4589,6 +4579,14 @@
     document.getElementById('mode-btn-split').classList.toggle('active', mode === 'split');
     document.getElementById('viral-find-row').style.display   = mode === 'viral' ? 'block' : 'none';
     document.getElementById('split-controls-row').classList.toggle('active', mode === 'split');
+    // Show this mode's saved set, or clear the cards so the other mode's results don't linger
+    // (fixes: choosing Sequential Split showed the previously-saved viral clips).
+    const sec = document.getElementById('candidates-section');
+    if (mode === 'split') {
+      if (_splitParts && _splitParts.length) renderParts(_splitParts); else if (sec) sec.innerHTML = '';
+    } else {
+      if (_candidates && _candidates.length) renderCandidates(_candidates); else if (sec) sec.innerHTML = '';
+    }
   }
 
   // ── Split Video → POST /split → Stage 2 ──
@@ -4759,6 +4757,7 @@
     restoreSavedClipEdits(_editCandidate.hook_line);
     syncSpeedButtons();   // reflect restored/sticky clip speed in the buttons
     syncSplitScreenUI();  // reflect restored/sticky split-screen choice
+    _autoDetectSplit();   // POD default now; Claude-vision confirms + auto-frames
 
     const vid = document.getElementById('edit-video');
     vid.src = getPlayableVideoUrl('clips');
@@ -4843,6 +4842,7 @@
     // If this clip was edited before (same hook line), restore trims + word
     // edits from the project store.
     resetClipIgCaption('');   // clear the previous clip's caption; restored below if saved
+    _splitFromSave = false; _editorSplitScreen = _isPodDefault();  // reset split per clip; POD default
     const saved = (activeProject?.edited_clips || []).find(c =>
       hookLine && c.hook_line === hookLine);
     if (!saved) return false;
@@ -4851,7 +4851,7 @@
     if (saved.end_time   != null) editorOutTime = saved.end_time;
     editorCutRanges   = (saved.cut_ranges   || []).map(r => ({ start: r.start, end: r.end }));
     editorBleepRanges = (saved.bleep_ranges || []).map(r => ({ start: r.start, end: r.end }));
-    if (typeof saved.split_screen === 'boolean') _editorSplitScreen = saved.split_screen;
+    if (typeof saved.split_screen === 'boolean') { _editorSplitScreen = saved.split_screen; _splitFromSave = true; }
     if (saved.split_regions && saved.split_regions.top && saved.split_regions.bottom) _splitRegions = JSON.parse(JSON.stringify(saved.split_regions));
     if (saved.caption_style && typeof saved.caption_style === 'object') {
       editorCaptionStyle = { ...editorCaptionStyle, ...saved.caption_style };
@@ -4896,6 +4896,7 @@
     restoreSavedClipEdits(_editCandidate.hook_line);
     syncSpeedButtons();   // reflect restored/sticky clip speed in the buttons
     syncSplitScreenUI();  // reflect restored/sticky split-screen choice
+    _autoDetectSplit();   // POD default now; Claude-vision confirms + auto-frames
     if (editorCaptionStyle.show) setTimeout(() => runAiEmphasis(false), 400);
 
     const vid = document.getElementById('edit-video');
@@ -11092,6 +11093,28 @@
     if (chk) chk.checked = _editorSplitScreen;
     syncSplitZoomSliders();
     setSplitScreen(_editorSplitScreen);
+  }
+  function _isPodDefault() {
+    try { const code = (_clipFile && _clipFile.name) ? extractItemCode(_clipFile.name) : ''; return /^POD/i.test(code || ''); }
+    catch (_) { return false; }
+  }
+  let _splitFromSave = false;
+  async function _autoDetectSplit() {
+    if (_splitFromSave) return;
+    if (!backendOnline || !_clipFile) return;
+    try {
+      const body = { timestamp: editorInTime || 0, filename: (_clipFile.name || _clipFile.filename || '') };
+      if (_clipFile.source_path) body.source_path = _clipFile.source_path;
+      const res = await fetch(BACKEND + '/detect_speakers', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+      const d = await res.json();
+      if (_splitFromSave || !d || !d.checked) return;
+      if (d.two_speakers) {
+        if (d.left  != null) _splitRegions.top.cx    = Math.max(0.05, Math.min(0.95, d.left));
+        if (d.right != null) _splitRegions.bottom.cx = Math.max(0.05, Math.min(0.95, d.right));
+      }
+      setSplitScreen(!!d.two_speakers);
+      const chk = document.getElementById('split-screen-toggle'); if (chk) chk.checked = !!d.two_speakers;
+    } catch (_) {}
   }
   function syncSpeedButtons() {
     const cur = getClipSpeed();
