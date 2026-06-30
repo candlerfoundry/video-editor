@@ -62,7 +62,7 @@ CORS(app)
 
 # Bump this whenever the frontend/backend contract changes (the frontend
 # carries a matching EXPECTED_BACKEND_BUILD and warns when they differ).
-BACKEND_BUILD = "2026-06-30-reconcile"
+BACKEND_BUILD = "2026-06-30-coveraudio"
 
 CREATE_NO_WINDOW = 0x08000000 if platform.system() == 'Windows' else 0
 
@@ -2773,6 +2773,54 @@ def build_bleep_tone_expr(bleep_ranges, time_offset=0.0):
 
 # ── Export Clip ──
 @app.route("/export_clip", methods=["POST"])
+def _burn_cover_frame(thumb_local_path, src_video_path, out_path):
+    """Prepend the thumbnail as a ~1/30s cover frame (Instagram uses frame 0
+    as the reel cover).
+
+    IMPORTANT: we deliberately do NOT resample the clip's audio here. Forcing
+    44.1 kHz sources up to 48 kHz in this step was producing audible static on
+    some ffmpeg builds. We probe the clip's native audio sample rate, generate
+    the 0.1s lead-silence at that SAME rate, and concat without any sample-rate
+    conversion -- so the audio passes through untouched apart from one
+    same-rate AAC re-encode at a high bitrate."""
+    ffprobe_exe = 'ffprobe'
+    if FFMPEG_EXE and FFMPEG_EXE != 'ffmpeg':
+        _d, _b = os.path.split(FFMPEG_EXE)
+        _pb = _b.replace('ffmpeg', 'ffprobe')
+        ffprobe_exe = os.path.join(_d, _pb) if _d else _pb
+    clip_ar = '48000'
+    try:
+        _pr = subprocess.run(
+            [ffprobe_exe, '-v', 'error', '-select_streams', 'a:0',
+             '-show_entries', 'stream=sample_rate',
+             '-of', 'default=nw=1:nk=1', src_video_path],
+            capture_output=True, creationflags=CREATE_NO_WINDOW,
+        )
+        _lines = _pr.stdout.decode('utf-8', errors='replace').strip().splitlines()
+        if _lines and _lines[0].isdigit() and int(_lines[0]) > 0:
+            clip_ar = _lines[0]
+    except Exception:
+        pass
+    return subprocess.run(
+        [FFMPEG_EXE, "-y",
+         "-loop", "1", "-framerate", "30", "-t", "0.10", "-i", thumb_local_path,
+         "-i", src_video_path,
+         "-f", "lavfi", "-t", "0.10", "-i", "anullsrc=r=%s:cl=stereo" % clip_ar,
+         "-filter_complex",
+         "[0:v]scale=1080:1920:force_original_aspect_ratio=increase,"
+         "crop=1080:1920,setsar=1,format=yuv420p[cv];"
+         "[1:v]setsar=1[mv];"
+         "[2:a]aformat=sample_rates=%s:channel_layouts=stereo[ca];"
+         "[1:a]aformat=sample_rates=%s:channel_layouts=stereo[ma];"
+         "[cv][ca][mv][ma]concat=n=2:v=1:a=1[v][a]" % (clip_ar, clip_ar),
+         "-map", "[v]", "-map", "[a]",
+         "-c:v", "libx264", "-crf", "18", "-preset", "veryfast",
+         "-c:a", "aac", "-b:a", "256k",
+         out_path],
+        capture_output=True, creationflags=CREATE_NO_WINDOW,
+    )
+
+
 def export_clip():
     """
     Accepts multipart/form-data:
@@ -3067,24 +3115,7 @@ def export_clip():
         # while staying imperceptible during playback.
         if cover_frame and thumb_local_path:
             burned_path = os.path.join(tmp_dir, "burned.mp4")
-            rb = subprocess.run(
-                [FFMPEG_EXE, "-y",
-                 "-loop", "1", "-framerate", "30", "-t", "0.10", "-i", thumb_local_path,
-                 "-i", output_path,
-                 "-f", "lavfi", "-t", "0.10", "-i", "anullsrc=r=48000:cl=stereo",
-                 "-filter_complex",
-                 "[0:v]scale=1080:1920:force_original_aspect_ratio=increase,"
-                 "crop=1080:1920,setsar=1,format=yuv420p[cv];"
-                 "[1:v]setsar=1[mv];"
-                 "[2:a]aformat=sample_rates=48000:channel_layouts=stereo[ca];"
-                 "[1:a]aformat=sample_rates=48000:channel_layouts=stereo[ma];"
-                 "[cv][ca][mv][ma]concat=n=2:v=1:a=1[v][a]",
-                 "-map", "[v]", "-map", "[a]",
-                 "-c:v", "libx264", "-crf", "18", "-preset", "veryfast",
-                 "-c:a", "aac",
-                 burned_path],
-                capture_output=True, creationflags=CREATE_NO_WINDOW,
-            )
+            rb = _burn_cover_frame(thumb_local_path, output_path, burned_path)
             if rb.returncode == 0 and os.path.isfile(burned_path):
                 shutil.move(burned_path, output_path)
                 logger.info("[export] Burned thumbnail as cover frame")
@@ -3328,24 +3359,7 @@ def export_thumbnail():
         tmp_dir = tempfile.mkdtemp()
         try:
             burned_path = os.path.join(tmp_dir, "burned.mp4")
-            rb = subprocess.run(
-                [FFMPEG_EXE, "-y",
-                 "-loop", "1", "-framerate", "30", "-t", "0.10", "-i", thumb_local_path,
-                 "-i", clip_path,
-                 "-f", "lavfi", "-t", "0.10", "-i", "anullsrc=r=48000:cl=stereo",
-                 "-filter_complex",
-                 "[0:v]scale=1080:1920:force_original_aspect_ratio=increase,"
-                 "crop=1080:1920,setsar=1,format=yuv420p[cv];"
-                 "[1:v]setsar=1[mv];"
-                 "[2:a]aformat=sample_rates=48000:channel_layouts=stereo[ca];"
-                 "[1:a]aformat=sample_rates=48000:channel_layouts=stereo[ma];"
-                 "[cv][ca][mv][ma]concat=n=2:v=1:a=1[v][a]",
-                 "-map", "[v]", "-map", "[a]",
-                 "-c:v", "libx264", "-crf", "18", "-preset", "veryfast",
-                 "-c:a", "aac",
-                 burned_path],
-                capture_output=True, creationflags=CREATE_NO_WINDOW,
-            )
+            rb = _burn_cover_frame(thumb_local_path, clip_path, burned_path)
             if rb.returncode == 0 and os.path.isfile(burned_path):
                 shutil.move(burned_path, clip_path)
                 cover_burned = True
