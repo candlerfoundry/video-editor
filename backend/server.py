@@ -62,7 +62,7 @@ CORS(app)
 
 # Bump this whenever the frontend/backend contract changes (the frontend
 # carries a matching EXPECTED_BACKEND_BUILD and warns when they differ).
-BACKEND_BUILD = "2026-06-29-ctitle"
+BACKEND_BUILD = "2026-06-30-caps-titles"
 
 CREATE_NO_WINDOW = 0x08000000 if platform.system() == 'Windows' else 0
 
@@ -452,8 +452,14 @@ def spec_to_ass(spec, width, height):
             for i, w in enumerate(words):
                 txt = disp(w["t"], i in emphasis)
                 run = styled_run(txt, i in emphasis, False)
-                end_t = words[i + 1]["s"] if i + 1 < len(words) else g_end
-                events.append(f"Dialogue: 0,{t2ass(w['s'])},{t2ass(max(w['s'] + 0.08, end_t))},Default,,0,0,0,,{pop_tag}{run}")
+                start_t = w["s"]
+                if i + 1 < len(words):
+                    end_t = words[i + 1]["s"]           # contiguous -> never overlap the next word
+                    if end_t <= start_t:
+                        continue
+                else:
+                    end_t = max(start_t + 0.08, g_end)  # safe: last word, no following event
+                events.append(f"Dialogue: 0,{t2ass(start_t)},{t2ass(end_t)},Default,,0,0,0,,{pop_tag}{run}")
             continue
 
         if mode == "karaoke":
@@ -463,9 +469,14 @@ def spec_to_ass(spec, width, height):
                     txt = disp(w["t"], j in emphasis)
                     runs.append((styled_run(txt, j in emphasis, j == i), w))
                 start_t = words[i]["s"] if i > 0 else g_start
-                end_t = words[i + 1]["s"] if i + 1 < len(words) else g_end
-                if end_t - start_t < 0.04:
-                    end_t = start_t + 0.04
+                if i + 1 < len(words):
+                    end_t = words[i + 1]["s"]          # contiguous with next word -> never overlap
+                    if end_t <= start_t:
+                        continue                        # zero/negative duration -> skip (avoids stacking)
+                else:
+                    end_t = g_end
+                    if end_t - start_t < 0.04:
+                        end_t = start_t + 0.04          # safe: last word in the group, no following event
                 events.append(f"Dialogue: 0,{t2ass(start_t)},{t2ass(end_t)},Default,,0,0,0,," + join_runs(runs))
             continue
 
@@ -2081,9 +2092,9 @@ def _thumbnail_worker(job_id, filename, clipstart, clipend, clip_transcript):
                 s = raw.find('['); e = raw.rfind(']')
                 if s != -1 and e != -1:
                     parsed = json.loads(raw[s:e+1])
-                    titles = [str(t) for t in parsed if len(str(t)) <= 60][:8]
+                    titles = [str(t) for t in parsed if len(str(t)) <= 40][:8]
                     if len(titles) < 5:
-                        titles = [str(t)[:60] for t in parsed[:8]]
+                        titles = [str(t)[:40] for t in parsed[:8]]
             except Exception as te:
                 thumb_logger.warning('Job %s title generation failed: %s', job_id, te)
                 titles = ["Add Your Title Here"] * 8
@@ -2189,9 +2200,15 @@ def thumbnail_titles():
                 f"Today's date is {date_str}.{series_note}\n\n"
                 "From the CLIP transcript below, produce two things:\n\n"
                 "1) titles: exactly 8 thumbnail title options.\n"
-                "   - MAX 60 characters each\n"
-                "   - Short, punchy, emotionally direct: a provocative question or bold statement\n"
-                "   - No filler phrases, no colons that only pad length\n\n"
+                "   - MAX 5 WORDS each (roughly 32 characters); fewer words is better\n"
+                "   - A clear, dignified TOPIC LABEL that names what the clip is about, e.g.\n"
+                "     \"Faith & Gender Identity\", \"Calling & Vocation\", \"Doubt & Belief\" —\n"
+                "     NOT a clickbait question, and NOT a first-person confession\n"
+                "   - On-brand for a faith-based educational initiative at a university: warm,\n"
+                "     thoughtful, and credible; never gimmicky, cheesy, sensational, or salesy\n"
+                "   - Use real, searchable keywords a viewer would actually type — the theme,\n"
+                "     topic, person, or concept — so the title aids SEO/discovery\n"
+                "   - Title Case, no end punctuation, no colons used only to pad length\n\n"
                 "2) caption: ONE Instagram caption for a Reel of this clip.\n"
                 "   - SHORT and punchy (about 1-3 sentences), built to drive engagement\n"
                 "   - Open with a scroll-stopping hook in the first line\n"
@@ -2226,7 +2243,7 @@ def thumbnail_titles():
             a = raw.find('['); b = raw.rfind(']')
             if a != -1 and b != -1:
                 try:
-                    titles = [str(t)[:60] for t in json.loads(raw[a:b + 1])][:8]
+                    titles = [str(t)[:40] for t in json.loads(raw[a:b + 1])][:8]
                 except Exception:
                     pass
         thumb_logger.info('[titles] Generated %s titles, caption=%s chars', len(titles), len(caption))

@@ -2308,3 +2308,16 @@ return to its prior position each time.
   to call document.fonts.load('700 64px "<family>"') for every font_family in the draft (700 = the
   weight the canvas draws) before rendering. Fixes both the Save-Clip gallery and the in-editor
   Saved-thumbnails modal. FRONTEND-ONLY -> hard-reload.
+
+## Caption burn overlap + on-brand thumbnail titles (June 30, 2026)
+- #2 CAPTION STACKING (burned video only, not preview): karaoke/word ASS events used a min-duration
+  clamp (end = start+0.04 / +0.08) that pushed an event's end PAST the next event's start ->
+  overlapping events, which libass stacks vertically (a duplicate caption appears higher up). Fixed
+  the timing so mid-group events are contiguous (end = next word start, never overlapping; degenerate
+  zero-length events skipped); only the LAST event in a group gets the min-duration pad. The fps=30
+  speed change likely exposed it by changing which frames are sampled. spec_to_ass karaoke + word modes.
+- #3 AI THUMBNAIL TITLES were long/gimmicky ("I Shrunk Myself So No One Would Be Mad"). Rewrote the
+  /thumbnail_titles prompt: MAX 5 words (~32 chars), a dignified TOPIC LABEL (e.g. "Faith & Gender
+  Identity"), on-brand for a faith-based university initiative, SEO keywords, no clickbait/confession.
+  Tightened the length filter 60 -> 40 chars.
+- BACKEND_BUILD + EXPECTED_BACKEND_BUILD -> 2026-06-30-caps-titles. Needs redeploy + launcher restart.
