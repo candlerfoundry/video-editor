@@ -6139,6 +6139,7 @@
 
   // ── Saved-thumbnails gallery (Thumbnails tab) ─────────────────────────
   let _thumbGalleryItems = [];
+  let _allSavedThumbnails = [];   // /thumbnails/list cache for cross-project reuse lookup
 
   function _galleryRatio(format) {
     const cfg = getThumbTargetConfig(format || 'instagram');
@@ -7628,20 +7629,25 @@
   };
 
   function getCurrentProjectThumbnailDrafts() {
-    const drafts = activeProject?.thumbnail_drafts || [];
     const curName = _clipFile?.name || activeProject?.source_filename || activeProject?.source_video?.filename || '';
     const curCode = extractItemCode(curName);
-    return drafts
-      .filter(draft => {
-        if (!draft.source_filename) return true;               // no source recorded -> this project's
-        const dCode = extractItemCode(draft.source_filename);
-        // Match by item code (e.g. THEO-170) so Captioned/Uncaptioned variants and post-resync
-        // path changes can't hide a thumbnail that's obviously the same source video.
-        if (curCode && dCode) return dCode === curCode;
-        return draft.source_filename === curName;              // fallback when no code is present
-      })
-      .slice()
-      .sort((a, b) => String(b.saved_at || '').localeCompare(String(a.saved_at || '')));
+    const seen = new Set();
+    const out = [];
+    const consider = (d) => {
+      if (!d || !d.draft_id || seen.has(d.draft_id)) return;
+      let ok;
+      if (!d.source_filename) { ok = true; }
+      else {
+        const dCode = extractItemCode(d.source_filename);
+        ok = (curCode && dCode) ? (dCode === curCode) : (d.source_filename === curName);
+      }
+      if (ok) { seen.add(d.draft_id); out.push(d); }
+    };
+    // This project's drafts first, then ANY saved thumbnail (other projects) with the same item
+    // code — drafts can get stored under the wrong project, so match by code (e.g. THEO-170).
+    (activeProject?.thumbnail_drafts || []).forEach(consider);
+    (_allSavedThumbnails || []).forEach(it => consider(it && it.draft));
+    return out.sort((a, b) => String(b.saved_at || '').localeCompare(String(a.saved_at || '')));
   }
 
   function cloneDraftForCurrentClip(draft, duplicate = false) {
@@ -7822,8 +7828,9 @@
 
     // Show existing drafts first
     const draftSection = document.getElementById('export-flow-existing-drafts');
-    // Show every saved thumbnail for THIS source video (any clip/part), so a
-    // thumbnail made for Part 1 can be reused/copied for Part 2 of the series.
+    // Show every saved thumbnail for THIS source video (any clip/part, ANY project), so a
+    // thumbnail made for Part 1 — or saved under a different project — can be reused.
+    try { _allSavedThumbnails = (await fetch(BACKEND + '/thumbnails/list').then(r => r.json())).thumbnails || []; } catch (_) {}
     const drafts = getCurrentProjectThumbnailDrafts();
     if (draftSection) {
       if (drafts.length) {

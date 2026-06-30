@@ -2364,3 +2364,14 @@ return to its prior position each time.
   section re-applied the same exact filename filter on top.
 - FIX: match by item code (extractItemCode, e.g. THEO-170) within the active project; drop the
   redundant exact filter in the Save-Clip section. FRONTEND-ONLY -> hard-reload.
+
+## Cross-project thumbnail reuse: find by item code across ALL projects (June 30, 2026)
+- DIAGNOSED via live backend: drafts are cross-contaminated between projects (e.g. the THEO-170
+  Lewis thumbnail is physically stored in the UNST-139 Abby project; a THEO-169 Scott Mitchell draft
+  sits in the THEO-170 Lewis project) from the earlier save-context bug. So the reuse lookup, which
+  only read activeProject.thumbnail_drafts, couldn't find Lewis's thumbnail when in Lewis's project.
+- FIX: getCurrentProjectThumbnailDrafts now merges activeProject.thumbnail_drafts with a
+  _allSavedThumbnails cache (from /thumbnails/list, refreshed when the Save Clip window opens) and
+  matches by item code (THEO-170). So a thumbnail is reusable for any clip of the same code,
+  wherever it's stored. duplicate/edit-a-copy saves the copy into the CURRENT project (gradually
+  un-scrambling). The gallery already groups by draft source_filename. FRONTEND-ONLY -> hard-reload.
