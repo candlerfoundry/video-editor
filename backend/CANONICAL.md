@@ -2333,3 +2333,12 @@ return to its prior position each time.
   when entry point is 'standalone'. saveCurrentThumbnailDraft reloads loadThumbnailGallery() after a
   standalone save so the gallery preview isn't stale (#4). FRONTEND-ONLY -> hard-reload.
 - NOTE: thumbnails already mis-saved under the wrong project stay mis-grouped until re-saved.
+
+## Thumbnail color popover clipped off-window (June 30, 2026, part of #6)
+- The color popover (.color-pop, position:fixed) is re-parented into the overflow-clipping dialog,
+  so swatches positioned near an edge fell outside the dialog box and were unclickable until the
+  dialog was enlarged. openColorPopover now clamps the popover to the HOST dialog's visible rect
+  (not just the viewport) on both axes. FRONTEND-ONLY -> hard-reload.
+- STILL OPEN (#6): text-box move/resize bugginess and the source frame vanishing on click-outside
+  need a live reproduction to fix safely (the drag/resize/inline-edit code is delicate and was not
+  touched by recent commits per git blame).

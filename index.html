@@ -9038,9 +9038,20 @@
     pop.style.display = 'block';
     const r = anchor.getBoundingClientRect();
     const pw = pop.offsetWidth, ph = pop.offsetHeight;
+    // The popover is parented inside the (overflow-clipping) dialog, so keep it within the
+    // dialog's visible box — not just the viewport — or swatches near an edge get clipped and
+    // become unclickable until the dialog is enlarged.
+    const host = pop.parentNode;
+    const hr = (host && host.getBoundingClientRect && host !== document.body)
+      ? host.getBoundingClientRect()
+      : { left: 0, top: 0, right: window.innerWidth, bottom: window.innerHeight };
+    const minL = Math.max(8, hr.left + 4), maxR = Math.min(window.innerWidth - 8, hr.right - 4);
+    const minT = Math.max(8, hr.top + 4),  maxB = Math.min(window.innerHeight - 8, hr.bottom - 4);
     let left = r.left, top = r.bottom + 6;
-    if (left + pw > window.innerWidth - 8) left = Math.max(8, window.innerWidth - pw - 8);
-    if (top + ph > window.innerHeight - 8) top = Math.max(8, r.top - ph - 6);
+    if (left + pw > maxR) left = maxR - pw;          // keep right edge inside
+    if (left < minL) left = minL;                    // keep left edge inside
+    if (top + ph > maxB) top = r.top - ph - 6;       // flip above the anchor if it would overflow
+    if (top < minT) top = minT;                      // last resort: pin to top
     pop.style.left = left + 'px';
     pop.style.top = top + 'px';
     setTimeout(function() {
