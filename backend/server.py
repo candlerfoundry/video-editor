@@ -62,7 +62,7 @@ CORS(app)
 
 # Bump this whenever the frontend/backend contract changes (the frontend
 # carries a matching EXPECTED_BACKEND_BUILD and warns when they differ).
-BACKEND_BUILD = "2026-06-30-caps-titles"
+BACKEND_BUILD = "2026-06-30-fontfix"
 
 CREATE_NO_WINDOW = 0x08000000 if platform.system() == 'Windows' else 0
 
@@ -822,7 +822,7 @@ def normalize_text_box(item, fallback_id='text-1'):
         'color': item.get('color') or '#ffffff',
         'background_color': item.get('background_color') or '#111111',
         'background_opacity': int(item.get('background_opacity') or 0),
-        'font_family': item.get('font_family') or 'Montserrat',
+        'font_family': ('Handmade Sans' if (item.get('font_family') in (None, '', 'Montserrat')) else item.get('font_family')),
         'font_size': int(item.get('font_size') or 64),
         'x': item.get('x'),
         'y': item.get('y'),
@@ -851,7 +851,7 @@ def normalize_thumbnail_draft(payload):
             'color': payload.get('text_color') or '#ffffff',
             'background_color': payload.get('background_color') or '#111111',
             'background_opacity': payload.get('background_opacity') or 0,
-            'font_family': payload.get('font_family') or 'Montserrat',
+            'font_family': ('Handmade Sans' if (payload.get('font_family') in (None, '', 'Montserrat')) else payload.get('font_family')),
             'font_size': payload.get('font_size') or 64,
             'x': payload.get('text_x'),
             'y': payload.get('text_y'),

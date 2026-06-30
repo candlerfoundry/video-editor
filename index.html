@@ -3101,7 +3101,7 @@
   // Must match BACKEND_BUILD in server.py — bumped together whenever the
   // frontend/backend contract changes. A mismatch means the user is running
   // an old backend (launcher not restarted after a deploy).
-  const EXPECTED_BACKEND_BUILD = '2026-06-30-caps-titles';
+  const EXPECTED_BACKEND_BUILD = '2026-06-30-fontfix';
 
   if (document.fonts && document.fonts.load) { document.fonts.load("700 64px 'Handmade Sans'").catch(function(){}); }
   let _staleBackendWarned = false;
@@ -6159,7 +6159,7 @@
       // font isn't loaded yet, which made the first previews show the wrong typeface.
       const fams = new Set();
       (draft.text_boxes || []).forEach(b => {
-        if (b && b.font_family) fams.add(String(b.font_family).replace(/['"]/g, '').trim());  // stored names carry quotes
+        if (b) fams.add(thumbSafeFont(b.font_family).replace(/['"]/g, '').trim());  // coerce Montserrat -> Handmade Sans; names carry quotes
       });
       if (!fams.size) fams.add('Handmade Sans');
       // Load each font at BOTH weights the renderer might use; a malformed string
@@ -6179,7 +6179,7 @@
   }
 
   function _galleryGroupKey(item) {
-    return _galleryStripExt(item.project_name || item.source_filename || 'Other');
+    return _galleryStripExt(item.source_filename || item.project_name || 'Other');
   }
   async function loadThumbnailGallery() {
     const grid = document.getElementById('thumb-gallery-grid');
@@ -6885,10 +6885,18 @@
   }
 
   // Largest 700-weight font size whose wrapped text fits inside box.width x box.height.
+  // "Montserrat" is never a selectable thumbnail font — it only ever appears as the old
+  // backend default that leaked in. Treat it as the real default (Handmade Sans) everywhere
+  // it renders, so existing drafts display in the intended font without needing a re-save.
+  function thumbSafeFont(f) {
+    if (!f) return 'Handmade Sans';
+    var bare = String(f).replace(/['"]/g, '').trim();
+    return bare === 'Montserrat' ? 'Handmade Sans' : f;
+  }
   function fitFontSizeToBox(box) {
     const ctx = _txMeasureCtx;
     const W = Math.max(20, box.width || 200), H = Math.max(20, box.height || 100);
-    const fam = (box.font_family || 'Handmade Sans');
+    const fam = thumbSafeFont(box.font_family);
     const ls  = box.line_spacing || 1.25;
     let lo = 8, hi = Math.max(8, Math.floor(H)), best = 8;
     while (lo <= hi) {
@@ -6910,7 +6918,7 @@
   // Natural height a box needs to contain its text at a given font size.
   function thumbTextBlockHeight(box, fontSize) {
     const ctx = _txMeasureCtx;
-    const fam = (box.font_family || 'Handmade Sans');
+    const fam = thumbSafeFont(box.font_family);
     ctx.font = `700 ${fontSize}px ${fam}, sans-serif`;
     ctx.letterSpacing = (box.letter_spacing || 0) + 'px';
     const { padX, padY } = thumbBoxPad(box);
@@ -6949,7 +6957,7 @@
         };
     const isObjectBox = typeof titleOrBox === 'object' && titleOrBox !== null;
     if (isObjectBox) ensureTextBoxDims(box);
-    const resolvedFontFamily = box.font_family || 'Handmade Sans';
+    const resolvedFontFamily = thumbSafeFont(box.font_family);
     const resolvedX = box.x ?? (W * 0.5);
     const resolvedY = box.y ?? 0;
     const resolvedAlign = box.align || 'center';
@@ -10304,7 +10312,7 @@
       div.style.whiteSpace = 'pre-wrap';   // preserve explicit line breaks the user typed
       div.style.wordBreak  = 'break-word';
       div.style.zIndex     = isSelected ? '20' : '1';
-      div.style.fontFamily = (box.font_family || 'Handmade Sans') + ', sans-serif';
+      div.style.fontFamily = thumbSafeFont(box.font_family) + ', sans-serif';
       div.style.fontSize   = (fit / Math.max(scaleX, scaleY)) + 'px';
       div.style.letterSpacing = ((box.letter_spacing || 0) / Math.max(scaleX, scaleY)) + 'px';
       div.style.lineHeight = (box.line_spacing || 1.25);

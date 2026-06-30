@@ -2342,3 +2342,16 @@ return to its prior position each time.
 - STILL OPEN (#6): text-box move/resize bugginess and the source frame vanishing on click-outside
   need a live reproduction to fix safely (the drag/resize/inline-edit code is delicate and was not
   touched by recent commits per git blame).
+
+## ROOT CAUSE of thumbnail "wrong font": backend default was Montserrat (June 30, 2026)
+- normalize_text_box defaulted font_family to 'Montserrat' (server.py ~825, ~854) while the ENTIRE
+  frontend/editor defaults to 'Handmade Sans'. Any box saved without an explicit font got stamped
+  Montserrat -> editor showed Handmade Sans, saved/gallery render showed Montserrat. (Montserrat is
+  not even in the thumbnail font dropdown.) Earlier font-LOAD fixes were chasing the wrong cause;
+  the canvas was faithfully drawing the wrong STORED value.
+- FIX: backend default -> 'Handmade Sans' and coerce any stored 'Montserrat' -> 'Handmade Sans' on
+  normalize. Frontend adds thumbSafeFont() (Montserrat -> Handmade Sans) used in render, measure,
+  overlay, and gallery font-preload, so EXISTING Montserrat drafts display correctly immediately
+  (no re-save needed). BACKEND_BUILD/EXPECTED -> 2026-06-30-fontfix (restart + hard-reload).
+- #5 grouping: gallery now groups by the draft's OWN source_filename (correct even for drafts
+  mis-saved under the wrong project) instead of the stored project_name. Frontend-only.
