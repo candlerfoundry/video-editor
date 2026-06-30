@@ -3101,7 +3101,7 @@
   // Must match BACKEND_BUILD in server.py — bumped together whenever the
   // frontend/backend contract changes. A mismatch means the user is running
   // an old backend (launcher not restarted after a deploy).
-  const EXPECTED_BACKEND_BUILD = '2026-06-29-thumbpng';
+  const EXPECTED_BACKEND_BUILD = '2026-06-29-ctitle';
 
   if (document.fonts && document.fonts.load) { document.fonts.load("700 64px 'Handmade Sans'").catch(function(){}); }
   let _staleBackendWarned = false;
@@ -10696,6 +10696,7 @@
       (code ? code + ' - ' : '') + (srcTitle || baseName) +
       (firstWords ? ' (\u201C' + firstWords + '\u201D - ' + dateStr + ')' : ' (' + dateStr + ')') + '.mp4';
     document.getElementById('flow-export-type').value = detectClipType(_clipFile ? _clipFile.name : '');
+    { const _ct = document.getElementById('flow-export-content-title'); if (_ct) _ct.value = ''; }  // free-form Content Title, blank => auto-fill
     const burnChk = document.getElementById('export-burn-captions');
     if (burnChk) burnChk.checked = !!editorCaptionStyle.show;
     document.getElementById('export-flow-status').style.display = 'none';
@@ -11494,22 +11495,12 @@
     const srcName = _clipFile?.name || activeProject?.source_filename || activeProject?.source_video?.filename || '';
     const itemCode = extractItemCode(srcName);
     if (itemCode) form.append('item_code', itemCode);
-    // Content Title: "Speaker - first words of the clip" (Emily's spec:
-    // speaker name + 3-5 word summary; first words suffice in a pinch).
-    (() => {
-      const speaker = extractSpeakerName(srcName);
-      let firstWords = '';
-      if (_wordsData) {
-        firstWords = _wordsData
-          .filter(w => (w.start ?? 0) < editorOutTime && (w.end ?? w.start ?? 0) >= editorInTime)
-          .filter(w => !isWordCut(w))
-          .slice(0, 5)
-          .map(w => (w.word ?? '').trim()).join(' ').replace(/[.,;:!?]+$/, '');
-      }
-      const title = [speaker, firstWords ? firstWords + '\u2026' : '']
-        .filter(Boolean).join(' \u2014 ');
-      if (title) form.append('content_title', title.slice(0, 120));
-    })();
+    // Content Title: free-form value the user typed in the Save Clip form.
+    // Blank -> not sent -> backend auto-fills "Speaker \u2014 first words".
+    {
+      const ct = (document.getElementById('flow-export-content-title')?.value || '').trim();
+      if (ct) form.append('content_title', ct.slice(0, 120));
+    }
     if (editorCutRanges.length) {
       // Word ranges the user struck out -> backend stitches the kept segments
       const cuts = editorCutRanges
@@ -12202,6 +12193,10 @@
     <div class="export-form-row">
       <label class="export-form-label" for="flow-export-filename">Clip Name</label>
       <input type="text" id="flow-export-filename" class="export-form-input" placeholder="clip-filename.mp4" />
+    </div>
+    <div class="export-form-row">
+      <label class="export-form-label" for="flow-export-content-title">Content Title <span style="font-weight:400;color:var(--muted);text-transform:none;letter-spacing:0;">&mdash; Airtable (leave blank to auto-fill)</span></label>
+      <input type="text" id="flow-export-content-title" class="export-form-input" placeholder="Type any title, or leave blank to auto-fill (Speaker — first words)" />
     </div>
     <div class="export-form-row">
       <label class="export-form-label" for="flow-export-type">Clip Type</label>

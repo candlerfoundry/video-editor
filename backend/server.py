@@ -62,7 +62,7 @@ CORS(app)
 
 # Bump this whenever the frontend/backend contract changes (the frontend
 # carries a matching EXPECTED_BACKEND_BUILD and warns when they differ).
-BACKEND_BUILD = "2026-06-29-thumbpng"
+BACKEND_BUILD = "2026-06-29-ctitle"
 
 CREATE_NO_WINDOW = 0x08000000 if platform.system() == 'Windows' else 0
 
@@ -3088,7 +3088,7 @@ def export_clip():
     # Prefer "Full Speaker Name — first 4 words…" when we found the source
     # record (the filename only carries the last name).
     try:
-        if source_speaker_name and clip_transcript:
+        if not content_title and source_speaker_name and clip_transcript:
             first4 = " ".join(clip_transcript.split()[:4]).rstrip(".,;:!?")
             content_title = f"{source_speaker_name} \u2014 {first4}\u2026"[:120]
     except Exception:

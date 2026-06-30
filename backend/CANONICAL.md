@@ -2278,3 +2278,14 @@ return to its prior position each time.
 - Cover-frame burn is unchanged and independent (save_png is separate from cover_frame).
 - BACKEND_BUILD + EXPECTED_BACKEND_BUILD -> 2026-06-29-thumbpng. Needs server.py redeploy +
   launcher restart.
+
+## Free-form Content Title field in the Save Clip window (June 29, 2026)
+- Added a "Content Title" text input to the Save Clip dialog (dialog-export-flow, id
+  flow-export-content-title) so the user can type any title that writes to Airtable's
+  "Content Title" field. doExport now sends that value as content_title (blank -> not sent);
+  openExportFormDialog clears it per clip.
+- BACKEND: export_clip previously OVERWROTE the posted content_title with the auto-generated
+  "Speaker — first 4 words…" whenever the source record was found. Changed the guard to
+  `if not content_title and source_speaker_name and clip_transcript:` so a user-typed title wins;
+  a blank field still auto-fills the full-speaker-name title (no regression).
+- BACKEND_BUILD + EXPECTED_BACKEND_BUILD -> 2026-06-29-ctitle. Needs redeploy + launcher restart.
