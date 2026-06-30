@@ -62,7 +62,7 @@ CORS(app)
 
 # Bump this whenever the frontend/backend contract changes (the frontend
 # carries a matching EXPECTED_BACKEND_BUILD and warns when they differ).
-BACKEND_BUILD = "2026-06-30-coveraudio"
+BACKEND_BUILD = "2026-06-30-coveraudio2"
 
 CREATE_NO_WINDOW = 0x08000000 if platform.system() == 'Windows' else 0
 
@@ -2771,8 +2771,6 @@ def build_bleep_tone_expr(bleep_ranges, time_offset=0.0):
     return f"volume='0.25*({terms})':eval=frame"
 
 
-# ── Export Clip ──
-@app.route("/export_clip", methods=["POST"])
 def _burn_cover_frame(thumb_local_path, src_video_path, out_path):
     """Prepend the thumbnail as a ~1/30s cover frame (Instagram uses frame 0
     as the reel cover).
@@ -2821,6 +2819,8 @@ def _burn_cover_frame(thumb_local_path, src_video_path, out_path):
     )
 
 
+# ── Export Clip ──
+@app.route("/export_clip", methods=["POST"])
 def export_clip():
     """
     Accepts multipart/form-data:
