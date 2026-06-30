@@ -6156,9 +6156,19 @@
       // rendering — canvas text silently falls back to a default font if the custom
       // font isn't loaded yet, which made the first previews show the wrong typeface.
       const fams = new Set();
-      (draft.text_boxes || []).forEach(b => { if (b && b.font_family) fams.add(b.font_family); });
+      (draft.text_boxes || []).forEach(b => {
+        if (b && b.font_family) fams.add(String(b.font_family).replace(/['"]/g, '').trim());  // stored names carry quotes
+      });
       if (!fams.size) fams.add('Handmade Sans');
-      try { await Promise.all([...fams].map(f => document.fonts.load('700 64px "' + f + '"'))); } catch (_) {}
+      // Load each font at BOTH weights the renderer might use; a malformed string
+      // here previously threw and loaded nothing, leaving the wrong-font race.
+      const _loads = [];
+      [...fams].forEach(f => {
+        if (!f) return;
+        try { _loads.push(document.fonts.load('700 64px "' + f + '"')); } catch (_) {}
+        try { _loads.push(document.fonts.load('64px "' + f + '"')); } catch (_) {}
+      });
+      try { await Promise.all(_loads); await document.fonts.ready; } catch (_) {}
       const canvas = document.createElement('canvas');
       canvas.width = cfg.width; canvas.height = cfg.height;
       const ok = await renderThumbnailDraftToCanvas(canvas, draft);
