@@ -2289,3 +2289,13 @@ return to its prior position each time.
   `if not content_title and source_speaker_name and clip_transcript:` so a user-typed title wins;
   a blank field still auto-fills the full-speaker-name title (no regression).
 - BACKEND_BUILD + EXPECTED_BACKEND_BUILD -> 2026-06-29-ctitle. Needs redeploy + launcher restart.
+
+## Save Clip gallery: composite previews + button styling (June 29, 2026)
+- Saved-thumbnail previews in the Save Clip window showed only the frame, not text/graphics. Cause:
+  previews rendered to a 405x720 canvas while draft text/graphics use 1080x1920 coordinates, so the
+  text drew off-canvas. Fixed by rendering the FULL composite via _renderGalleryPreview (full-res
+  1080x1920 -> dataURL -> <img>), plus await document.fonts.ready so custom fonts render.
+- "Create thumbnail" button now reads "Create New Thumbnail" when saved thumbnails exist (plain
+  "Create thumbnail" when none), and is larger + blue (#2553D6) to stand out from the orange edit
+  actions. Footer: Cancel -> gray (#6B7280), Save without Thumbnail -> navy (#1E2530); Save with
+  Thumbnail stays orange. FRONTEND-ONLY -> hard-reload.
