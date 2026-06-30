@@ -2355,3 +2355,12 @@ return to its prior position each time.
   (no re-save needed). BACKEND_BUILD/EXPECTED -> 2026-06-30-fontfix (restart + hard-reload).
 - #5 grouping: gallery now groups by the draft's OWN source_filename (correct even for drafts
   mis-saved under the wrong project) instead of the stored project_name. Frontend-only.
+
+## Reuse lookup couldn't find an in-project saved thumbnail (June 30, 2026)
+- getCurrentProjectThumbnailDrafts required draft.source_filename === _clipFile.name AND
+  draft.source_path === activeProject.source_path (exact). A Captioned/Uncaptioned filename
+  difference or a post-Dropbox-resync path change made the exact match fail, so a thumbnail that
+  was clearly in the project ("8 clips / 1 thumbnail") wasn't offered for reuse. The Save-Clip
+  section re-applied the same exact filename filter on top.
+- FIX: match by item code (extractItemCode, e.g. THEO-170) within the active project; drop the
+  redundant exact filter in the Save-Clip section. FRONTEND-ONLY -> hard-reload.

@@ -7629,11 +7629,16 @@
 
   function getCurrentProjectThumbnailDrafts() {
     const drafts = activeProject?.thumbnail_drafts || [];
+    const curName = _clipFile?.name || activeProject?.source_filename || activeProject?.source_video?.filename || '';
+    const curCode = extractItemCode(curName);
     return drafts
       .filter(draft => {
-        const sameFilename = !draft.source_filename || !_clipFile || draft.source_filename === _clipFile.name;
-        const samePath = !draft.source_path || !activeProject?.source_path || draft.source_path === activeProject.source_path;
-        return sameFilename && samePath;
+        if (!draft.source_filename) return true;               // no source recorded -> this project's
+        const dCode = extractItemCode(draft.source_filename);
+        // Match by item code (e.g. THEO-170) so Captioned/Uncaptioned variants and post-resync
+        // path changes can't hide a thumbnail that's obviously the same source video.
+        if (curCode && dCode) return dCode === curCode;
+        return draft.source_filename === curName;              // fallback when no code is present
       })
       .slice()
       .sort((a, b) => String(b.saved_at || '').localeCompare(String(a.saved_at || '')));
@@ -7819,9 +7824,7 @@
     const draftSection = document.getElementById('export-flow-existing-drafts');
     // Show every saved thumbnail for THIS source video (any clip/part), so a
     // thumbnail made for Part 1 can be reused/copied for Part 2 of the series.
-    const drafts = getCurrentProjectThumbnailDrafts().filter(d =>
-      (!d.source_filename || d.source_filename === (_clipFile?.name || ''))
-    );
+    const drafts = getCurrentProjectThumbnailDrafts();
     if (draftSection) {
       if (drafts.length) {
         draftSection.innerHTML = '<div style="font-size:11px;font-weight:600;letter-spacing:0.06em;text-transform:uppercase;color:var(--muted);margin-bottom:10px;">Saved thumbnails</div>';
