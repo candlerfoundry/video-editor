@@ -6152,6 +6152,13 @@
   async function _renderGalleryPreview(draft) {
     try {
       const cfg = getThumbTargetConfig(draft.target_format || 'instagram');
+      // Explicitly load the draft's fonts (weight 700, as the canvas draws) BEFORE
+      // rendering — canvas text silently falls back to a default font if the custom
+      // font isn't loaded yet, which made the first previews show the wrong typeface.
+      const fams = new Set();
+      (draft.text_boxes || []).forEach(b => { if (b && b.font_family) fams.add(b.font_family); });
+      if (!fams.size) fams.add('Handmade Sans');
+      try { await Promise.all([...fams].map(f => document.fonts.load('700 64px "' + f + '"'))); } catch (_) {}
       const canvas = document.createElement('canvas');
       canvas.width = cfg.width; canvas.height = cfg.height;
       const ok = await renderThumbnailDraftToCanvas(canvas, draft);

@@ -2299,3 +2299,12 @@ return to its prior position each time.
   "Create thumbnail" when none), and is larger + blue (#2553D6) to stand out from the orange edit
   actions. Footer: Cancel -> gray (#6B7280), Save without Thumbnail -> navy (#1E2530); Save with
   Thumbnail stays orange. FRONTEND-ONLY -> hard-reload.
+
+## Thumbnail gallery previews: fix wrong font (font-load race) (June 30, 2026)
+- Saved-thumbnail previews rendered the first 1-2 cards in a fallback font while later ones were
+  correct. Cause: canvas text silently falls back to a default font if the custom (web) font isn't
+  loaded yet; await document.fonts.ready isn't enough because an unused font isn't loaded until
+  explicitly requested, and canvas drawing doesn't trigger that load. Fixed _renderGalleryPreview
+  to call document.fonts.load('700 64px "<family>"') for every font_family in the draft (700 = the
+  weight the canvas draws) before rendering. Fixes both the Save-Clip gallery and the in-editor
+  Saved-thumbnails modal. FRONTEND-ONLY -> hard-reload.
