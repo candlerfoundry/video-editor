@@ -2321,3 +2321,15 @@ return to its prior position each time.
   Identity"), on-brand for a faith-based university initiative, SEO keywords, no clickbait/confession.
   Tightened the length filter 60 -> 40 chars.
 - BACKEND_BUILD + EXPECTED_BACKEND_BUILD -> 2026-06-30-caps-titles. Needs redeploy + launcher restart.
+
+## Thumbnail gallery source-context cluster: #5 sorting, #7 wrong video, #4 stale (June 30, 2026)
+- ROOT: editing a SAVED thumbnail kept the draft but not its project/source — the frame picker used
+  the currently-loaded clip's video and re-saves went to the ACTIVE project (updateProject targets
+  activeProject.id). So Dr. Lewis's thumbnail pulled Abby's footage (#7) and re-saved under Abby ->
+  wrong gallery grouping (#5).
+- FIX: openThumbnailFromGallery now switches into the thumbnail's OWN project first via
+  tryResumeProjectFromSavedPath(item.project_id, 'thumbnails') (sets activeProject + hydrates
+  _thumbFile with /projects/source_video/<pid>). dlgOpenFramePicker prefers the thumbnails source
+  when entry point is 'standalone'. saveCurrentThumbnailDraft reloads loadThumbnailGallery() after a
+  standalone save so the gallery preview isn't stale (#4). FRONTEND-ONLY -> hard-reload.
+- NOTE: thumbnails already mis-saved under the wrong project stay mis-grouped until re-saved.

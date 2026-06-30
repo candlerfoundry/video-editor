@@ -6089,6 +6089,8 @@
     await updateProject('thumbnail_draft_saved', payload);
     if (_sharedThumbnailEntryPoint === 'standalone') {
       renderStandaloneThumbnailPreview();
+      // The Saved Thumbnails gallery caches its rendered previews; reload it so the edit shows.
+      if (document.getElementById('thumb-gallery-grid')) { try { loadThumbnailGallery(); } catch (_) {} }
     }
     if (showFeedback) alert('Thumbnail draft saved to the local project.');
   }
@@ -6284,6 +6286,13 @@
   async function openThumbnailFromGallery(i) {
     const item = _thumbGalleryItems[i];
     if (!item || !item.draft) return;
+    // Switch into THIS thumbnail's OWN project + source video first, so the frame picker
+    // loads the right footage and any re-save lands under the correct project (not whatever
+    // clip happens to be loaded). Without this, editing a saved thumbnail used the active
+    // clip's video and re-grouped the draft under the wrong source.
+    if (item.project_id && item.project_id !== (activeProject && activeProject.id)) {
+      try { await tryResumeProjectFromSavedPath({ id: item.project_id }, 'thumbnails'); } catch (_) {}
+    }
     _sharedThumbnailDraft = item.draft;
     _sharedThumbnailEntryPoint = 'standalone';
     updateSharedComposerDoneLabel();
@@ -9355,7 +9364,11 @@
     _dlgReleaseOtherVideoDecoders();        // only one full-res decode while picking
     if (typeof panel.showModal === 'function') { if (!panel.open) panel.showModal(); }
     else panel.style.display = 'block';
-    const src = getPlayableVideoUrl('clips') || getPlayableVideoUrl('thumbnails');
+    // Standalone (Thumbnails tab / gallery): the source is the thumbnail's OWN video, not
+    // whatever clip is loaded — prefer the thumbnails source so the picker shows the right footage.
+    const src = (_sharedThumbnailEntryPoint === 'standalone')
+      ? (getPlayableVideoUrl('thumbnails') || getPlayableVideoUrl('clips'))
+      : (getPlayableVideoUrl('clips') || getPlayableVideoUrl('thumbnails'));
     const seekTo = _dlgPickLastTime;   // null on first open -> falls back to clip start
     if (src && vidEl.src !== src) {
       vidEl.crossOrigin = 'anonymous';
