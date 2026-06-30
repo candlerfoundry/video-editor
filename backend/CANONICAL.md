@@ -2381,3 +2381,11 @@ return to its prior position each time.
   draft's OWN source code. Move-only (never deletes), idempotent. Dry-run unless apply=1. Used to
   un-scramble drafts saved under the wrong project by the earlier save-context bug.
 - BACKEND_BUILD/EXPECTED -> 2026-06-30-reconcile (restart, then trigger the route once).
+
+## Save Clip "missing save button" — auto-select saved thumbnail (June 30, 2026)
+- "Save with Thumbnail" only appeared for a freshly-CREATED thumbnail; when only SAVED thumbnails
+  existed for the clip, no thumbnail was auto-selected so the button stayed hidden and the window
+  looked like it had no save button (only "Save without Thumbnail"). Now, when saved thumbnails
+  exist and none was freshly made, startExportFlowThumb auto-selects the most recent (efUseDraft)
+  so "Save with Thumbnail" is present + enabled (cover is on by default). User can still pick
+  another, Edit a copy, or Save without Thumbnail. FRONTEND-ONLY -> hard-reload.

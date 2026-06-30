@@ -7887,11 +7887,18 @@
       if (statusEl) statusEl.textContent = '';
       const saveWithBtn = document.getElementById('btn-save-with-thumb');
       if (saveWithBtn) { saveWithBtn.style.display = ''; saveWithBtn.disabled = false; }
+    } else if (drafts.length) {
+      if (readyRow) readyRow.style.display = 'none';
+      // No freshly-made thumbnail, but saved ones exist: default to the most recent so the
+      // primary "Save with Thumbnail" button is present and ready (cover is on by default).
+      // The user can still pick another, "Edit a copy", or "Save without Thumbnail".
+      efUseDraft(drafts[0].draft_id);
+      if (statusEl) statusEl.textContent = 'Ready to save with your most recent thumbnail below \u2014 or pick another, edit it, or save without it.';
     } else {
       if (readyRow) readyRow.style.display = 'none';
-      if (statusEl) statusEl.textContent = drafts.length
-        ? 'Reuse a saved thumbnail below, or create a new one:'
-        : 'No thumbnail yet \u2014 create one, or save without it.';
+      const saveWithBtn = document.getElementById('btn-save-with-thumb');
+      if (saveWithBtn) { saveWithBtn.style.display = 'none'; saveWithBtn.disabled = true; }
+      if (statusEl) statusEl.textContent = 'No thumbnail yet \u2014 create one, or save without it.';
     }
   }
 
