@@ -2375,3 +2375,9 @@ return to its prior position each time.
   matches by item code (THEO-170). So a thumbnail is reusable for any clip of the same code,
   wherever it's stored. duplicate/edit-a-copy saves the copy into the CURRENT project (gradually
   un-scrambling). The gallery already groups by draft source_filename. FRONTEND-ONLY -> hard-reload.
+
+## /thumbnails/reconcile — one-time cleanup of cross-filed drafts (June 30, 2026)
+- New route moves each saved thumbnail draft into the project whose source item-code matches the
+  draft's OWN source code. Move-only (never deletes), idempotent. Dry-run unless apply=1. Used to
+  un-scramble drafts saved under the wrong project by the earlier save-context bug.
+- BACKEND_BUILD/EXPECTED -> 2026-06-30-reconcile (restart, then trigger the route once).

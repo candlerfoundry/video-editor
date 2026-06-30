@@ -62,7 +62,7 @@ CORS(app)
 
 # Bump this whenever the frontend/backend contract changes (the frontend
 # carries a matching EXPECTED_BACKEND_BUILD and warns when they differ).
-BACKEND_BUILD = "2026-06-30-fontfix"
+BACKEND_BUILD = "2026-06-30-reconcile"
 
 CREATE_NO_WINDOW = 0x08000000 if platform.system() == 'Windows' else 0
 
@@ -1424,6 +1424,75 @@ def delete_thumbnail():
     except Exception as exc:
         logger.exception('[thumbnails] delete failed')
         return jsonify({'error': str(exc)}), 500
+
+
+@app.route('/thumbnails/reconcile', methods=['POST'])
+def reconcile_thumbnails():
+    """One-time cleanup: move each saved thumbnail draft to the project whose source
+    item-code matches the draft's OWN source code (drafts can get saved under the wrong
+    project). Move-only, never deletes; idempotent. Dry-run unless apply=1 (query or JSON)."""
+    def _code(name):
+        m = re.match(r'^\s*([A-Z0-9]{2,5}-\d+(?:\.\d+)?)', str(name or '').upper())
+        return m.group(1) if m else ''
+    try:
+        body = request.get_json(silent=True) or {}
+        apply = (request.args.get('apply') or body.get('apply') or '') in ('1', 'true', 'yes', True)
+        with project_store_lock:
+            projects = {}
+            for fn in os.listdir(project_store_dir):
+                if not fn.endswith('.json'):
+                    continue
+                try:
+                    with open(os.path.join(project_store_dir, fn), 'r', encoding='utf-8') as h:
+                        pr = json.load(h)
+                    if pr.get('id'):
+                        projects[pr['id']] = pr
+                except Exception:
+                    continue
+            # code -> canonical project id (the project whose own source matches that code)
+            code_to_pid = {}
+            for pid, pr in projects.items():
+                pc = _code((pr.get('source_video') or {}).get('filename'))
+                if pc and pc not in code_to_pid:
+                    code_to_pid[pc] = pid
+            # Plan moves (no mutation yet)
+            moves, orphans = [], []
+            for pid, pr in projects.items():
+                pc = _code((pr.get('source_video') or {}).get('filename'))
+                for d in (pr.get('thumbnail_drafts') or []):
+                    dc = _code(d.get('source_filename'))
+                    if not dc:
+                        continue
+                    target = code_to_pid.get(dc)
+                    if target and target != pid:
+                        moves.append({'draft_id': d.get('draft_id'), 'code': dc,
+                                      'from_id': pid, 'from': pr.get('project_name'),
+                                      'to_id': target, 'to': projects[target].get('project_name')})
+                    elif not target and dc != pc:
+                        orphans.append({'draft_id': d.get('draft_id'), 'code': dc,
+                                        'in': pr.get('project_name')})
+            if apply and moves:
+                by_id = projects
+                dirty = set()
+                # index drafts by id for movement
+                for m in moves:
+                    did = m['draft_id']
+                    src = by_id[m['from_id']]
+                    moved_draft = next((x for x in (src.get('thumbnail_drafts') or []) if x.get('draft_id') == did), None)
+                    if moved_draft is None:
+                        continue
+                    src['thumbnail_drafts'] = [x for x in (src.get('thumbnail_drafts') or []) if x.get('draft_id') != did]
+                    tgt = by_id[m['to_id']]
+                    tgt['thumbnail_drafts'] = [x for x in (tgt.get('thumbnail_drafts') or []) if x.get('draft_id') != did] + [moved_draft]
+                    dirty.add(m['from_id']); dirty.add(m['to_id'])
+                for pid in dirty:
+                    save_project(by_id[pid])
+                logger.info('[reconcile] moved %s thumbnail drafts to their correct projects', len(moves))
+            return jsonify({'success': True, 'applied': bool(apply), 'moved': len(moves),
+                            'orphans': len(orphans), 'moves': moves, 'orphan_details': orphans})
+    except Exception as exc:
+        logger.exception('[reconcile] failed')
+        return jsonify({'success': False, 'error': str(exc)}), 500
 
 
 @app.route('/projects/delete', methods=['POST'])
