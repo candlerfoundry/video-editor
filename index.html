@@ -7841,7 +7841,8 @@
         try { await document.fonts.ready; } catch (_) {}
         for (const draft of drafts) {
           const card = document.createElement('div');
-          card.style.cssText = 'border:1px solid var(--border);border-radius:10px;overflow:hidden;background:var(--surface);display:flex;flex-direction:column;';
+          card.dataset.draftId = draft.draft_id;
+          card.style.cssText = 'border:2px solid var(--border);border-radius:10px;overflow:hidden;background:var(--surface);display:flex;flex-direction:column;transition:border-color 120ms, box-shadow 120ms;';
           const previewWrap = document.createElement('div');
           previewWrap.style.cssText = 'width:100%;aspect-ratio:9 / 16;background:#111;overflow:hidden;';
           const previewImg = document.createElement('img');
@@ -7966,17 +7967,17 @@
   function efUseDraft(draftId) {
     _efSelectedDraftId    = draftId;
     _efSelectedThumbFrame = -1;
-    // Deselect any frame
     document.querySelectorAll('#export-flow-thumb-frames .frame-cell').forEach(c => c.classList.remove('selected'));
     const saveWithBtn = document.getElementById('btn-save-with-thumb');
-    if (saveWithBtn) {
-      saveWithBtn.disabled = false;
-      saveWithBtn.style.display = '';
-    }
-    // Highlight the chosen draft card (optional: add a .selected border)
-    document.querySelectorAll('#export-flow-existing-drafts .btn').forEach(b => {
-      b.classList.remove('selected');
+    if (saveWithBtn) { saveWithBtn.disabled = false; saveWithBtn.style.display = ''; }
+    // Make the selection visible: ring the chosen card so it's obvious which thumbnail will save.
+    document.querySelectorAll('#export-flow-existing-drafts [data-draft-id]').forEach(c => {
+      const on = c.dataset.draftId === draftId;
+      c.style.borderColor = on ? 'var(--orange)' : 'var(--border)';
+      c.style.boxShadow   = on ? '0 0 0 2px var(--orange-tint)' : 'none';
     });
+    const sw = document.getElementById('export-flow-thumb-status');
+    if (sw) sw.textContent = 'Selected the highlighted thumbnail \u2014 it will be saved with the clip.';
   }
 
   function efEditDraft(draftId) {

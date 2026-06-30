@@ -2389,3 +2389,20 @@ return to its prior position each time.
   exist and none was freshly made, startExportFlowThumb auto-selects the most recent (efUseDraft)
   so "Save with Thumbnail" is present + enabled (cover is on by default). User can still pick
   another, Edit a copy, or Save without Thumbnail. FRONTEND-ONLY -> hard-reload.
+
+## Save Clip: thumbnail "Use as-is" gave no feedback / wrong one attached (June 30, 2026)
+- efUseDraft set _efSelectedDraftId but never highlighted the chosen card (the highlight was a
+  TODO), so clicking "Use as-is" looked like it did nothing and you couldn't tell which thumbnail
+  was selected — combined with the auto-select of the most-recent, the wrong one could attach.
+  Now each card is tagged data-draft-id and efUseDraft rings the selected card (orange border +
+  ring) and updates the status line, so the selection is visible and the highlighted one is what
+  saves. FRONTEND-ONLY -> hard-reload.
+
+## Audio static / caption bounce — measured both fresh exports, files are CLEAN (June 30, 2026)
+- Pulled both recent Abby exports ("and my pastor" 2:13pm, "Hi my name" 9:20pm). BOTH measure clean:
+  no clipping (peaks -5.25/-4.38 dB, flat factor 0), audio/video durations in sync (fps=30 fix
+  working), 30fps CFR, and the audio spectrum matches the untouched 1x source (atempo adds no
+  visible artifacts vs 1x; rubberband identical). Captions are stable in the burned frames (caption
+  overlap fix holding). Could NOT reproduce static or bounce in the files. => the staticky Instagram
+  post was likely an OLDER (pre-restart) export or Instagram's own re-encode; verify a fresh export
+  in a LOCAL player (QuickTime/VLC). No further speculative audio/caption changes made.
