@@ -2544,3 +2544,25 @@ restart the App Launcher (the handshake banner will prompt it) + hard-refresh.
 Regression risk: Medium-High (touches the fragile thumbnail overlay/export render + the
 caption burn filter graph — both High-risk areas; all changes syntax-checked and the
 caption fix unit-tested).
+
+## 2026-07-01 — Thumbnail editor follow-ups (frontend-only, no handshake bump)
+Emily's feedback on the first batch. All in index.html; Netlify deploy + hard-refresh.
+- OVERSIZED SELECTION BOXES: elements/text boxes whose STORED width/height exceeded the
+  canvas rendered with handles far off-screen ("enormous boxes, hard to move"). Proven via
+  a live test that the render math is correct for normal data (a 400px element → 124px on a
+  335px canvas); the boxes were big because the stored dims were big. FIX:
+  `_clampDraftItemsToCanvas()` runs at the top of `renderDialogOverlayLayer()` and caps every
+  text box / element / logo to the canvas (min(w,W), min(h,H)) and pulls x/y back on-frame
+  (text is centre-anchored, elements top-left). Anything outside the 9:16 frame never exports
+  anyway, so nothing useful is lost, and it self-heals legacy oversized drafts on open.
+  Verified live: 1700×500 @ x=-300 → 1080 @ x=0, fully on-canvas.
+- LAYERS: duplicate labels are numbered ("Highlights & Boxes 1/2") in renderLayerPanel so you
+  can tell identical pack elements apart.
+- LAYERS DRAG-AND-DROP: rows are draggable (grip handle) — `thumbLayerDragStart/Over/Leave/Drop`
+  + `thumbLayerReorderTo` reassign z (drops the dragged item into the target's slot, in front of
+  it). The ▲/▼ arrows still work.
+- IG GRID GUIDE: changed from centered to TOP-anchored (top:0, height:75%) — Instagram crops the
+  BOTTOM of a reel for the grid, not the top (Emily's real-world experience). Copy updated.
+- Note on the "Fill & crop" toggle (from #6): it only shows while a pack image element is
+  selected — that's why it "disappeared" when Emily changed selection. On = graphic fills its box
+  and overflow is cropped (drag a side handle to trim); off = show the whole graphic.
