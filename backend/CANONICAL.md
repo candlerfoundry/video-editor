@@ -2566,3 +2566,16 @@ Emily's feedback on the first batch. All in index.html; Netlify deploy + hard-re
 - Note on the "Fill & crop" toggle (from #6): it only shows while a pack image element is
   selected — that's why it "disappeared" when Emily changed selection. On = graphic fills its box
   and overflow is cropped (drag a side handle to trim); off = show the whole graphic.
+
+## 2026-07-01 — Recent-project click always opens Clips (frontend-only)
+Bug (Emily): clicking a project in the recent-projects sidebar opened the THUMBNAILS tab (showing
+all saved thumbnails) instead of the clip/video editor. Repro: Dr. Lewis, right after editing her
+thumbnail. Cause: renderRecentProjects passed `project.meta.last_view` to selectRecentProject, and
+that had been persisted as 'thumbnails', so the project reopened in Thumbnails.
+FIX: the sidebar project button now ALWAYS calls selectRecentProject(id, 'clips') — the clip editor
+is the default entry point regardless of last_view. Thumbnails remain reachable via the left-nav
+Thumbnails tab and the clip flow's "Create Thumbnail". (selectRecentProject still accepts a targetTab,
+so the thumbnail gallery's own open-in-thumbnails path is unaffected.)
+Note: the big green box on the standalone Thumbnails tab is the #thumb-drop upload drop-zone; clicking
+it opens the OS file picker (lands in Dropbox) to choose a source video — working as designed, just
+easy to mistake for a link to the loaded video. Left as-is.

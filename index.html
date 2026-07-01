@@ -3899,10 +3899,14 @@
           items.map(project => {
             const summary = getProjectCountSummary(project) || 'Saved project';
             const isActive = activeProject?.id && activeProject.id === project.id;
-            const lastView = project?.meta?.last_view === 'thumbnails' ? 'thumbnails' : 'clips';
             const hasSavedPath = !!(project?.source_path || project?.source_video?.path);
+            // Clicking a project ALWAYS opens the clip/video editor (the main
+            // workflow), never the thumbnail tab — even if the user was last in
+            // Thumbnails for this project. Use the left-nav Thumbnails tab (or the
+            // clip's "Create Thumbnail") to reach thumbnails. (Emily's report:
+            // Dr. Lewis opened Thumbnails because meta.last_view was 'thumbnails'.)
             return (
-              '<button class="sidebar-project-item' + (isActive ? ' active' : '') + '" type="button" oncontextmenu="showProjectContextMenu(\'' + escHtml(project.id) + '\', event); return false;" onclick="selectRecentProject(\'' + escHtml(project.id) + '\', \'' + lastView + '\')">' +
+              '<button class="sidebar-project-item' + (isActive ? ' active' : '') + '" type="button" oncontextmenu="showProjectContextMenu(\'' + escHtml(project.id) + '\', event); return false;" onclick="selectRecentProject(\'' + escHtml(project.id) + '\', \'clips\')">' +
                 '<div class="sidebar-project-item-head">' +
                   '<div class="recent-project-name" title="' + escHtml(getProjectLabel(project)) + '">' + escHtml(getProjectLabel(project)) + '</div>' +
                   '<div class="recent-project-date">' + escHtml(formatProjectDate(project.last_modified || project.updated_at)) + '</div>' +
