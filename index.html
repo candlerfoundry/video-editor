@@ -2563,7 +2563,14 @@
                 </div>
                 <div class="time-field-group">
                   <span class="time-field-label">Length</span>
-                  <span id="clip-length-val" class="time-input" style="display:inline-flex;align-items:center;justify-content:center;min-width:84px;background:var(--orange-tint);color:var(--orange);font-weight:600;" title="Clip length after edits">0.0s</span>
+                  <span id="clip-length-val" class="time-input" style="display:inline-flex;align-items:center;justify-content:center;min-width:84px;background:var(--orange-tint);color:var(--orange);font-weight:600;" title="Output length (adjusts for speed and edits)">0.0s</span>
+                </div>
+                <div class="time-field-group">
+                  <span class="time-field-label">Set from playhead</span>
+                  <div style="display:flex;gap:6px;">
+                    <button class="btn-ghost btn-sm" type="button" onclick="setInToPlayhead()" title="Set the clip START to where the video is paused/playing now">&#8676; Start here</button>
+                    <button class="btn-ghost btn-sm" type="button" onclick="setOutToPlayhead()" title="Set the clip END to where the video is paused/playing now">End here &#8677;</button>
+                  </div>
                 </div>
                 <button class="btn" id="btn-play-toggle" onclick="togglePlayPause()" style="padding:10px 22px;font-size:15px;" title="Play / pause (you can also click the video)">
                   <svg id="play-toggle-icon" width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"/></svg>
@@ -2660,6 +2667,13 @@
                   <input type="range" id="clip-speed-slider" min="1" max="2" step="0.05" value="1" style="width:130px;accent-color:var(--orange);" oninput="setClipSpeed(this.value)" title="Clip speed 1&#215;–2&#215; (preview &amp; burned into the exported clip)">
                   <span id="clip-speed-readout" style="font-size:12px;font-weight:700;color:var(--text);min-width:40px;text-align:center;">1&#215;</span>
                   <span style="font-size:11px;color:var(--muted);">1&#215;&#8211;2&#215; · applies to preview and export</span>
+                </div>
+                <div class="thumb-inline-row" id="clip-reframe-row" style="align-items:center;gap:8px;margin-top:8px;">
+                  <span style="font-size:10px;font-weight:700;letter-spacing:0.06em;text-transform:uppercase;color:var(--muted);">Reframe</span>
+                  <input type="range" id="clip-reframe-slider" min="-100" max="100" step="1" value="0" style="width:130px;accent-color:var(--orange);" oninput="setReframeX(this.value)" title="Slide the vertical 9:16 crop left/right so the speaker stays in frame on wide/horizontal talks">
+                  <span id="clip-reframe-readout" style="font-size:12px;font-weight:700;color:var(--text);min-width:56px;text-align:center;">Center</span>
+                  <button type="button" class="btn-ghost btn-sm" onclick="resetReframe()" title="Re-center the crop">Center</button>
+                  <span style="font-size:11px;color:var(--muted);">moves the crop left/right for wide shots (e.g. TheoEd)</span>
                 </div>
                 <p style="font-size:11px;color:var(--muted);margin:6px 0 0;">Burns exactly as shown. <strong>Click a word</strong> to toggle emphasis &#183; <strong>double-click</strong> (or &#9998;) to edit text &#8212; <strong>Enter makes a second line</strong> &#183; <strong>drag</strong> the captions to reposition.</p>
               </div>
@@ -3162,7 +3176,7 @@
   // Must match BACKEND_BUILD in server.py — bumped together whenever the
   // frontend/backend contract changes. A mismatch means the user is running
   // an old backend (launcher not restarted after a deploy).
-  const EXPECTED_BACKEND_BUILD = '2026-07-01-editor';
+  const EXPECTED_BACKEND_BUILD = '2026-07-01-editor2';
 
   if (document.fonts && document.fonts.load) { document.fonts.load("700 64px 'Handmade Sans'").catch(function(){}); }
   let _staleBackendWarned = false;
@@ -4578,9 +4592,14 @@
   function renderCandidates(candidates) {
     seedEditedKeys(candidates);
     candidates.sort(function (a, b) {
-      const ea = _editedClipKeys.has(clipEditKey(a)) ? 1 : 0;
-      const eb = _editedClipKeys.has(clipEditKey(b)) ? 1 : 0;
-      if (ea !== eb) return eb - ea;
+      const ka = clipEditKey(a), kb = clipEditKey(b);
+      const ea = _editedClipKeys.has(ka) ? 1 : 0;
+      const eb = _editedClipKeys.has(kb) ? 1 : 0;
+      if (ea !== eb) return eb - ea;                 // edited clips first
+      if (ea && eb) {                                 // both edited -> most recently edited on top
+        const ta = _editedClipTimes[ka] || 0, tb = _editedClipTimes[kb] || 0;
+        if (ta !== tb) return tb - ta;
+      }
       return (b.hook_score ?? 0) - (a.hook_score ?? 0);
     });
     const section = document.getElementById('candidates-section');
@@ -5247,9 +5266,14 @@
       if (sEnd > sStart) cut += (sEnd - sStart);
     });
     const net = Math.max(0, span - cut);
-    el.textContent = net.toFixed(1) + 's';
-    el.title = cut > 0.05
-      ? ('Clip length after edits (' + span.toFixed(1) + 's selection \u2212 ' + cut.toFixed(1) + 's edited out)')
+    const speed = (typeof getClipSpeed === 'function') ? (getClipSpeed() || 1) : 1;
+    const output = net / speed;
+    el.textContent = output.toFixed(1) + 's';
+    const speedNote = Math.abs(speed - 1) > 0.001 ? (' at ' + speed + '\u00d7 speed') : '';
+    el.title = (cut > 0.05 || speedNote)
+      ? ('Output length' + speedNote + ' (' + span.toFixed(1) + 's selection'
+          + (cut > 0.05 ? ' \u2212 ' + cut.toFixed(1) + 's edited out' : '')
+          + (speedNote ? ' \u00f7 ' + speed + '\u00d7' : '') + ')')
       : 'Clip length';
   }
 
@@ -5268,6 +5292,37 @@
     updateTimelineGradient();
     updateClipTranscriptHighlight();
   });
+
+  // Foolproof point-setting: scrub/pause the video to the spot, then click a
+  // button — no bracket dragging, works even when far from the AI suggestion.
+  // "Reset to suggested" restores the original AI in/out (resetToAISuggestion).
+  function _flashTimeField(id) {
+    const el = document.getElementById(id); if (!el) return;
+    const o = el.style.background; el.style.transition = 'background 140ms';
+    el.style.background = 'var(--orange-tint)';
+    setTimeout(function () { el.style.background = o; }, 320);
+  }
+  function setInToPlayhead() {
+    const v = document.getElementById('edit-video'); if (!v) return;
+    let t = v.currentTime; if (isNaN(t)) return;
+    t = Math.max(0, Math.min(t, editorOutTime - 0.2));
+    if (typeof pushEditorUndo === 'function') pushEditorUndo('set-in');
+    editorInTime = t;
+    updateAllEditorUI();
+    try { autosaveClipEdits(); } catch (_) {}
+    _flashTimeField('in-time-field');
+  }
+  function setOutToPlayhead() {
+    const v = document.getElementById('edit-video'); if (!v) return;
+    let t = v.currentTime; if (isNaN(t)) return;
+    const dur = v.duration || t;
+    t = Math.min(dur, Math.max(editorInTime + 0.2, t));
+    if (typeof pushEditorUndo === 'function') pushEditorUndo('set-out');
+    editorOutTime = t;
+    updateAllEditorUI();
+    try { autosaveClipEdits(); } catch (_) {}
+    _flashTimeField('out-time-field');
+  }
 
   // Bind a video so playback skips cut-out ranges, applies bleeps, and stops
   // exactly at the out-point. Shared by the main Play button and Play-selection.
@@ -8384,6 +8439,7 @@
   }
 
   let _editedClipKeys = new Set();
+  let _editedClipTimes = {};   // clipEditKey -> last edit timestamp (ms) for recency sorting
   function clipEditKey(c) { if (!c) return ''; return c.hook_line ? ('h:' + c.hook_line) : ('t:' + (c.start_time ?? 0) + '-' + (c.end_time ?? 0)); }
   function _entryHasRealEdits(e, cand) {
     if (!e) return false;
@@ -8396,8 +8452,17 @@
   }
   function seedEditedKeys(candidates) {
     _editedClipKeys = new Set();
+    _editedClipTimes = {};
     const ec = (activeProject && activeProject.edited_clips) || [];
-    (candidates || []).forEach(function (c) { const e = ec.find(function (x) { return c.hook_line && x.hook_line === c.hook_line; }); if (_entryHasRealEdits(e, c)) _editedClipKeys.add(clipEditKey(c)); });
+    (candidates || []).forEach(function (c) {
+      const e = ec.find(function (x) { return c.hook_line && x.hook_line === c.hook_line; });
+      if (_entryHasRealEdits(e, c)) {
+        const k = clipEditKey(c);
+        _editedClipKeys.add(k);
+        const ts = e && e.updated_at ? Date.parse(e.updated_at) : 0;
+        _editedClipTimes[k] = isNaN(ts) ? 0 : ts;
+      }
+    });
   }
   function currentEditHasRealEdits() {
     return !!(editorCutRanges.length || editorBleepRanges.length || Math.abs(editorInTime - origInTime) > 0.05 || Math.abs(editorOutTime - origOutTime) > 0.05 ||
@@ -11216,6 +11281,7 @@
     outline_on: true,          // letter outline (burns + preview)
     outline_width: 3,          // 0-10 thickness level
     letter_spacing: 2,         // 0-20 (% of font size)
+    reframe_x: 0,              // -1..1 horizontal shift of the 9:16 crop (wide/TheoEd talks)
     emphasis_color_on: true,   // emphasis options — any combination
     emphasis_larger: false,
     emphasis_pulse: false,
@@ -11577,10 +11643,43 @@
     if (sl) sl.value = cur;
     const ro = document.getElementById('clip-speed-readout');
     if (ro) ro.textContent = (Math.round(cur * 100) / 100) + '\u00d7';
+    syncReframe();
   }
   function applyPreviewSpeed() {
     const vid = document.getElementById('edit-video');
     if (vid) { try { vid.playbackRate = getClipSpeed(); } catch (_) {} }
+    applyReframePreview();
+  }
+  // Horizontal reframe: slide the 9:16 crop left/right so a speaker in a wide
+  // (TheoEd) shot isn't cut off. Preview via object-position; burned on export.
+  function getReframeX() {
+    return Math.max(-1, Math.min(1, (editorCaptionStyle.reframe_x) || 0));
+  }
+  function setReframeX(sliderVal) {
+    const r = Math.max(-1, Math.min(1, (parseFloat(sliderVal) || 0) / 100));
+    if (typeof pushEditorUndo === 'function') pushEditorUndo('reframe');
+    editorCaptionStyle.reframe_x = r;
+    applyReframePreview();
+    syncReframe();
+    try { autosaveClipEdits(); } catch (_) {}
+  }
+  function resetReframe() {
+    const sl = document.getElementById('clip-reframe-slider'); if (sl) sl.value = 0;
+    setReframeX(0);
+  }
+  function applyReframePreview() {
+    const vid = document.getElementById('edit-video');
+    if (!vid) return;
+    // object-fit:cover crops the WIDTH on a horizontal source; object-position X
+    // chooses which slice shows. r=-1 -> left edge (0%), +1 -> right edge (100%).
+    const r = getReframeX();
+    vid.style.objectPosition = ((r + 1) / 2 * 100).toFixed(1) + '% 50%';
+  }
+  function syncReframe() {
+    const r = getReframeX();
+    const sl = document.getElementById('clip-reframe-slider'); if (sl) sl.value = Math.round(r * 100);
+    const ro = document.getElementById('clip-reframe-readout');
+    if (ro) ro.textContent = Math.abs(r) < 0.005 ? 'Center' : (r < 0 ? ('Left ' + Math.round(-r * 100) + '%') : ('Right ' + Math.round(r * 100) + '%'));
   }
   function setClipSpeed(v) {
     const s = clampClipSpeed(v);
@@ -11588,6 +11687,7 @@
     editorCaptionStyle.speed = s;
     syncSpeedButtons();
     applyPreviewSpeed();
+    updateClipDuration();   // output length depends on speed
     try { autosaveClipEdits(); } catch (_) {}
   }
   function setCaptionOutline(v) {
@@ -12022,6 +12122,8 @@
     if (_igCap) form.append('ig_caption', _igCap);
     // Clip speed (1 / 1.5 / 2x) — burned into the exported video while toggled.
     form.append('speed', String(getClipSpeed()));
+    // Horizontal reframe of the 9:16 crop (wide/TheoEd talks). 0 = centered.
+    if (Math.abs(getReframeX()) > 0.001) form.append('reframe_x', String(getReframeX()));
     if (_editorSplitScreen) {
       form.append('split_screen', '1');
       const _sv = document.getElementById('edit-video');

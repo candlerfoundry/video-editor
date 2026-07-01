@@ -62,7 +62,7 @@ CORS(app)
 
 # Bump this whenever the frontend/backend contract changes (the frontend
 # carries a matching EXPECTED_BACKEND_BUILD and warns when they differ).
-BACKEND_BUILD = "2026-07-01-editor"
+BACKEND_BUILD = "2026-07-01-editor2"
 
 CREATE_NO_WINDOW = 0x08000000 if platform.system() == 'Windows' else 0
 
@@ -2907,6 +2907,14 @@ def export_clip():
         speed = max(1.0, min(2.0, round(speed, 2)))  # clip-speed slider: continuous 1.0-2.0 (atempo valid range; >2.0 would need 2-stage)
         split_screen    = request.form.get("split_screen", "").strip() in {"1", "true", "yes"}
         split_swap      = request.form.get("split_swap",   "").strip() in {"1", "true", "yes"}
+        # Horizontal reframe of the single 9:16 crop (-1..1; 0 = centered). Lets a
+        # speaker in a wide/horizontal talk (TheoEd) stay in frame instead of being
+        # centre-cropped out. Ignored when split_screen is on (that has its own framing).
+        try:
+            reframe_x = float(request.form.get("reframe_x", "0") or 0)
+        except (ValueError, TypeError):
+            reframe_x = 0.0
+        reframe_x = max(-1.0, min(1.0, reframe_x))
         # Manual per-cell crop regions (fractions of the SOURCE frame): {x,y,w,h} in 0..1.
         # When present they override the auto left/right framing; w/h carry the 9:8 cell aspect.
         split_top = split_bot = None
@@ -2919,6 +2927,15 @@ def export_clip():
             logger.warning("[export] bad split crop regions, using auto: %s", _e)
         if split_screen:
             logger.info("[export] Split-screen vertical 2-up (swap=%s, manual=%s)", split_swap, bool(split_top and split_bot))
+        # The standard (non-split) 9:16 crop, with optional horizontal reframe. The
+        # x expression is clamped to keep the crop window inside the source frame.
+        if abs(reframe_x) < 0.001:
+            single_crop = "crop=ih*9/16:ih"
+        else:
+            # x = centre + reframe_x*half-range, clamped to [0, iw-out_w]; commas
+            # escaped for the ffmpeg filter parser.
+            single_crop = ("crop=ih*9/16:ih:max(0\\,min(iw-ih*9/16\\,(iw-ih*9/16)/2*(1+%.4f))):0" % reframe_x)
+            logger.info("[export] Reframe x=%.3f", reframe_x)
     except (ValueError, TypeError) as e:
         return jsonify({"error": f"Invalid parameters: {e}"}), 400
 
@@ -2988,7 +3005,7 @@ def export_clip():
             # in_label is the source video pad, e.g. "[0:v]" or "[vcat]". Returns a
             # filter_complex segment ending in [vout], with captions + speed appended.
             if not split_screen:
-                return f"{in_label}crop=ih*9/16:ih,scale=1080:1920{caption_filter}{speed_v_suffix}[vout]"
+                return f"{in_label}{single_crop},scale=1080:1920{caption_filter}{speed_v_suffix}[vout]"
             # Vertical split-screen: two side-by-side people stacked into 9:16. Each cell
             # is 1080x960 (9:8); crop a 9:8 region at full height anchored to each edge
             # (left side -> top cell, right side -> bottom; swap flips them).
@@ -3114,7 +3131,7 @@ def export_clip():
                     pass2_cmd += ["-filter_complex", _reframe("[0:v]"),
                                   "-map", "[vout]", "-map", "0:a?"]
                 else:
-                    pass2_cmd += ["-vf", f"crop=ih*9/16:ih,scale=1080:1920{caption_filter}{speed_v_suffix}"]
+                    pass2_cmd += ["-vf", f"{single_crop},scale=1080:1920{caption_filter}{speed_v_suffix}"]
                 if speed != 1.0:
                     pass2_cmd += ["-af", f"atempo={speed:.4f},alimiter=limit=0.97"]
                 pass2_cmd += ["-c:v", "libx264", "-crf", "18", "-preset", "veryfast",

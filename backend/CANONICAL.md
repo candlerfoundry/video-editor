@@ -2579,3 +2579,24 @@ so the thumbnail gallery's own open-in-thumbnails path is unaffected.)
 Note: the big green box on the standalone Thumbnails tab is the #thumb-drop upload drop-zone; clicking
 it opens the OS file picker (lands in Dropbox) to choose a source video — working as designed, just
 easy to mistake for a link to the loaded video. Left as-is.
+
+## 2026-07-01 — Clip editor round 2 (build `2026-07-01-editor2`)
+Five items from Emily. Handshake bumped (new /export_clip form field `reframe_x`).
+- SET START/END FROM PLAYHEAD (#1): the numeric Start/End fields already existed; added
+  "⇤ Start here" / "End here ⇥" buttons (setInToPlayhead/setOutToPlayhead) that set the
+  in/out point to the current video position — foolproof for points far from the AI suggestion,
+  no bracket dragging. "Reset to suggested" already restores origInTime/origOutTime (+ clears cuts).
+- DURATION ADJUSTS FOR SPEED (#2): updateClipDuration divides the net (out-in minus cuts) by
+  getClipSpeed(); title shows the speed. Recomputed on setClipSpeed.
+- RECENCY ORDERING (#4): renderCandidates now sorts edited clips first, then by LAST-EDIT time
+  (edited_clips[].updated_at, captured in seedEditedKeys -> _editedClipTimes), then hook_score.
+- HORIZONTAL REFRAME (#3): TheoEd/wide talks were centre-cropped, cutting the speaker out. New
+  "Reframe" slider (editorCaptionStyle.reframe_x, -1..1) slides the single 9:16 crop left/right;
+  preview via #edit-video object-position, burned on export. Backend builds a clamped crop x
+  expression `crop=ih*9/16:ih:max(0\,min(iw-ih*9/16\,(iw-ih*9/16)/2*(1+r))):0` used in BOTH the
+  _reframe (filter_complex) path and the -vf single-seg path; split-screen ignores it (own framing).
+  Verified with ffmpeg that the filter parses and outputs 1080x1920. reframe_x rides in
+  caption_style so it persists/restores per clip; syncReframe/applyReframePreview hook into
+  syncSpeedButtons/applyPreviewSpeed. NOTE: this is a manual reframe (no auto face detection);
+  auto speaker-centering would need a vision pass like /detect_speakers.
+Deploy: push (Netlify) + redeploy server.py + rebuild zip + restart launcher + hard-refresh.
