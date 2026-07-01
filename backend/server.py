@@ -62,7 +62,7 @@ CORS(app)
 
 # Bump this whenever the frontend/backend contract changes (the frontend
 # carries a matching EXPECTED_BACKEND_BUILD and warns when they differ).
-BACKEND_BUILD = "2026-06-30-coveraudio2"
+BACKEND_BUILD = "2026-06-30-coveraudio3"
 
 CREATE_NO_WINDOW = 0x08000000 if platform.system() == 'Windows' else 0
 
@@ -2781,24 +2781,25 @@ def _burn_cover_frame(thumb_local_path, src_video_path, out_path):
     the 0.1s lead-silence at that SAME rate, and concat without any sample-rate
     conversion -- so the audio passes through untouched apart from one
     same-rate AAC re-encode at a high bitrate."""
-    ffprobe_exe = 'ffprobe'
-    if FFMPEG_EXE and FFMPEG_EXE != 'ffmpeg':
-        _d, _b = os.path.split(FFMPEG_EXE)
-        _pb = _b.replace('ffmpeg', 'ffprobe')
-        ffprobe_exe = os.path.join(_d, _pb) if _d else _pb
-    clip_ar = '48000'
+    # Detect the clip's native audio sample rate using ffmpeg itself. This
+    # machine's ffmpeg ships WITHOUT ffprobe.exe, so the old probe silently
+    # fell back to 48000 and resampled every clip. Keeping native rate avoids
+    # a 44.1->48 kHz resample, which on this ffmpeg smears the tiny join
+    # discontinuities of a stitched (cut) clip into audible fuzz.
+    clip_ar = None
     try:
         _pr = subprocess.run(
-            [ffprobe_exe, '-v', 'error', '-select_streams', 'a:0',
-             '-show_entries', 'stream=sample_rate',
-             '-of', 'default=nw=1:nk=1', src_video_path],
+            [FFMPEG_EXE, '-hide_banner', '-i', src_video_path],
             capture_output=True, creationflags=CREATE_NO_WINDOW,
         )
-        _lines = _pr.stdout.decode('utf-8', errors='replace').strip().splitlines()
-        if _lines and _lines[0].isdigit() and int(_lines[0]) > 0:
-            clip_ar = _lines[0]
+        _err = _pr.stderr.decode('utf-8', errors='replace')
+        _m = re.search(r'([0-9]+) Hz', _err)
+        if _m:
+            clip_ar = _m.group(1)
     except Exception:
         pass
+    if not clip_ar:
+        clip_ar = '48000'
     return subprocess.run(
         [FFMPEG_EXE, "-y",
          "-loop", "1", "-framerate", "30", "-t", "0.10", "-i", thumb_local_path,
