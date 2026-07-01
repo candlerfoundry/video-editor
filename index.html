@@ -9271,7 +9271,7 @@
       if (!wrap || !wrap.contains(e.target)) return;
       // The hand tool or Shift+drag pans from ANYWHERE on the canvas (even
       // over text/elements); a plain drag pans only from empty areas.
-      if (!_dlgPanTool && !e.shiftKey && e.target.closest('.dlg-overlay-text, .dlg-logo-overlay, .dlg-design-elem-overlay, .dlg-resize-handle')) return;
+      if (!_dlgPanTool && !e.shiftKey) return;   // pan only via hand tool or Shift; never hijack a plain drag
       if (!_sharedThumbnailDraft) return;
       if (e.shiftKey) { e.stopPropagation(); }
       pushDlgUndo('pan');
@@ -10329,7 +10329,7 @@
       // overflow:visible is set by CSS class .dlg-overlay-text; inline hidden clips resize handles
       div.style.whiteSpace = 'pre-wrap';   // preserve explicit line breaks the user typed
       div.style.wordBreak  = 'break-word';
-      div.style.zIndex     = isSelected ? '20' : '1';
+      div.style.zIndex     = isSelected ? '1000' : String(10 + index);
       div.style.fontFamily = thumbSafeFont(box.font_family) + ', sans-serif';
       div.style.fontSize   = (fit / Math.max(scaleX, scaleY)) + 'px';
       div.style.letterSpacing = ((box.letter_spacing || 0) / Math.max(scaleX, scaleY)) + 'px';
@@ -10370,11 +10370,12 @@
     // ── Graphic Elements (shapes + brand images) ──
     var _elems = (_sharedThumbnailDraft.graphic_elements || []).filter(function(e) { return e.type === 'shape' || e.type === 'image'; });
     var _sx = scaleX, _sy = scaleY;
-    _elems.forEach(function(elem) {
+    _elems.forEach(function(elem, _ei) {
       var isElemSel = elem.id === _dlgSelectedElemId;
       var wrap = document.createElement('div');
       wrap.className = 'dlg-design-elem-overlay' + (isElemSel ? ' selected' : '');
       wrap.dataset.elemId = elem.id;
+      wrap.style.zIndex = isElemSel ? '1000' : String(10 + _ei);
       wrap.style.position = 'absolute';
       wrap.style.overflow = 'visible';
       var dw = Math.round((elem.width  || 100) / _sx);
@@ -10395,11 +10396,6 @@
         wrap.innerHTML = shapeOverlaySvg(elem);
       }
       if (isElemSel) _addResizeHandles(wrap, ALL_HANDLES);
-      wrap.addEventListener('mousedown', function(ev) {
-        if (ev.target.classList.contains('dlg-resize-handle')) return;
-        dlgSelectDesignElement(elem.id);
-        renderDesignElementList();
-      });
       layer.appendChild(wrap);
     });
   }
@@ -10456,6 +10452,36 @@
     }
     textEl.addEventListener('input', onInput);
     textEl.addEventListener('blur', onBlur);
+  }
+
+  // Live-update ONLY the element being dragged (no full overlay rebuild mid-drag).
+  function _dlgLiveDragNode(d) {
+    var layer = document.getElementById('dlg-overlay-layer');
+    if (!layer || !d) return;
+    var sc = getThumbCanvasScale('dlg-canvas', 'dlg-canvas-wrap');
+    var scaleX = sc.scaleX, scaleY = sc.scaleY, mx = Math.max(scaleX, scaleY);
+    if (d.type === 'text' || d.type === 'resize-text') {
+      var box = (d.type === 'resize-text')
+        ? ((_sharedThumbnailDraft && _sharedThumbnailDraft.text_boxes || []).find(function(b){ return b.id === d.boxId; }))
+        : getActiveThumbnailTextBox();
+      if (!box) return;
+      var tn = layer.querySelector('.dlg-overlay-text[data-box-id="' + box.id + '"]');
+      if (!tn) return;
+      tn.style.left   = (box.x / scaleX) + 'px';
+      tn.style.top    = (box.y / scaleY) + 'px';
+      tn.style.width  = (box.width  / scaleX) + 'px';
+      tn.style.height = (box.height / scaleY) + 'px';
+      tn.style.fontSize = ((box.font_size || 64) / mx) + 'px';
+    } else if (d.type === 'elem' || d.type === 'resize-elem') {
+      var el = (_sharedThumbnailDraft && _sharedThumbnailDraft.graphic_elements || []).find(function(x){ return x.id === d.elemId; });
+      if (!el) return;
+      var en = layer.querySelector('.dlg-design-elem-overlay[data-elem-id="' + el.id + '"]');
+      if (!en) return;
+      en.style.left   = Math.round(el.x / scaleX) + 'px';
+      en.style.top    = Math.round(el.y / scaleY) + 'px';
+      en.style.width  = Math.round((el.width  || 100) / scaleX) + 'px';
+      en.style.height = Math.round((el.height || 100) / scaleY) + 'px';
+    }
   }
 
   // Drag / Resize / Inline-edit for dialog overlay elements
@@ -10602,8 +10628,7 @@
         _dlgCanvasTX = box.x; _dlgCanvasTY = box.y;  // keep move-state in sync
         const ss = document.getElementById('dlg-size-slider'); if (ss) ss.value = _dlgFontSize;
         const sv = document.getElementById('dlg-size-val'); if (sv) sv.textContent = _dlgFontSize;
-        syncDraftFromDialogState();
-        renderDialogOverlayLayer();
+        _dlgLiveDragNode(dragging);
         return;
       }
 
@@ -10637,8 +10662,7 @@
         found.height = Math.round(newH);
         found.x = Math.round(hdx < 0 ? dragging.origX + (dragging.origW - newW) : dragging.origX);
         found.y = Math.round(hdy < 0 ? dragging.origY + (dragging.origH - newH) : dragging.origY);
-        syncDraftFromDialogState();
-        renderDialogOverlayLayer();
+        _dlgLiveDragNode(dragging);
         return;
       }
 
@@ -10659,6 +10683,8 @@
         _dlgCanvasTX = nx; _dlgCanvasTY = ny;
         box.x = _dlgCanvasTX;
         box.y = _dlgCanvasTY;
+        _dlgLiveDragNode(dragging);
+        return;
       } else if (dragging.type === 'logo' && _sharedThumbnailDraft?.logo) {
         const W = canvas?.width || 1080, H = canvas?.height || 1350;
         let lx = Math.max(50, Math.min(W - 50, dragging.origX + dx * scaleX));
@@ -10677,8 +10703,7 @@
         if (!found2) return;
         found2.x = Math.round(dragging.origX + dx * scaleX);
         found2.y = Math.round(dragging.origY + dy * scaleY);
-        syncDraftFromDialogState();
-        renderDialogOverlayLayer();
+        _dlgLiveDragNode(dragging);
         return;
       }
       syncDraftFromDialogState();
@@ -10695,6 +10720,9 @@
             selectTextBoxData(ids[(ci + 1) % ids.length]);
           }
           if (dragging.type === 'text' || dragging.type === 'elem' || dragging.type === 'logo') renderDialogOverlayLayer();
+        } else {
+          syncDraftFromDialogState();
+          renderDialogOverlayLayer();
         }
       }
       dragging = null;
