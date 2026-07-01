@@ -2418,3 +2418,32 @@ The `coveraudio` insertion placed `def _burn_cover_frame(...)` BETWEEN `@app.rou
 
 ## 2026-06-30 — `coveraudio3`: cover-burn rate probe must not depend on ffprobe.exe
 This machine's ffmpeg (Dropbox\Scripts\FFMPEG\ffmpeg.exe) ships WITHOUT ffprobe.exe. The coveraudio2 helper derived ffprobe from FFMPEG_EXE, the probe raised FileNotFoundError, and clip_ar silently defaulted to 48000 — so the cover burn resampled EVERY clip 44.1->48 kHz regardless. Single-clip audio resamples cleanly; but a STITCHED (cut) clip's audio has tiny join discontinuities that this ffmpeg's resampler smears into audible fuzz (clean until the first concat join, then fuzz — the join lands in the OUTPUT timeline, not where the user cut in the source). Confirmed by A/B: same clip exported with cuts = fuzz, without cuts = clean. Fix: detect the clip's audio rate by parsing `ffmpeg -hide_banner -i <clip>` stderr for `<n> Hz` (no ffprobe needed); keep native rate through the cover concat so nothing is resampled. If the cut clip is still fuzzy after this, the stitched pass2 audio (atrim+asetpts+concat) itself needs reworking (extract each kept segment like the single-clip path + concat demuxer).
+
+## ★ AUDIO FUZZ / STATIC ON EXPORTS — CONSOLIDATED REFERENCE (read this first if it recurs)
+Hard-won over a long session (builds coveraudio → coveraudio2 → coveraudio3). If exported clips fuzz again, start HERE instead of from scratch.
+
+### Final understanding (what it actually was)
+Two independent things had to line up:
+1. **This machine's ffmpeg has NO `ffprobe.exe`** (only `ffmpeg.exe` at `Dropbox\Scripts\FFMPEG\`). Any code that shells out to ffprobe silently fails and hits its fallback. The cover-burn rate probe fell back to 48000 and therefore **resampled 44.1→48 kHz on every clip**.
+2. **The clip's SOURCE is 44.1 kHz** (Abby / Unstuck). TheoEd/Jacqui sources are already 48 kHz, so they never resampled → never fuzzed. That's why it looked "Abby-specific" but wasn't about her audio (her source is clean).
+The resample itself is clean on a CONTINUOUS single-clip audio track. But on a **STITCHED (cut) clip** — audio built with `atrim + asetpts=PTS-STARTPTS + concat` — the join has tiny sample discontinuities, and THIS ffmpeg's resampler smears them into continuous fuzz for the rest of the segment. Result: clip is clean until the first concat join (which lands in the OUTPUT timeline, NOT where the user cut in the source — that's why "fuzz at 0:50" didn't match "I cut at a different spot"), then fuzz.
+
+### How it was proven (the only reliable method)
+The fuzz is **specific to the user's ffmpeg build and cannot be reproduced in the sandbox** (sandbox ffmpeg resamples cleanly). Spectrograms / RMS / adeclick / null tests ALL failed to show an objective marker — do NOT keep trying to visually detect it; that wasted hours. The instrument that works is **the user's ears in single-variable A/B exports**:
+- Same clip WITH cuts = fuzz; WITHOUT cuts = clean  → isolates the stitched path.
+- With vs without thumbnail (cover burn) → isolates the resample step.
+Change ONE variable per test, let the user listen.
+
+### The fix (coveraudio3)
+`_burn_cover_frame()` now detects the clip's native audio rate by parsing `ffmpeg -hide_banner -i <clip>` stderr for `<n> Hz` (NO ffprobe dependency), and keeps that native rate through the cover concat (`aformat=sample_rates=<native>` on both segments + `anullsrc=r=<native>`), so nothing is resampled. Verified: a 44.1 kHz clip now exports 44.1 kHz. User confirmed cut + sped + thumbnail clip is clean.
+
+### Red herrings (do NOT re-chase these)
+- NOT the atempo/speed path (alimiter, fps=30) — those were real A/V-sync fixes but not this fuzz.
+- NOT the AAC double-encode, not aliasing, not a channel imbalance (the ~6 dB L/R imbalance is inherent to the source).
+- NOT "Dropbox/Instagram transcoding" — confirmed the fuzz is baked into the file (plays fuzzy in local QuickTime).
+- NOT Abby's source audio (it's clean).
+
+### If it recurs / remaining hardening
+- If a cut clip is STILL fuzzy even at native rate, the artifact is in the stitched pass2 itself. Planned fix: build each kept segment the same clean way as the single-clip path (input-seek re-encode per segment) and join with the concat DEMUXER (stream copy), instead of one `atrim+asetpts+concat` filtergraph.
+- Consider shipping `ffprobe.exe` alongside `ffmpeg.exe`, OR keep all rate detection ffmpeg-only (as coveraudio3 does) so nothing silently falls back to a resample.
+- The bleep/censor path builds a `sine=...:sample_rate=48000` tone and amix — if a 44.1 kHz clip is bleeped, that tone forces a resample too. If bleeped 44.1k clips fuzz, make the tone `sample_rate` match the detected source rate.
