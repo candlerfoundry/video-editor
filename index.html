@@ -1923,15 +1923,15 @@
     #dlg-canvas { display: block; width: 100%; height: 100%; }
     /* 3:4 Instagram-grid safe area drawn over the 9:16 composer canvas (#3). */
     .dlg-grid-safe {
-      position: absolute; left: 0; right: 0; top: 12.5%; height: 75%;
-      border: 2px dashed rgba(255,255,255,0.9);
+      position: absolute; left: 0; right: 0; top: 0; height: 75%;
+      border: 2px dashed rgba(255,255,255,0.9); border-top: none;
       box-sizing: border-box; pointer-events: none; z-index: 40;
       filter: drop-shadow(0 0 1.5px rgba(0,0,0,0.85));
-      border-radius: 2px;
+      border-radius: 0 0 2px 2px;
     }
     .dlg-grid-safe.hidden { display: none; }
     .dlg-grid-safe .dlg-grid-safe-label {
-      position: absolute; top: -2px; left: 4px; transform: translateY(-100%);
+      position: absolute; bottom: 2px; left: 4px;
       font-size: 10px; font-weight: 700; letter-spacing: 0.04em;
       color: #fff; background: rgba(0,0,0,0.6); padding: 1px 6px; border-radius: 4px;
       filter: none;
@@ -2136,8 +2136,12 @@
       padding: 6px 8px; border-radius: 7px; font-size: 12px; cursor: pointer;
       border: 1px solid transparent; transition: background 120ms, border-color 120ms;
     }
+    .dlg-layer-row { cursor: grab; }
+    .dlg-layer-row:active { cursor: grabbing; }
     .dlg-layer-row:hover { background: rgba(0,0,0,0.04); }
     .dlg-layer-row.selected { background: var(--orange-tint, rgba(200,72,38,0.10)); border-color: var(--orange, #C84826); }
+    .dlg-layer-row.drag-over { border-color: var(--orange, #C84826); background: rgba(200,72,38,0.16); box-shadow: 0 -2px 0 var(--orange, #C84826) inset; }
+    .dlg-layer-grip { flex: 0 0 auto; color: var(--muted); font-size: 12px; opacity: 0.55; cursor: grab; user-select: none; }
     .dlg-layer-ico {
       flex: 0 0 22px; width: 22px; height: 22px; display: flex; align-items: center; justify-content: center;
       border-radius: 5px; background: rgba(0,0,0,0.06); font-weight: 700; font-size: 12px; color: var(--ink, #1E2530);
@@ -10471,6 +10475,47 @@
     renderLayerPanel();
     renderDesignElementList();
   }
+  // Drag-and-drop reordering of the Layers panel (works alongside the arrows).
+  let _layerDrag = null;
+  function thumbLayerDragStart(e, kind, id) {
+    _layerDrag = { kind: kind, id: id };
+    try { e.dataTransfer.effectAllowed = 'move'; e.dataTransfer.setData('text/plain', id); } catch (_) {}
+  }
+  function thumbLayerDragOver(e) {
+    e.preventDefault();
+    try { e.dataTransfer.dropEffect = 'move'; } catch (_) {}
+    const row = e.currentTarget; if (row) row.classList.add('drag-over');
+  }
+  function thumbLayerDragLeave(e) {
+    const row = e.currentTarget; if (row) row.classList.remove('drag-over');
+  }
+  function thumbLayerDrop(e, kind, id) {
+    e.preventDefault();
+    const row = e.currentTarget; if (row) row.classList.remove('drag-over');
+    if (!_layerDrag) return;
+    if (!(_layerDrag.kind === kind && _layerDrag.id === id)) {
+      thumbLayerReorderTo(_layerDrag.kind, _layerDrag.id, kind, id);
+    }
+    _layerDrag = null;
+  }
+  // Move the dragged item into the target's stacking slot (drops in FRONT of it).
+  function thumbLayerReorderTo(dk, did, tk, tid) {
+    const front = thumbLayerStack().slice().reverse(); // front-first
+    const di = front.findIndex(function (it) { return it.kind === dk && it.id === did; });
+    if (di < 0) return;
+    const dragged = front.splice(di, 1)[0];
+    let ti = front.findIndex(function (it) { return it.kind === tk && it.id === tid; });
+    if (ti < 0) ti = front.length;
+    front.splice(ti, 0, dragged);
+    if (typeof pushDlgUndo === 'function') pushDlgUndo('layer-dnd');
+    const n = front.length;
+    front.forEach(function (it, i) { it.ref.z = (n - i) * 10; }); // front-first -> highest z first
+    syncDraftFromDialogState();
+    renderDialogOverlayLayer();
+    renderLayerPanel();
+    renderDesignElementList();
+  }
+
   // Select any layer (text / element / logo) from the unified panel.
   function thumbLayerSelect(kind, id) {
     if (!_sharedThumbnailDraft) return;
@@ -10493,16 +10538,27 @@
     if (!el || !_sharedThumbnailDraft) return;
     const stack = thumbLayerStack().slice().reverse(); // front-first
     if (!stack.length) { el.innerHTML = '<div class="dlg-layer-empty">Nothing on the canvas yet. Add text or an element.</div>'; return; }
+    // Disambiguate repeated labels (e.g. two "Highlights & Boxes") by numbering
+    // them so the layer list says which is which.
+    const _labelTotals = {};
+    stack.forEach(function (it) { _labelTotals[it.label] = (_labelTotals[it.label] || 0) + 1; });
+    const _labelSeen = {};
     el.innerHTML = stack.map(function (it, idx) {
+      let _dispLabel = it.label || it.kind;
+      if (_labelTotals[it.label] > 1) { _labelSeen[it.label] = (_labelSeen[it.label] || 0) + 1; _dispLabel = it.label + ' ' + _labelSeen[it.label]; }
       const isSel = (it.kind === 'text' && _sharedThumbnailDraft.selected_text_box_id === it.id)
         || (it.kind === 'elem' && _dlgSelectedElemId === it.id)
         || (it.kind === 'logo' && _dlgLogoSelected);
       const ico = it.kind === 'text' ? 'T' : it.kind === 'logo' ? '◆' : (it.ref.type === 'image' ? '▣' : '◇');
       const isFront = idx === 0, isBack = idx === stack.length - 1;
-      return '<div class="dlg-layer-row' + (isSel ? ' selected' : '') + '" '
-        + 'onclick="thumbLayerSelect(\'' + it.kind + '\',\'' + escHtml(it.id) + '\')">'
+      return '<div class="dlg-layer-row' + (isSel ? ' selected' : '') + '" draggable="true"'
+        + ' ondragstart="thumbLayerDragStart(event,\'' + it.kind + '\',\'' + escHtml(it.id) + '\')"'
+        + ' ondragover="thumbLayerDragOver(event)" ondragleave="thumbLayerDragLeave(event)"'
+        + ' ondrop="thumbLayerDrop(event,\'' + it.kind + '\',\'' + escHtml(it.id) + '\')"'
+        + ' onclick="thumbLayerSelect(\'' + it.kind + '\',\'' + escHtml(it.id) + '\')">'
+        + '<span class="dlg-layer-grip" title="Drag to reorder">\u2630</span>'
         + '<span class="dlg-layer-ico">' + ico + '</span>'
-        + '<span class="dlg-layer-label">' + escHtml(it.label || it.kind) + '</span>'
+        + '<span class="dlg-layer-label">' + escHtml(_dispLabel) + '</span>'
         + '<span class="dlg-layer-btns">'
         + '<button class="btn-ghost btn-sm" type="button" title="Bring forward"' + (isFront ? ' disabled' : '')
         + ' onclick="event.stopPropagation();thumbLayerMove(\'' + it.kind + '\',\'' + escHtml(it.id) + '\',\'forward\')">&#9650;</button>'
@@ -10512,6 +10568,32 @@
     }).join('');
   }
 
+  // Keep every draft item within the canvas so its handles stay grabbable.
+  // Sizes are capped to the canvas; centers/top-lefts are pulled back on-frame.
+  function _clampDraftItemsToCanvas() {
+    const d = _sharedThumbnailDraft; if (!d) return;
+    const cfg = getThumbTargetConfig(_dlgTargetFormat || 'instagram');
+    const W = cfg.width, H = cfg.height;
+    const clampNum = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
+    (d.text_boxes || []).forEach(function (b) {
+      if (b.width  != null) b.width  = Math.min(b.width,  W);
+      if (b.height != null) b.height = Math.min(b.height, H);
+      const w = b.width || 0, h = b.height || 0;                 // text boxes are centre-anchored
+      if (b.x != null && w) b.x = clampNum(b.x, w / 2, Math.max(w / 2, W - w / 2));
+      if (b.y != null && h) b.y = clampNum(b.y, h / 2, Math.max(h / 2, H - h / 2));
+    });
+    (d.graphic_elements || []).forEach(function (e) {
+      if (e.width  != null) e.width  = Math.min(e.width,  W);
+      if (e.height != null) e.height = Math.min(e.height, H);
+      const w = e.width || 0, h = e.height || 0;                 // elements are top-left-anchored
+      if (e.x != null) e.x = clampNum(e.x, 0, Math.max(0, W - w));
+      if (e.y != null) e.y = clampNum(e.y, 0, Math.max(0, H - h));
+    });
+    if (d.logo && d.logo.enabled && d.logo.width != null) {
+      d.logo.width = Math.min(d.logo.width, W);
+    }
+  }
+
   function renderDialogOverlayLayer() {
     // Don't re-render while inline-editing (would destroy the editing div)
     if (_dlgEditingTextId) return;
@@ -10519,6 +10601,10 @@
     if (!layer || !_sharedThumbnailDraft) return;
     layer.innerHTML = '';
     normalizeThumbLayerZ();
+    // Self-heal items whose stored size/position runs past the canvas — anything
+    // outside the 9:16 frame never appears in the export anyway, and off-canvas
+    // boxes put the drag/resize handles out of reach (Emily's "enormous boxes").
+    _clampDraftItemsToCanvas();
     const { scaleX, scaleY } = getThumbCanvasScale('dlg-canvas', 'dlg-canvas-wrap');
     const CORNER_HANDLES = ['nw','ne','sw','se'];
     const ALL_HANDLES    = ['nw','n','ne','e','se','s','sw','w'];
@@ -12341,7 +12427,7 @@
               <input type="checkbox" id="dlg-grid-guide-toggle" checked onchange="toggleGridGuide(this.checked)" style="width:auto;">
               Show Instagram grid guide
             </label>
-            <div class="thumb-editor-label" style="color:var(--muted);font-weight:400;margin:6px 0 0;">The reel itself is full 9:16. Instagram shows a centered 3:4 crop in the profile grid &mdash; keep key faces and text inside the dashed box.</div>
+            <div class="thumb-editor-label" style="color:var(--muted);font-weight:400;margin:6px 0 0;">The reel itself is full 9:16. Instagram shows a top-anchored 3:4 crop in the profile grid (the bottom gets cut off) &mdash; keep key faces and text inside the dashed box.</div>
           </div>
 
           <!-- Design Elements Bar -->
