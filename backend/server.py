@@ -834,6 +834,7 @@ def normalize_text_box(item, fallback_id='text-1'):
         'line_spacing': item.get('line_spacing') or 1.25,
         'bg_pill': bool(item.get('bg_pill', False)),
         'runs': item.get('runs'),
+        'z': item.get('z'),
     }
 
 
@@ -890,6 +891,8 @@ def normalize_thumbnail_draft(payload):
             'x': (payload.get('logo') or {}).get('x'),
             'y': (payload.get('logo') or {}).get('y'),
             'width': (payload.get('logo') or {}).get('width'),
+            'opacity': (payload.get('logo') or {}).get('opacity'),
+            'z': (payload.get('logo') or {}).get('z'),
         },
         'suggested_titles': suggested_titles[:12],
         'ig_caption': (payload.get('ig_caption') or ''),

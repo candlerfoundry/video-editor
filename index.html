@@ -1896,6 +1896,21 @@
     .thumb-prev-meta { font-size: 13px; color: var(--text-2); }
     /* Dialog canvas */
     #dlg-canvas { display: block; width: 100%; height: 100%; }
+    /* 3:4 Instagram-grid safe area drawn over the 9:16 composer canvas (#3). */
+    .dlg-grid-safe {
+      position: absolute; left: 0; right: 0; top: 12.5%; height: 75%;
+      border: 2px dashed rgba(255,255,255,0.9);
+      box-sizing: border-box; pointer-events: none; z-index: 40;
+      filter: drop-shadow(0 0 1.5px rgba(0,0,0,0.85));
+      border-radius: 2px;
+    }
+    .dlg-grid-safe.hidden { display: none; }
+    .dlg-grid-safe .dlg-grid-safe-label {
+      position: absolute; top: -2px; left: 4px; transform: translateY(-100%);
+      font-size: 10px; font-weight: 700; letter-spacing: 0.04em;
+      color: #fff; background: rgba(0,0,0,0.6); padding: 1px 6px; border-radius: 4px;
+      filter: none;
+    }
     .thumb-format-group {
       display: flex;
       gap: 8px;
@@ -2089,6 +2104,23 @@
     .design-elem-list-row:hover, .design-elem-list-row.selected {
       background: var(--orange-tint, rgba(200,72,38,0.07));
     }
+    .dlg-layer-list { display: flex; flex-direction: column; gap: 3px; max-height: 260px; overflow-y: auto; }
+    .dlg-layer-empty { font-size: 11px; color: var(--muted); padding: 6px 2px; }
+    .dlg-layer-row {
+      display: flex; align-items: center; gap: 8px;
+      padding: 6px 8px; border-radius: 7px; font-size: 12px; cursor: pointer;
+      border: 1px solid transparent; transition: background 120ms, border-color 120ms;
+    }
+    .dlg-layer-row:hover { background: rgba(0,0,0,0.04); }
+    .dlg-layer-row.selected { background: var(--orange-tint, rgba(200,72,38,0.10)); border-color: var(--orange, #C84826); }
+    .dlg-layer-ico {
+      flex: 0 0 22px; width: 22px; height: 22px; display: flex; align-items: center; justify-content: center;
+      border-radius: 5px; background: rgba(0,0,0,0.06); font-weight: 700; font-size: 12px; color: var(--ink, #1E2530);
+    }
+    .dlg-layer-label { flex: 1 1 auto; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .dlg-layer-btns { flex: 0 0 auto; display: flex; gap: 3px; }
+    .dlg-layer-btns .btn-sm { padding: 1px 7px; font-size: 11px; line-height: 1.4; }
+    .dlg-layer-btns .btn-sm[disabled] { opacity: 0.3; cursor: default; }
     .thumb-editor-input,
     .thumb-editor-textarea,
     .thumb-editor-select {
@@ -7236,50 +7268,65 @@
     // June 11, 2026: no baked style overlay (dark scrim + orange accent line
     // removed at Emily's request). Text legibility comes from each text box's
     // own background/shadow controls.
-    // Draw graphic elements onto exported canvas (shapes + brand images).
-    // The live editor passes omitElements:true — elements render as HTML
-    // overlays there; baking them too created ghost duplicates after moves.
-    for (var _gi = 0; _gi < (options.omitElements ? [] : (draft.graphic_elements || [])).length; _gi++) {
-      var _ge = draft.graphic_elements[_gi];
-      var _rot = (_ge.rotation || 0) * Math.PI / 180;
-      var _fx = _ge.flipH ? -1 : 1, _fy = _ge.flipV ? -1 : 1;
-      var _gcx = (_ge.x || 0) + (_ge.width || 200) / 2, _gcy = (_ge.y || 0) + (_ge.height || 200) / 2;
-      var _xf = (_rot || _fx < 0 || _fy < 0);
-      if (_xf) { ctx.save(); ctx.translate(_gcx, _gcy); if (_rot) ctx.rotate(_rot); if (_fx < 0 || _fy < 0) ctx.scale(_fx, _fy); ctx.translate(-_gcx, -_gcy); }
-      if (_ge.type === 'shape') {
-        drawShapeToCanvas(ctx, _ge);
-      } else if (_ge.type === 'image' && _ge.asset) {
-        try {
-          var _bi = _ge.packEl ? await getPackCanvas(_ge) : await loadBrandImage(_ge.asset);
-          var _niw = _bi.naturalWidth || _bi.width, _nih = _bi.naturalHeight || _bi.height;
-          // object-fit: contain inside the element box (matches the overlay)
-          var _bw = _ge.width || 200, _bh = _ge.height || 200;
-          var _s = Math.min(_bw / _niw, _bh / _nih);
-          var _rw = _niw * _s, _rh = _nih * _s;
-          var _pa2 = ctx.globalAlpha; ctx.globalAlpha = (_ge.opacity ?? 100) / 100;
-          ctx.drawImage(_bi, (_ge.x || 0) + (_bw - _rw) / 2, (_ge.y || 0) + (_bh - _rh) / 2, _rw, _rh);
-          ctx.globalAlpha = _pa2;
-        } catch (_) {}
-      }
-      if (_xf) ctx.restore();
-    }
-    if (!options.omitText) {
-      (draft.text_boxes || []).forEach((box, index) => {
+    // Unified layer order (back → front) — SAME stack the editor overlay uses,
+    // so the exported PNG/burn matches what the user arranged. The live editor
+    // passes omit* flags because it renders these as HTML overlays instead.
+    const _stack = thumbLayerStackFor(draft);
+    for (const _it of _stack) {
+      if (_it.kind === 'elem') {
+        if (options.omitElements) continue;
+        const _ge = _it.ref;
+        const _rot = (_ge.rotation || 0) * Math.PI / 180;
+        const _fx = _ge.flipH ? -1 : 1, _fy = _ge.flipV ? -1 : 1;
+        const _gcx = (_ge.x || 0) + (_ge.width || 200) / 2, _gcy = (_ge.y || 0) + (_ge.height || 200) / 2;
+        const _xf = (_rot || _fx < 0 || _fy < 0);
+        if (_xf) { ctx.save(); ctx.translate(_gcx, _gcy); if (_rot) ctx.rotate(_rot); if (_fx < 0 || _fy < 0) ctx.scale(_fx, _fy); ctx.translate(-_gcx, -_gcy); }
+        if (_ge.type === 'shape') {
+          drawShapeToCanvas(ctx, _ge);
+        } else if (_ge.type === 'image' && _ge.asset) {
+          try {
+            const _bi = _ge.packEl ? await getPackCanvas(_ge) : await loadBrandImage(_ge.asset);
+            const _niw = _bi.naturalWidth || _bi.width, _nih = _bi.naturalHeight || _bi.height;
+            const _bw = _ge.width || 200, _bh = _ge.height || 200;
+            const _pa2 = ctx.globalAlpha; ctx.globalAlpha = (_ge.opacity ?? 100) / 100;
+            if (_ge.crop_fill) {
+              // Free crop: fill the box (cover), clipping overflow — matches the
+              // editor overlay when the element is reshaped non-proportionally.
+              const _s = Math.max(_bw / _niw, _bh / _nih);
+              const _rw = _niw * _s, _rh = _nih * _s;
+              ctx.save();
+              ctx.beginPath(); ctx.rect(_ge.x || 0, _ge.y || 0, _bw, _bh); ctx.clip();
+              ctx.drawImage(_bi, (_ge.x || 0) + (_bw - _rw) / 2, (_ge.y || 0) + (_bh - _rh) / 2, _rw, _rh);
+              ctx.restore();
+            } else {
+              // object-fit: contain inside the element box (matches the overlay)
+              const _s = Math.min(_bw / _niw, _bh / _nih);
+              const _rw = _niw * _s, _rh = _nih * _s;
+              ctx.drawImage(_bi, (_ge.x || 0) + (_bw - _rw) / 2, (_ge.y || 0) + (_bh - _rh) / 2, _rw, _rh);
+            }
+            ctx.globalAlpha = _pa2;
+          } catch (_) {}
+        }
+        if (_xf) ctx.restore();
+      } else if (_it.kind === 'text') {
+        if (options.omitText) continue;
+        const box = _it.ref;
+        const index = (draft.text_boxes || []).indexOf(box);
         const resolved = makeThumbnailTextBox(box?.text || '', {
           ...box,
-          id: box?.id || `text-${index + 1}`,
-          x: box?.x ?? getDefaultThumbTextPosition(draft.style, draft.target_format, index).x,
-          y: box?.y ?? getDefaultThumbTextPosition(draft.style, draft.target_format, index).y,
-          width: box?.width ?? getDefaultThumbTextPosition(draft.style, draft.target_format, index).width,
+          id: box?.id || ('text-' + (index + 1)),
+          x: box?.x ?? getDefaultThumbTextPosition(draft.style, draft.target_format, Math.max(0, index)).x,
+          y: box?.y ?? getDefaultThumbTextPosition(draft.style, draft.target_format, Math.max(0, index)).y,
+          width: box?.width ?? getDefaultThumbTextPosition(draft.style, draft.target_format, Math.max(0, index)).width,
         });
         drawThumbTextBlock(ctx, W, resolved);
-      });
-    }
-    if (!options.omitLogo && draft.logo?.enabled && draft.logo?.asset) {
-      try {
-        draft.logo._img = await loadFoundryLogoImage();
-        drawThumbnailLogo(ctx, draft.logo);
-      } catch (_) {}
+      } else if (_it.kind === 'logo') {
+        if (options.omitLogo) continue;
+        try {
+          draft.logo._img = await loadFoundryLogoImage();
+          drawThumbnailLogo(ctx, draft.logo);
+        } catch (_) {}
+      }
     }
     return true;
   }
@@ -8689,6 +8736,11 @@
     document.body.appendChild(ov);
   }
 
+  function toggleGridGuide(on) {
+    const m = document.getElementById('dlg-grid-safe');
+    if (m) m.classList.toggle('hidden', !on);
+  }
+
   function setDlgTargetFormat(format) {
     const previous = _dlgTargetFormat;
     syncDlgTargetFormat(format);
@@ -8846,6 +8898,7 @@
     dlgDrawCanvas();
     requestAnimationFrame(() => { dlgUpdateText(); fitDlgCanvas(); });
     renderDesignElementList();
+    renderLayerPanel();
     refreshColorTriggers();
   }
 
@@ -9921,12 +9974,9 @@
     syncDraftFromDialogState(); renderDialogOverlayLayer(); renderDesignElementList();
   }
   function dlgMoveElemLayer(id, dir) {
-    const arr = (_sharedThumbnailDraft && _sharedThumbnailDraft.graphic_elements) || [];
-    const i = arr.findIndex(e => e.id === id); if (i < 0) return;
-    const j = dir === 'forward' ? i + 1 : i - 1; if (j < 0 || j >= arr.length) return;
-    pushDlgUndo('elem-layer');
-    const t = arr[i]; arr[i] = arr[j]; arr[j] = t;
-    syncDraftFromDialogState(); renderDialogOverlayLayer(); renderDesignElementList();
+    // Unified ordering: move relative to ALL layers (text + elements + logo),
+    // not just within the graphic_elements array.
+    thumbLayerMove('elem', id, dir === 'forward' ? 'forward' : 'backward');
   }
 
   function setDesignElem2Color(id, color) {
@@ -10011,10 +10061,13 @@
 
   function dlgSelectDesignElement(id) {
     _dlgSelectedElemId = id;
+    _dlgLogoSelected = false;
+    if (_sharedThumbnailDraft) _sharedThumbnailDraft.selected_text_box_id = null;
     document.querySelectorAll('#dlg-overlay-layer .dlg-design-elem-overlay').forEach(function(el) {
       el.classList.toggle('selected', el.dataset.elemId === id);
     });
     renderDesignElementList();
+    renderLayerPanel();
   }
 
   function renderDesignElementList() {
@@ -10054,7 +10107,16 @@
     const selEl = (_sharedThumbnailDraft && _sharedThumbnailDraft.graphic_elements || []).find(e => e.id === _dlgSelectedElemId);
     if (selEl) {
       const op = selEl.opacity ?? 100, rot = selEl.rotation || 0;
-      listEl.innerHTML += '<div class="elem-controls">' +
+      const cropRow = (selEl.type === 'image' && selEl.packEl)
+        ? ('<div class="thumb-editor-label" style="margin:10px 0 2px;display:flex;align-items:center;justify-content:space-between;gap:8px;">' +
+             '<span>Crop to box</span>' +
+             '<label style="display:inline-flex;align-items:center;gap:6px;cursor:pointer;font-weight:400;">' +
+               '<input type="checkbox" ' + (selEl.crop_fill ? 'checked' : '') + ' style="width:auto;" onchange="setDesignElemCrop(\'' + escHtml(selEl.id) + '\', this.checked)"> fill &amp; crop' +
+             '</label>' +
+           '</div>' +
+           '<div class="thumb-editor-label" style="color:var(--muted);font-weight:400;margin:0 0 4px;font-size:10px;">On = fills the box and crops overflow (drag a side handle to trim). Off = shows the whole graphic.</div>')
+        : '';
+      listEl.innerHTML += '<div class="elem-controls">' + cropRow +
         '<div class="thumb-editor-label" style="margin:10px 0 4px;">Opacity <span id="elem-opacity-val">' + op + '</span>%</div>' +
         '<input type="range" min="5" max="100" value="' + op + '" style="width:100%;accent-color:var(--orange);" oninput="setDesignElemOpacity(\'' + escHtml(selEl.id) + '\', this.value)">' +
         '<div class="thumb-editor-label" style="margin:8px 0 4px;">Rotation <span id="elem-rotation-val">' + rot + '\u00b0</span>' +
@@ -10068,6 +10130,7 @@
         '</div>' +
         '</div>';
     }
+    if (typeof renderLayerPanel === 'function') renderLayerPanel();
   }
 
   function setSelectedElemBrandColor(color) {
@@ -10083,6 +10146,16 @@
     found.color = color;
     syncDraftFromDialogState();
     renderDialogOverlayLayer();
+  }
+
+  function setDesignElemCrop(id, on) {
+    var found = (_sharedThumbnailDraft?.graphic_elements || []).find(function(e) { return e.id === id; });
+    if (!found) return;
+    pushDlgUndo('elem-crop-' + id);
+    found.crop_fill = !!on;
+    syncDraftFromDialogState();
+    renderDialogOverlayLayer();
+    renderDesignElementList();
   }
 
   // Push current _dlg* control state into the sidebar inputs (no redraw).
@@ -10140,8 +10213,11 @@
     _refreshTextBoxChips();
   }
   function dlgSelectTextBox(id) {
+    _dlgSelectedElemId = null;
+    _dlgLogoSelected = false;
     selectTextBoxData(id);
     renderDialogOverlayLayer();
+    renderLayerPanel();
   }
 
   function dlgAddTextBox() {
@@ -10285,120 +10361,216 @@
     dlgDrawCanvas();
   }
 
+  // ── Unified layer ordering (text boxes + graphic elements + logo) ──
+  // Every item carries a numeric `z`; higher z = closer to the viewer (front).
+  // One stack drives BOTH the editor overlay and the exported canvas so they
+  // never disagree (the old code kept two separate arrays that tied on z-index
+  // and let DOM order decide, which is how text ended up stuck behind elements).
+  function thumbLayerStackFor(d) {
+    if (!d) return [];
+    const out = [];
+    (d.text_boxes || []).forEach(function (b, i) {
+      out.push({ kind: 'text', id: b.id, ref: b, mig: 2000 + i,
+        label: ((b.text || '').replace(/\s+/g, ' ').trim().slice(0, 26)) || ('Text ' + (i + 1)) });
+    });
+    (d.graphic_elements || []).forEach(function (e, i) {
+      if (e.type !== 'shape' && e.type !== 'image') return;
+      out.push({ kind: 'elem', id: e.id, ref: e, mig: 1000 + i,
+        label: e.type === 'image' ? (e.label || 'Image')
+          : ((typeof SHAPE_LABELS !== 'undefined' && SHAPE_LABELS[e.shape_type]) || e.shape_type || 'Shape') });
+    });
+    if (d.logo && d.logo.enabled && d.logo.asset) {
+      out.push({ kind: 'logo', id: '__logo__', ref: d.logo, mig: 3000, label: 'Foundry Logo' });
+    }
+    out.forEach(function (it) { if (typeof it.ref.z !== 'number') it.ref.z = it.mig; });
+    out.sort(function (a, b) { return (a.ref.z - b.ref.z) || (a.mig - b.mig); });
+    return out; // ascending z = back → front
+  }
+  function thumbLayerStack() { return thumbLayerStackFor(_sharedThumbnailDraft); }
+  // Give every item a clean, gap-spaced z (10,20,30…) preserving current order.
+  function normalizeThumbLayerZ() {
+    const stack = thumbLayerStack();
+    stack.forEach(function (it, i) { it.ref.z = (i + 1) * 10; });
+  }
+  // Move an item forward/back by swapping z with its stack neighbour.
+  function thumbLayerMove(kind, id, dir) {
+    const stack = thumbLayerStack();
+    const i = stack.findIndex(function (it) { return it.kind === kind && it.id === id; });
+    if (i < 0) return;
+    const j = dir === 'forward' ? i + 1 : i - 1;
+    if (j < 0 || j >= stack.length) return;
+    if (typeof pushDlgUndo === 'function') pushDlgUndo('layer');
+    const a = stack[i].ref, b = stack[j].ref;
+    const tz = a.z; a.z = b.z; b.z = tz;
+    syncDraftFromDialogState();
+    renderDialogOverlayLayer();
+    renderLayerPanel();
+    renderDesignElementList();
+  }
+  // Select any layer (text / element / logo) from the unified panel.
+  function thumbLayerSelect(kind, id) {
+    if (!_sharedThumbnailDraft) return;
+    if (kind === 'text') {
+      _dlgSelectedElemId = null; _dlgLogoSelected = false;
+      dlgSelectTextBox(id);
+    } else if (kind === 'elem') {
+      _dlgLogoSelected = false; _sharedThumbnailDraft.selected_text_box_id = null;
+      dlgSelectDesignElement(id);
+    } else if (kind === 'logo') {
+      _dlgSelectedElemId = null; _sharedThumbnailDraft.selected_text_box_id = null;
+      _dlgLogoSelected = true;
+      renderDialogOverlayLayer();
+    }
+    renderLayerPanel();
+  }
+  // Render the single Canva-style Layers list (front layer at the top).
+  function renderLayerPanel() {
+    const el = document.getElementById('dlg-layer-list');
+    if (!el || !_sharedThumbnailDraft) return;
+    const stack = thumbLayerStack().slice().reverse(); // front-first
+    if (!stack.length) { el.innerHTML = '<div class="dlg-layer-empty">Nothing on the canvas yet. Add text or an element.</div>'; return; }
+    el.innerHTML = stack.map(function (it, idx) {
+      const isSel = (it.kind === 'text' && _sharedThumbnailDraft.selected_text_box_id === it.id)
+        || (it.kind === 'elem' && _dlgSelectedElemId === it.id)
+        || (it.kind === 'logo' && _dlgLogoSelected);
+      const ico = it.kind === 'text' ? 'T' : it.kind === 'logo' ? '◆' : (it.ref.type === 'image' ? '▣' : '◇');
+      const isFront = idx === 0, isBack = idx === stack.length - 1;
+      return '<div class="dlg-layer-row' + (isSel ? ' selected' : '') + '" '
+        + 'onclick="thumbLayerSelect(\'' + it.kind + '\',\'' + escHtml(it.id) + '\')">'
+        + '<span class="dlg-layer-ico">' + ico + '</span>'
+        + '<span class="dlg-layer-label">' + escHtml(it.label || it.kind) + '</span>'
+        + '<span class="dlg-layer-btns">'
+        + '<button class="btn-ghost btn-sm" type="button" title="Bring forward"' + (isFront ? ' disabled' : '')
+        + ' onclick="event.stopPropagation();thumbLayerMove(\'' + it.kind + '\',\'' + escHtml(it.id) + '\',\'forward\')">&#9650;</button>'
+        + '<button class="btn-ghost btn-sm" type="button" title="Send back"' + (isBack ? ' disabled' : '')
+        + ' onclick="event.stopPropagation();thumbLayerMove(\'' + it.kind + '\',\'' + escHtml(it.id) + '\',\'backward\')">&#9660;</button>'
+        + '</span></div>';
+    }).join('');
+  }
+
   function renderDialogOverlayLayer() {
     // Don't re-render while inline-editing (would destroy the editing div)
     if (_dlgEditingTextId) return;
     const layer = document.getElementById('dlg-overlay-layer');
     if (!layer || !_sharedThumbnailDraft) return;
     layer.innerHTML = '';
+    normalizeThumbLayerZ();
     const { scaleX, scaleY } = getThumbCanvasScale('dlg-canvas', 'dlg-canvas-wrap');
     const CORNER_HANDLES = ['nw','ne','sw','se'];
     const ALL_HANDLES    = ['nw','n','ne','e','se','s','sw','w'];
+    const _sx = scaleX, _sy = scaleY;
 
-    // ── Text Boxes ──
-    (_sharedThumbnailDraft.text_boxes || []).forEach((box, index) => {
-      const isSelected = _sharedThumbnailDraft.selected_text_box_id === box.id;
-      const div = document.createElement('div');
-      div.className = 'dlg-overlay-text' + (isSelected ? ' selected' : '');
-      div.dataset.boxId = box.id;
-      if (box.runs && box.runs.length) {
-        div.innerHTML = box.runs.map(function(r){ return '<span style="color:' + (r.color || (box.color || '#ffffff')) + '">' + escHtml(r.text).replace(/\n/g, '<br>') + '</span>'; }).join('') || escHtml(box.text || ('Text Box ' + (index + 1)));
-      } else {
-        div.textContent = box.text || `Text Box ${index + 1}`;
+    // ONE unified stack (back → front) drives the overlay z-order. Selection no
+    // longer hijacks z-index (that made a back item jump to the front and
+    // confused ordering); it only adds the dashed outline + resize handles.
+    // Real ordering lives in the Layers panel.
+    thumbLayerStack().forEach(function (it, order) {
+      const zi = 100 + order;
+
+      if (it.kind === 'text') {
+        const box = it.ref;
+        const index = (_sharedThumbnailDraft.text_boxes || []).indexOf(box);
+        const isSelected = _sharedThumbnailDraft.selected_text_box_id === box.id;
+        const div = document.createElement('div');
+        div.className = 'dlg-overlay-text' + (isSelected ? ' selected' : '');
+        div.dataset.boxId = box.id;
+        if (box.runs && box.runs.length) {
+          div.innerHTML = box.runs.map(function(r){ return '<span style="color:' + (r.color || (box.color || '#ffffff')) + '">' + escHtml(r.text).replace(/\n/g, '<br>') + '</span>'; }).join('') || escHtml(box.text || ('Text Box ' + (index + 1)));
+        } else {
+          div.textContent = box.text || ('Text Box ' + (index + 1));
+        }
+        ensureTextBoxDims(box);
+        const dpos = getDefaultThumbTextPosition(_dlgStyle, _dlgTargetFormat, Math.max(0, index));
+        const bx = box.x ?? dpos.x;
+        const by = box.y ?? dpos.y;
+        const bw = box.width  || dpos.width || 400;
+        const bh = box.height || thumbTextBlockHeight(box, box.font_size || 64);
+        const fit = fitFontSizeToBox(box);
+        box.font_size = fit;
+        const pad = thumbBoxPad(box);
+        div.style.left       = (bx / scaleX) + 'px';
+        div.style.top        = (by / scaleY) + 'px';
+        div.style.transform  = 'translate(-50%, -50%)';
+        div.style.width      = (bw / scaleX) + 'px';
+        div.style.height     = (bh / scaleY) + 'px';
+        div.style.boxSizing  = 'border-box';
+        div.style.padding    = (pad.padY / scaleY) + 'px ' + (pad.padX / scaleX) + 'px';
+        div.style.display        = 'flex';
+        div.style.flexDirection  = 'column';
+        div.style.justifyContent = 'center';
+        div.style.alignItems     = box.align === 'left' ? 'flex-start' : box.align === 'right' ? 'flex-end' : 'center';
+        div.style.whiteSpace = 'pre-wrap';
+        div.style.wordBreak  = 'break-word';
+        div.style.zIndex     = String(zi);
+        div.style.fontFamily = thumbSafeFont(box.font_family) + ', sans-serif';
+        div.style.fontSize   = (fit / Math.max(scaleX, scaleY)) + 'px';
+        div.style.letterSpacing = ((box.letter_spacing || 0) / Math.max(scaleX, scaleY)) + 'px';
+        div.style.lineHeight = (box.line_spacing || 1.25);
+        div.style.color      = box.color || '#ffffff';
+        div.style.textAlign  = box.align || 'center';
+        div.style.textShadow = (box.shadow ?? true) ? '2px 2px 8px rgba(0,0,0,0.8)' : 'none';
+        const alpha = (box.background_opacity ?? 0) / 100;
+        const bg = hexToRgb(box.background_color || '#111111');
+        div.style.background = alpha > 0 ? ('rgba(' + bg.r + ',' + bg.g + ',' + bg.b + ',' + alpha + ')') : 'transparent';
+        div.style.borderRadius = (alpha > 0 && box.bg_pill) ? '999px' : (alpha > 0 ? '10px' : '0');
+        if (isSelected) _addResizeHandles(div, ALL_HANDLES);
+        layer.appendChild(div);
+
+      } else if (it.kind === 'logo') {
+        const logo = it.ref;
+        const img  = document.createElement('img');
+        img.src = logo.asset || FOUNDRY_LOGO_ASSET;
+        img.alt = 'Foundry logo';
+        img.style.display  = 'block';
+        img.style.width    = '100%';
+        img.style.height   = 'auto';
+        img.style.opacity  = ((logo.opacity ?? 100) / 100);
+        const wrap = document.createElement('div');
+        wrap.className = 'dlg-logo-overlay' + (_dlgLogoSelected ? ' selected' : '');
+        wrap.dataset.logo  = 'true';
+        wrap.style.left    = (logo.x / scaleX) + 'px';
+        wrap.style.top     = (logo.y / scaleY) + 'px';
+        wrap.style.width   = (logo.width / scaleX) + 'px';
+        wrap.style.transform = 'translate(-50%, -50%)';
+        wrap.style.zIndex  = String(zi);
+        wrap.appendChild(img);
+        if (_dlgLogoSelected) _addResizeHandles(wrap, CORNER_HANDLES);
+        layer.appendChild(wrap);
+
+      } else { // elem (shape or image)
+        const elem = it.ref;
+        const isElemSel = elem.id === _dlgSelectedElemId;
+        const wrap = document.createElement('div');
+        wrap.className = 'dlg-design-elem-overlay' + (isElemSel ? ' selected' : '');
+        wrap.dataset.elemId = elem.id;
+        wrap.style.zIndex = String(zi);
+        wrap.style.position = 'absolute';
+        wrap.style.overflow = 'visible';
+        const dw = Math.round((elem.width  || 100) / _sx);
+        const dh = Math.round((elem.height || 100) / _sy);
+        wrap.style.left   = Math.round(elem.x / _sx) + 'px';
+        wrap.style.top    = Math.round(elem.y / _sy) + 'px';
+        wrap.style.width  = dw + 'px';
+        wrap.style.height = dh + 'px';
+        wrap.style.opacity = ((elem.opacity ?? 100) / 100);
+        let _tf = '';
+        if (elem.rotation) _tf += ' rotate(' + elem.rotation + 'deg)';
+        if (elem.flipH || elem.flipV) _tf += ' scale(' + (elem.flipH ? -1 : 1) + ',' + (elem.flipV ? -1 : 1) + ')';
+        if (_tf) { wrap.style.transform = _tf.trim(); wrap.style.transformOrigin = '50% 50%'; }
+        if (elem.type === 'image') {
+          const _isrc = elem.packEl ? (ensurePackUrl(elem) || elem.preview || elem.asset) : (elem.asset || '');
+          const _fit = elem.crop_fill ? 'cover' : 'contain';
+          wrap.innerHTML = '<img src="' + escHtml(_isrc) + '" alt="" draggable="false" style="width:100%;height:100%;object-fit:' + _fit + ';display:block;pointer-events:none;">';
+        } else {
+          wrap.innerHTML = shapeOverlaySvg(elem);
+        }
+        if (isElemSel) _addResizeHandles(wrap, ALL_HANDLES);
+        layer.appendChild(wrap);
       }
-      ensureTextBoxDims(box);
-      const dpos = getDefaultThumbTextPosition(_dlgStyle, _dlgTargetFormat, index);
-      const bx = box.x ?? dpos.x;
-      const by = box.y ?? dpos.y;
-      const bw = box.width  || dpos.width || 400;
-      const bh = box.height || thumbTextBlockHeight(box, box.font_size || 64);
-      const fit = fitFontSizeToBox(box);
-      box.font_size = fit;                          // keep stored value coherent
-      const pad = thumbBoxPad(box);
-      div.style.left       = (bx / scaleX) + 'px';
-      div.style.top        = (by / scaleY) + 'px';
-      div.style.transform  = 'translate(-50%, -50%)';
-      div.style.width      = (bw / scaleX) + 'px';
-      div.style.height     = (bh / scaleY) + 'px';
-      div.style.boxSizing  = 'border-box';
-      div.style.padding    = (pad.padY / scaleY) + 'px ' + (pad.padX / scaleX) + 'px';
-      div.style.display        = 'flex';
-      div.style.flexDirection  = 'column';
-      div.style.justifyContent = 'center';
-      div.style.alignItems     = box.align === 'left' ? 'flex-start' : box.align === 'right' ? 'flex-end' : 'center';
-      // overflow:visible is set by CSS class .dlg-overlay-text; inline hidden clips resize handles
-      div.style.whiteSpace = 'pre-wrap';   // preserve explicit line breaks the user typed
-      div.style.wordBreak  = 'break-word';
-      div.style.zIndex     = isSelected ? '1000' : String(10 + index);
-      div.style.fontFamily = thumbSafeFont(box.font_family) + ', sans-serif';
-      div.style.fontSize   = (fit / Math.max(scaleX, scaleY)) + 'px';
-      div.style.letterSpacing = ((box.letter_spacing || 0) / Math.max(scaleX, scaleY)) + 'px';
-      div.style.lineHeight = (box.line_spacing || 1.25);
-      div.style.color      = box.color || '#ffffff';
-      div.style.textAlign  = box.align || 'center';
-      div.style.textShadow = (box.shadow ?? true) ? '2px 2px 8px rgba(0,0,0,0.8)' : 'none';
-      const alpha = (box.background_opacity ?? 0) / 100;
-      const bg = hexToRgb(box.background_color || '#111111');
-      div.style.background = alpha > 0 ? `rgba(${bg.r},${bg.g},${bg.b},${alpha})` : 'transparent';
-      div.style.borderRadius = (alpha > 0 && box.bg_pill) ? '999px' : (alpha > 0 ? '10px' : '0');
-      if (isSelected) _addResizeHandles(div, ALL_HANDLES);
-      layer.appendChild(div);
     });
-
-    // ── Logo ──
-    if (_sharedThumbnailDraft.logo?.enabled) {
-      const logo = _sharedThumbnailDraft.logo;
-      const img  = document.createElement('img');
-      img.src = logo.asset || FOUNDRY_LOGO_ASSET;
-      img.alt = 'Foundry logo';
-      img.style.display  = 'block';
-      img.style.width    = '100%';
-      img.style.height   = 'auto';
-      img.style.opacity  = ((logo.opacity ?? 100) / 100);
-      const wrap = document.createElement('div');
-      wrap.className = 'dlg-logo-overlay' + (_dlgLogoSelected ? ' selected' : '');
-      wrap.dataset.logo  = 'true';
-      wrap.style.left    = (logo.x / scaleX) + 'px';
-      wrap.style.top     = (logo.y / scaleY) + 'px';
-      wrap.style.width   = (logo.width / scaleX) + 'px';
-      wrap.style.transform = 'translate(-50%, -50%)';
-      wrap.appendChild(img);
-      if (_dlgLogoSelected) _addResizeHandles(wrap, CORNER_HANDLES);
-      layer.appendChild(wrap);
-    }
-
-    // ── Graphic Elements (shapes + brand images) ──
-    var _elems = (_sharedThumbnailDraft.graphic_elements || []).filter(function(e) { return e.type === 'shape' || e.type === 'image'; });
-    var _sx = scaleX, _sy = scaleY;
-    _elems.forEach(function(elem, _ei) {
-      var isElemSel = elem.id === _dlgSelectedElemId;
-      var wrap = document.createElement('div');
-      wrap.className = 'dlg-design-elem-overlay' + (isElemSel ? ' selected' : '');
-      wrap.dataset.elemId = elem.id;
-      wrap.style.zIndex = isElemSel ? '1000' : String(10 + _ei);
-      wrap.style.position = 'absolute';
-      wrap.style.overflow = 'visible';
-      var dw = Math.round((elem.width  || 100) / _sx);
-      var dh = Math.round((elem.height || 100) / _sy);
-      wrap.style.left   = Math.round(elem.x / _sx) + 'px';
-      wrap.style.top    = Math.round(elem.y / _sy) + 'px';
-      wrap.style.width  = dw + 'px';
-      wrap.style.height = dh + 'px';
-      wrap.style.opacity = ((elem.opacity ?? 100) / 100);
-      var _tf = '';
-      if (elem.rotation) _tf += ' rotate(' + elem.rotation + 'deg)';
-      if (elem.flipH || elem.flipV) _tf += ' scale(' + (elem.flipH ? -1 : 1) + ',' + (elem.flipV ? -1 : 1) + ')';
-      if (_tf) { wrap.style.transform = _tf.trim(); wrap.style.transformOrigin = '50% 50%'; }
-      if (elem.type === 'image') {
-        var _isrc = elem.packEl ? (ensurePackUrl(elem) || elem.preview || elem.asset) : (elem.asset || '');
-        wrap.innerHTML = '<img src="' + escHtml(_isrc) + '" alt="" draggable="false" style="width:100%;height:100%;object-fit:contain;display:block;pointer-events:none;">';
-      } else {
-        wrap.innerHTML = shapeOverlaySvg(elem);
-      }
-      if (isElemSel) _addResizeHandles(wrap, ALL_HANDLES);
-      layer.appendChild(wrap);
-    });
+    renderLayerPanel();
   }
+
 
   function _dlgSetGuides(vx, hy) {
     const wrap = document.getElementById('dlg-canvas-wrap');
@@ -10564,7 +10736,7 @@
           return px >= r.left && px <= r.right && py >= r.top && py <= r.bottom;
         }).map(function (el) { return el.dataset.boxId; });
         const alreadySel = _sharedThumbnailDraft && _sharedThumbnailDraft.selected_text_box_id === bid;
-        if (!alreadySel) selectTextBoxData(bid);
+        if (!alreadySel) { _dlgSelectedElemId = null; _dlgLogoSelected = false; selectTextBoxData(bid); renderLayerPanel(); }
         const box = getActiveThumbnailTextBox();
         dragging = { type: 'text', startX: px, startY: py, origX: box?.x ?? _dlgCanvasTX, origY: box?.y ?? _dlgCanvasTY, moved: false,
                      cycleStack: (alreadySel && stack.length > 1) ? stack : null };
@@ -10572,7 +10744,10 @@
         const logo = _sharedThumbnailDraft?.logo;
         if (!logo) return;
         _dlgLogoSelected = true;
+        _dlgSelectedElemId = null;
+        if (_sharedThumbnailDraft) _sharedThumbnailDraft.selected_text_box_id = null;
         renderDialogOverlayLayer();
+        renderLayerPanel();
         dragging = { type: 'logo', startX: e.clientX, startY: e.clientY, origX: logo.x, origY: logo.y, moved: false };
       } else if (elemEl) {
         const eid   = elemEl.dataset.elemId;
@@ -10594,7 +10769,7 @@
       if (_sharedThumbnailDraft && _sharedThumbnailDraft.selected_text_box_id) { _sharedThumbnailDraft.selected_text_box_id = null; changed = true; }
       if (_dlgSelectedElemId) { _dlgSelectedElemId = null; changed = true; }
       if (_dlgLogoSelected) { _dlgLogoSelected = false; changed = true; }
-      if (changed) { renderDialogOverlayLayer(); renderDesignElementList(); if (typeof _refreshTextBoxChips === 'function') _refreshTextBoxChips(); }
+      if (changed) { renderDialogOverlayLayer(); renderDesignElementList(); renderLayerPanel(); if (typeof _refreshTextBoxChips === 'function') _refreshTextBoxChips(); }
     });
 
     document.addEventListener('mousemove', function (e) {
@@ -10662,6 +10837,9 @@
         found.height = Math.round(newH);
         found.x = Math.round(hdx < 0 ? dragging.origX + (dragging.origW - newW) : dragging.origX);
         found.y = Math.round(hdy < 0 ? dragging.origY + (dragging.origH - newH) : dragging.origY);
+        // Reshaping a pack graphic crops it to the new box (Canva-style) instead
+        // of letterboxing. Aspect-locked items and brand logos are unaffected.
+        if (found.type === 'image' && found.packEl && !aspectLocked) found.crop_fill = true;
         _dlgLiveDragNode(dragging);
         return;
       }
@@ -11997,6 +12175,7 @@
           <div class="thumb-canvas-wrap" id="dlg-canvas-wrap">
             <canvas id="dlg-canvas" width="1280" height="720"></canvas>
             <div id="dlg-overlay-layer"></div>
+            <div id="dlg-grid-safe" class="dlg-grid-safe"><span class="dlg-grid-safe-label">Instagram grid (3:4)</span></div>
           </div>
           <p style="font-size:12px;color:var(--muted);margin-top:8px;text-align:center;">Drag text or the logo directly on the thumbnail to reposition them.</p>
         </div>
@@ -12062,10 +12241,11 @@
 
         <div class="thumb-editor-sidebar">
           <div class="card">
-            <div class="thumb-editor-label">Thumbnail Format</div>
-            <div class="thumb-format-group" style="margin-bottom:0;">
-              <button type="button" class="thumb-format-btn selected" data-thumb-format-target="dialog" data-thumb-format="instagram" onclick="setDlgTargetFormat('instagram')">9:16 &middot; Reels &amp; Shorts</button>
-            </div>
+            <label class="thumb-editor-label" style="display:flex;align-items:center;gap:8px;cursor:pointer;margin-bottom:0;">
+              <input type="checkbox" id="dlg-grid-guide-toggle" checked onchange="toggleGridGuide(this.checked)" style="width:auto;">
+              Show Instagram grid guide
+            </label>
+            <div class="thumb-editor-label" style="color:var(--muted);font-weight:400;margin:6px 0 0;">The reel itself is full 9:16. Instagram shows a centered 3:4 crop in the profile grid &mdash; keep key faces and text inside the dashed box.</div>
           </div>
 
           <!-- Design Elements Bar -->
@@ -12100,6 +12280,12 @@
           </div>
 
           <div class="card">
+            <div class="thumb-editor-label" style="margin-bottom:2px;">Layers</div>
+            <div class="thumb-editor-label" style="color:var(--muted);font-weight:400;margin-bottom:8px;">Everything on the canvas, front to back. Click to select; use &#9650;/&#9660; to change what sits in front. This is the one place stacking order is set.</div>
+            <div id="dlg-layer-list" class="dlg-layer-list"></div>
+          </div>
+
+          <div class="card">
             <div class="thumb-inline-row" style="justify-content:space-between;align-items:center;">
               <div class="thumb-editor-label" style="margin-bottom:0;">Text Boxes</div>
               <div class="thumb-inline-row">
@@ -12107,8 +12293,6 @@
                 <button class="btn-ghost btn-sm" type="button" onclick="dlgEditSelectedTextBox()" title="Edit the text of the selected box (no need to find it on the canvas)">&#9998; Edit text</button>
                 <button class="btn-ghost btn-sm" type="button" id="dlg-textbox-remove-btn" onclick="dlgRemoveActiveTextBox()" title="Select a text box to remove it">Remove</button>
                 <button class="btn-ghost btn-sm" type="button" onclick="dlgDuplicateActiveTextBox()" title="Duplicate this text box">Duplicate</button>
-                <button class="btn-ghost btn-sm" type="button" onclick="dlgMoveTextBoxLayer('forward')" title="Bring forward">&#9650;</button>
-                <button class="btn-ghost btn-sm" type="button" onclick="dlgMoveTextBoxLayer('backward')" title="Send back">&#9660;</button>
               </div>
             </div>
             <div id="dlg-textbox-list" class="thumb-chip-row" style="margin-top:10px;"></div>
