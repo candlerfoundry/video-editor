@@ -1297,6 +1297,30 @@
 
     /* ─── EXPORT STATUS ─── */
     #export-status { margin-top: 12px; }
+    /* Save-Clip footer feedback (#8) — sits right above the save buttons. */
+    .ef-saving {
+      margin: 0 22px; padding: 12px 16px; border-radius: 10px;
+      font-size: 13px; line-height: 1.45; display: flex; align-items: center; gap: 10px;
+    }
+    .ef-saving.working { background: #FFF4EC; border: 1px solid var(--orange, #C84826); color: #7A2E12; }
+    .ef-saving.done { background: #EAF7EE; border: 1px solid #2D6A4F; color: #1E4B37; }
+    .ef-saving.err  { background: #FDECEA; border: 1px solid #B91C1C; color: #7F1D1D; }
+    .ef-saving-spin {
+      flex: 0 0 auto; width: 16px; height: 16px; border-radius: 50%;
+      border: 2px solid rgba(200,72,38,0.35); border-top-color: var(--orange, #C84826);
+      animation: ef-spin 0.8s linear infinite;
+    }
+    @keyframes ef-spin { to { transform: rotate(360deg); } }
+    /* Prominent saved-thumbnail selection (#8) */
+    .ef-draft-card { position: relative; }
+    .ef-draft-card.ef-selected { border-color: var(--orange, #C84826) !important; box-shadow: 0 0 0 4px rgba(200,72,38,0.32) !important; }
+    .ef-draft-card:not(.ef-selected).ef-dimmed { opacity: 0.5; }
+    .ef-sel-badge {
+      position: absolute; top: 8px; left: 8px; z-index: 2; display: none;
+      background: var(--orange, #C84826); color: #fff; font-size: 11px; font-weight: 700;
+      letter-spacing: 0.03em; padding: 3px 9px; border-radius: 999px; box-shadow: 0 1px 4px rgba(0,0,0,0.3);
+    }
+    .ef-draft-card.ef-selected .ef-sel-badge { display: block; }
 
     .export-progress-bar {
       height: 8px; border-radius: 6px;
@@ -1536,6 +1560,7 @@
     }
     .tx-word.tx-cut:hover { background: #FBE9E7; opacity: 0.85; }
     .tx-word.tx-cut-select { background: #FBE0DC; }
+    .tx-word.tx-restore-select { background: #D8F0DC; }
     .tx-word.tx-bleep {
       background: #FEF3C7; color: #92400E; border-radius: 4px; cursor: pointer;
     }
@@ -3133,7 +3158,7 @@
   // Must match BACKEND_BUILD in server.py — bumped together whenever the
   // frontend/backend contract changes. A mismatch means the user is running
   // an old backend (launcher not restarted after a deploy).
-  const EXPECTED_BACKEND_BUILD = '2026-06-30-coveraudio3';
+  const EXPECTED_BACKEND_BUILD = '2026-07-01-editor';
 
   if (document.fonts && document.fonts.load) { document.fonts.load("700 64px 'Handmade Sans'").catch(function(){}); }
   let _staleBackendWarned = false;
@@ -5096,6 +5121,25 @@
   function removeBleepRangeAt(t) {
     editorBleepRanges = editorBleepRanges.filter(r => !(t >= r.start && t < r.end));
   }
+  // Subtract [lo,hi] from a set of ranges (splits/trims), used to RESTORE a
+  // dragged-over block of edited-out or bleeped words.
+  function _subtractSpan(ranges, lo, hi) {
+    const out = [];
+    ranges.forEach(function (r) {
+      if (hi <= r.start || lo >= r.end) { out.push(r); return; } // no overlap
+      if (lo > r.start) out.push({ start: r.start, end: lo });    // keep left piece
+      if (hi < r.end)   out.push({ start: hi, end: r.end });      // keep right piece
+      // fully covered → dropped
+    });
+    return out.filter(r => r.end - r.start >= 0.05).sort((a, b) => a.start - b.start);
+  }
+  function restoreCutSpan(lo, hi) {
+    editorCutRanges = _subtractSpan(editorCutRanges, lo, hi);
+    updateClipDuration();
+  }
+  function restoreBleepSpan(lo, hi) {
+    editorBleepRanges = _subtractSpan(editorBleepRanges, lo, hi);
+  }
   let _txDragBoundary = null; // 'in' | 'out' while a transcript bracket is being dragged
   let _txSuppressClick = false; // swallow the click that follows a transcript drag
 
@@ -5563,8 +5607,15 @@
         return;
       }
       const wordEl = e.target.closest('.tx-word');
-      if (_txEditMode !== 'scrub' && wordEl && wordEl.classList.contains('tx-in-clip') && !wordEl.classList.contains('tx-cut')) {
-        _cutAnchor  = { s: parseFloat(wordEl.dataset.start), e: parseFloat(wordEl.dataset.end), idx: parseInt(wordEl.dataset.idx) };
+      if (_txEditMode !== 'scrub' && wordEl && wordEl.classList.contains('tx-in-clip')) {
+        // Decide the drag gesture from the FIRST word: dragging across already
+        // edited-out / bleeped words RESTORES them; dragging across normal words
+        // applies the current mode. (#1 re-highlight-to-restore.)
+        let gesture = null;
+        if (_txEditMode === 'cut')  gesture = wordEl.classList.contains('tx-cut')   ? 'uncut'   : 'cut';
+        else if (_txEditMode === 'bleep') gesture = wordEl.classList.contains('tx-bleep') ? 'unbleep' : 'bleep';
+        if (!gesture) return;
+        _cutAnchor  = { s: parseFloat(wordEl.dataset.start), e: parseFloat(wordEl.dataset.end), idx: parseInt(wordEl.dataset.idx), gesture: gesture };
         _cutCurrent = null;
         panel.style.userSelect = 'none';
         document.addEventListener('pointermove', onMove);
@@ -5595,10 +5646,13 @@
         // Live highlight via classes only (no DOM rebuild during drag)
         const lo = Math.min(_cutAnchor.s, _cutCurrent.s);
         const hi = Math.max(_cutAnchor.e, _cutCurrent.e);
+        const restore = (_cutAnchor.gesture === 'uncut' || _cutAnchor.gesture === 'unbleep');
+        const selClass = restore ? 'tx-restore-select' : 'tx-cut-select';
         panel.querySelectorAll('.tx-word.tx-in-clip').forEach(el => {
           const s  = parseFloat(el.dataset.start);
           const en = parseFloat(el.dataset.end);
-          el.classList.toggle('tx-cut-select', en > lo && s < hi);
+          el.classList.remove('tx-cut-select', 'tx-restore-select');
+          if (en > lo && s < hi) el.classList.add(selClass);
         });
       }
     }
@@ -5616,13 +5670,16 @@
           const i0 = Math.min(_cutAnchor.idx, _cutCurrent.idx);
           const i1 = Math.max(_cutAnchor.idx, _cutCurrent.idx);
           const b = cutBoundsForWords(i0, i1, Math.min(_cutAnchor.s, _cutCurrent.s), Math.max(_cutAnchor.e, _cutCurrent.e));
-          pushEditorUndo(_txEditMode + '-drag');
-          if (_txEditMode === 'bleep') { addBleepRange(b.lo, b.hi); previewBleepBlip(); }
-          else addCutRange(b.lo, b.hi);
+          const g = _cutAnchor.gesture;
+          pushEditorUndo(g + '-drag');
+          if (g === 'bleep')        { addBleepRange(b.lo, b.hi); previewBleepBlip(); }
+          else if (g === 'cut')     addCutRange(b.lo, b.hi);
+          else if (g === 'uncut')   restoreCutSpan(b.lo, b.hi);
+          else if (g === 'unbleep') restoreBleepSpan(b.lo, b.hi);
           _txSuppressClick = true;
           updateAllEditorUI();
         } else {
-          panel.querySelectorAll('.tx-cut-select').forEach(el => el.classList.remove('tx-cut-select'));
+          panel.querySelectorAll('.tx-cut-select, .tx-restore-select').forEach(el => el.classList.remove('tx-cut-select', 'tx-restore-select'));
         }
         _cutAnchor  = null;
         _cutCurrent = null;
@@ -7889,9 +7946,14 @@
         for (const draft of drafts) {
           const card = document.createElement('div');
           card.dataset.draftId = draft.draft_id;
-          card.style.cssText = 'border:2px solid var(--border);border-radius:10px;overflow:hidden;background:var(--surface);display:flex;flex-direction:column;transition:border-color 120ms, box-shadow 120ms;';
+          card.className = 'ef-draft-card';
+          card.style.cssText = 'border:2px solid var(--border);border-radius:10px;overflow:hidden;background:var(--surface);display:flex;flex-direction:column;transition:border-color 120ms, box-shadow 120ms, opacity 120ms;';
           const previewWrap = document.createElement('div');
-          previewWrap.style.cssText = 'width:100%;aspect-ratio:9 / 16;background:#111;overflow:hidden;';
+          previewWrap.style.cssText = 'position:relative;width:100%;aspect-ratio:9 / 16;background:#111;overflow:hidden;';
+          const badge = document.createElement('div');
+          badge.className = 'ef-sel-badge';
+          badge.textContent = '\u2713 Selected';
+          previewWrap.appendChild(badge);
           const previewImg = document.createElement('img');
           previewImg.alt = 'Thumbnail preview';
           previewImg.style.cssText = 'width:100%;height:100%;object-fit:cover;display:block;';
@@ -8017,14 +8079,16 @@
     document.querySelectorAll('#export-flow-thumb-frames .frame-cell').forEach(c => c.classList.remove('selected'));
     const saveWithBtn = document.getElementById('btn-save-with-thumb');
     if (saveWithBtn) { saveWithBtn.disabled = false; saveWithBtn.style.display = ''; }
-    // Make the selection visible: ring the chosen card so it's obvious which thumbnail will save.
+    // Prominent selection: bold ring + badge on the chosen card, dim the rest so
+    // it's unmistakable which thumbnail will be saved (#8).
     document.querySelectorAll('#export-flow-existing-drafts [data-draft-id]').forEach(c => {
       const on = c.dataset.draftId === draftId;
-      c.style.borderColor = on ? 'var(--orange)' : 'var(--border)';
-      c.style.boxShadow   = on ? '0 0 0 2px var(--orange-tint)' : 'none';
+      c.classList.toggle('ef-selected', on);
+      c.classList.toggle('ef-dimmed', !on);
+      c.style.borderColor = ''; c.style.boxShadow = '';
     });
     const sw = document.getElementById('export-flow-thumb-status');
-    if (sw) sw.textContent = 'Selected the highlighted thumbnail \u2014 it will be saved with the clip.';
+    if (sw) sw.innerHTML = '<span style="color:var(--orange);font-weight:700;">\u2713 Thumbnail selected</span> \u2014 it will be saved with the clip.';
   }
 
   function efEditDraft(draftId) {
@@ -10950,6 +11014,16 @@
       alert('Load a video first.');
       return;
     }
+    // Reset the save-feedback banner + buttons from any prior save attempt (#8).
+    const _efS = document.getElementById('export-flow-saving');
+    if (_efS) { _efS.style.display = 'none'; _efS.className = 'ef-saving'; _efS.innerHTML = ''; }
+    const _sw = document.getElementById('btn-save-with-thumb');
+    const _wo = document.getElementById('btn-save-clip-folder');
+    if (_wo) { _wo.disabled = true; _wo.innerHTML = 'Save without Thumbnail'; }
+    if (_sw) {
+      _sw.disabled = true; _sw.style.display = 'none';
+      _sw.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg> Save with Thumbnail';
+    }
     // Filename: CODE - Source Title (\u201CFirst three words\u201D - Month D, YYYY).mp4
     // Typographic quotes — straight quotes are illegal in Windows filenames.
     const srcNameForCode = _clipFile?.name || activeProject?.source_filename || '';
@@ -11764,6 +11838,24 @@
       '<div class="export-progress-bar"><div class="export-shimmer"></div></div>' +
       '<p class="export-progress-label">Saving clip to Dropbox\u2026</p></div>';
 
+    // Visible feedback right at the save buttons (#8): the top status is easy to
+    // miss because the buttons are at the bottom. Show a spinner + a heads-up
+    // that burning the thumbnail and captions can take a few minutes.
+    const _efSaving   = document.getElementById('export-flow-saving');
+    const _swBtn      = document.getElementById('btn-save-with-thumb');
+    const _woBtn      = document.getElementById('btn-save-clip-folder');
+    const _clickedBtn = withThumbnail ? _swBtn : _woBtn;
+    const _clickedOrig = _clickedBtn ? _clickedBtn.innerHTML : '';
+    if (_swBtn) _swBtn.disabled = true;
+    if (_woBtn) _woBtn.disabled = true;
+    if (_clickedBtn) _clickedBtn.innerHTML = 'Saving\u2026';
+    if (_efSaving) {
+      _efSaving.style.display = 'flex';
+      _efSaving.className = 'ef-saving working';
+      _efSaving.innerHTML = '<span class="ef-saving-spin"></span><span><strong>Saving\u2026</strong> This can take a few minutes while the clip'
+        + (withThumbnail ? ', thumbnail,' : '') + ' and captions are rendered. Please keep this window open.</span>';
+    }
+
     const form = new FormData();
     if (_clipFile instanceof Blob) form.append('file', _clipFile);
     else if (_clipFile?.source_path) form.append('source_path', _clipFile.source_path);
@@ -11924,6 +12016,10 @@
         '<div style="padding:0;">' +
         '<div class="export-error"><strong>Export failed:</strong> ' + escHtml(err.message) + '</div></div>';
       btn.disabled = false;
+      if (_swBtn) _swBtn.disabled = false;
+      if (_woBtn) _woBtn.disabled = false;
+      if (_clickedBtn) _clickedBtn.innerHTML = _clickedOrig;
+      if (_efSaving) { _efSaving.className = 'ef-saving err'; _efSaving.innerHTML = '<span>\u2715 Save failed: ' + escHtml(err.message) + '</span>'; }
     }
   }
 
@@ -12522,6 +12618,7 @@
       <div id="export-flow-thumb-frames" class="frame-grid" style="display:none;"></div>
     </div>
   </div>
+  <div id="export-flow-saving" class="ef-saving" style="display:none;"></div>
   <div class="dialog-footer">
     <button class="btn-ghost" onclick="closeExportFlowDialogs()" style="background:#6B7280;color:#fff;border-color:#6B7280;">Cancel</button>
     <span style="display:flex;flex-direction:column;gap:4px;margin-right:auto;">

@@ -62,7 +62,7 @@ CORS(app)
 
 # Bump this whenever the frontend/backend contract changes (the frontend
 # carries a matching EXPECTED_BACKEND_BUILD and warns when they differ).
-BACKEND_BUILD = "2026-06-30-coveraudio3"
+BACKEND_BUILD = "2026-07-01-editor"
 
 CREATE_NO_WINDOW = 0x08000000 if platform.system() == 'Windows' else 0
 
@@ -432,12 +432,28 @@ def spec_to_ass(spec, width, height):
         return prefix + txt + suffix
 
     events = []
-    for g in spec.get("groups") or []:
+    _groups = spec.get("groups") or []
+    for _gi, g in enumerate(_groups):
         words = norm_words(g)
         if not words:
             continue
         emphasis = set(int(i) for i in (g.get("emphasis") or []) if isinstance(i, (int, float)))
         g_start, g_end = float(g.get("start", 0)), float(g.get("end", 0))
+        # Hard ceiling = the NEXT group's start. No event (nor this group's own
+        # window) may extend past it, so libass never shows two caption groups at
+        # once. Overlapping group windows were the remaining cause of the
+        # "duplicate phrase that jumps to a different spot / bounces" bug — the
+        # within-group events were already contiguous, but the last event's
+        # min-duration pad (and slightly-long group windows from Whisper times)
+        # could spill into the next group and get stacked vertically. (#2)
+        g_ceiling = None
+        for _gj in range(_gi + 1, len(_groups)):
+            _ns = float((_groups[_gj] or {}).get("start", 0))
+            if _ns > g_start:
+                g_ceiling = _ns
+                break
+        if g_ceiling is not None and g_ceiling < g_end:
+            g_end = g_ceiling
 
         def join_runs(runs_with_words):
             # Single space + slight letter spacing (two spaces read too wide);
@@ -455,10 +471,12 @@ def spec_to_ass(spec, width, height):
                 start_t = w["s"]
                 if i + 1 < len(words):
                     end_t = words[i + 1]["s"]           # contiguous -> never overlap the next word
-                    if end_t <= start_t:
-                        continue
                 else:
-                    end_t = max(start_t + 0.08, g_end)  # safe: last word, no following event
+                    end_t = max(start_t + 0.08, g_end)  # last word, no following event
+                if g_ceiling is not None and end_t > g_ceiling:
+                    end_t = g_ceiling                   # never spill into the next group
+                if end_t <= start_t:
+                    continue
                 events.append(f"Dialogue: 0,{t2ass(start_t)},{t2ass(end_t)},Default,,0,0,0,,{pop_tag}{run}")
             continue
 
@@ -471,16 +489,20 @@ def spec_to_ass(spec, width, height):
                 start_t = words[i]["s"] if i > 0 else g_start
                 if i + 1 < len(words):
                     end_t = words[i + 1]["s"]          # contiguous with next word -> never overlap
-                    if end_t <= start_t:
-                        continue                        # zero/negative duration -> skip (avoids stacking)
                 else:
                     end_t = g_end
                     if end_t - start_t < 0.04:
-                        end_t = start_t + 0.04          # safe: last word in the group, no following event
+                        end_t = start_t + 0.04          # last word in the group, no following event
+                if g_ceiling is not None and end_t > g_ceiling:
+                    end_t = g_ceiling                   # never spill into the next group
+                if end_t <= start_t:
+                    continue                            # zero/negative duration -> skip (avoids stacking)
                 events.append(f"Dialogue: 0,{t2ass(start_t)},{t2ass(end_t)},Default,,0,0,0,," + join_runs(runs))
             continue
 
         # mode == 'group'
+        if g_end <= g_start:
+            continue                                    # clamped away by the next group -> skip
         runs = []
         for j, w in enumerate(words):
             txt = disp(w["t"], j in emphasis)
@@ -2305,9 +2327,15 @@ def thumbnail_titles():
             try:
                 obj = json.loads(raw[st:en + 1])
                 parsed = obj.get('titles') or []
-                titles = [str(t) for t in parsed if len(str(t)) <= 60][:8]
+                # Enforce Emily's brief: short, on-brand titles (<= ~5-6 words,
+                # <= 40 chars). Prefer strictly-short ones; relax only if too few
+                # survive so the grid is never empty.
+                def _title_ok(t):
+                    t = str(t).strip()
+                    return bool(t) and len(t) <= 40 and len(t.split()) <= 6
+                titles = [str(t).strip() for t in parsed if _title_ok(t)][:8]
                 if len(titles) < 5:
-                    titles = [str(t)[:60] for t in parsed[:8]]
+                    titles = [str(t).strip()[:40] for t in parsed if str(t).strip()][:8]
                 caption = str(obj.get('caption') or '').strip()
             except Exception as pe:
                 thumb_logger.warning('[titles] JSON object parse failed: %s', pe)

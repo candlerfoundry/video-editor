@@ -2456,3 +2456,91 @@ Symptom: with several overlapping text boxes + graphics, dragging/resizing/font 
 4. Font size: `setDlgFontSize` already scales the box to hit the target size (font auto-fits the box), so it was NOT independently broken — the erratic feel came from 1-3.
 5. z-order: selected element now z-index 1000 (its body + resize handles sit above all others so it's reliably grabbable once selected via click or the element list); unselected use a stable `10+index`. NOTE: cross-type alt-click "select the element beneath" cycling is still a possible follow-up; for now select an underneath element via the element list, then it jumps on top.
 Frontend-only change; no BACKEND_BUILD/handshake change. node --check passed on the extracted script.
+
+## 2026-07-01 — Thumbnail editor + clip editor batch (build `2026-07-01-editor`)
+Emily's 8-item feedback list. Frontend = index.html; backend = server.py (handshake
+bumped BACKEND_BUILD + EXPECTED_BACKEND_BUILD together → 2026-07-01-editor).
+
+### #4 Unified layer ordering (the big one) — was: text stuck behind elements
+- ROOT CAUSE: text_boxes and graphic_elements were TWO arrays, each with its own
+  overlay z-index `10+index`; equal indices tied and DOM append order decided —
+  elements appended last, so they always covered text. WORSE, the EXPORT canvas
+  drew elements→text→logo (text on top), the exact OPPOSITE of the editor overlay,
+  so editor and export disagreed.
+- FIX: ONE z-stack across text boxes + graphic elements + logo. Each item carries a
+  numeric `z`; `thumbLayerStackFor(draft)` returns items sorted ascending (back→front)
+  and drives BOTH `renderDialogOverlayLayer()` (overlay) and
+  `renderThumbnailDraftToCanvas()` (export). `normalizeThumbLayerZ()` reassigns clean
+  10,20,30… each render; `thumbLayerMove(kind,id,dir)` swaps z with the neighbour.
+- NEW "Layers" panel (`#dlg-layer-list` / `renderLayerPanel()`): the single place
+  stacking is set — front-first list, click to select any item, ▲/▼ to reorder.
+  The per-text-box ▲/▼ arrows were REMOVED (they only reordered within text_boxes and
+  confused Emily). `dlgMoveElemLayer` now delegates to `thumbLayerMove`.
+- Selection NO LONGER hijacks z-index (the old `selected → 1000` made a back item jump
+  to the front). Selecting only adds the dashed outline + handles; reorder via the panel.
+  (This intentionally supersedes the 2026-06-30 "selected element z-index 1000" note.)
+- Backend `normalize_text_box` persists `z`; logo dict persists `z` + `opacity`
+  (opacity was silently dropped before). graphic_elements pass through raw (z rides along).
+
+### #3 Instagram grid guide (replaces the removed IG/Shorts format toggle)
+- Decision (Emily): keep the composition + burn at full 9:16 (no mismatch — the reel
+  cover is burned 9:16) and just OVERLAY a dashed, centered 3:4 marker showing the crop
+  Instagram uses in the profile grid. `#dlg-grid-safe` = a dashed box at top:12.5%
+  height:75% of the 9:16 canvas (1080×1440 centered in 1080×1920). Toggle
+  `#dlg-grid-guide-toggle` (default on) → `toggleGridGuide()`. Removed the "9:16 · Reels
+  & Shorts" label/button. No export change, no format model change.
+
+### #6 Crop / free-resize pack graphic elements
+- Pack image elements already resized freely, but the <img> used object-fit:contain, so a
+  narrower box just letterboxed (shrank) the graphic — looked like proportional-only.
+- FIX: `crop_fill` flag → overlay uses object-fit:cover, export clips to the box (cover).
+  Reshaping a pack image with a handle auto-sets crop_fill=true (Canva-style crop). A per-
+  element "Crop to box" checkbox (`setDesignElemCrop`) toggles fit↔crop. Brand logos and
+  quote/sparkle/star stay aspect-locked. crop_fill rides in graphic_elements (raw persist).
+
+### #1 Re-highlight edited-out text to restore it
+- The cut/bleep drag-select refused to START on already-struck words, so you couldn't drag
+  to un-cut a block (only single-click restored one word).
+- FIX: the drag's gesture is decided by the FIRST word — dragging across tx-cut words =
+  'uncut', across tx-bleep = 'unbleep', across normal in-clip words = cut/bleep as before.
+  `_subtractSpan()` + `restoreCutSpan()`/`restoreBleepSpan()` remove the covered span from
+  editorCutRanges/editorBleepRanges. Restore drag highlights green (`.tx-restore-select`).
+
+### #2 Caption duplication / "bouncing" (recurrence) — cross-GROUP overlap
+- The 2026-06-30 fix made events contiguous WITHIN a group, but a group's window (or its
+  last event's min-duration pad, or slightly-long Whisper times) could still spill past the
+  NEXT group's start → two groups on screen at once → libass stacks them vertically = the
+  "duplicate phrase that jumps to another spot / bounces" symptom.
+- FIX (spec_to_ass): compute `g_ceiling` = the next group's start; clamp the group window
+  AND every emitted event end to it, skip zero/negative-duration events. Applied to group,
+  karaoke, and word modes. Verified by a unit test: overlapping input groups now produce
+  ZERO overlapping Dialogue events in all three modes.
+
+### #5 AI titles prompt (verify + harden)
+- The /thumbnail_titles prompt already enforced MAX 5 words (~32 chars), dignified topic
+  labels, on-brand, no clickbait (2026-06-30 change present). BUT the acceptance filter
+  still allowed ≤60 chars, so an over-long title could slip through. Tightened to ≤40 chars
+  AND ≤6 words (relaxes only if <5 survive, so the grid is never empty).
+
+### #8 Save Clip window feedback
+- Selected saved-thumbnail highlight was too subtle. Now a bold orange ring + "✓ Selected"
+  badge on the chosen card, non-selected cards dimmed (`.ef-draft-card.ef-selected` /
+  `.ef-sel-badge` / `.ef-dimmed`).
+- The "Saving…" status only showed at the TOP of the dialog, far from the bottom save
+  buttons. Added `#export-flow-saving` — a spinner banner directly ABOVE the footer buttons
+  that says saving "can take a few minutes while the clip/thumbnail/captions are rendered —
+  keep this window open." Clicked button relabels to "Saving…"; both save buttons disable
+  during save; reset on error and on dialog reopen.
+
+### #7 Remaining Creative Market elements — BLOCKED (need source assets)
+- The repo has 64 curated elements (brand/elements/, "Notes by Basia Stryjecka"). Adding the
+  REST of the purchased pack requires the original files, which are NOT in the repo or the
+  connected Dropbox folders. Emily must drop the full pack somewhere accessible (e.g. a
+  folder under Dropbox\Scripts\Foundry Video Editor\) so the recolor metadata + previews +
+  manifest.json can be regenerated. Not doable without the source PNGs.
+
+Deploy: git push (Netlify frontend) + copy server.py next to the exe + rebuild flat zip +
+restart the App Launcher (the handshake banner will prompt it) + hard-refresh.
+Regression risk: Medium-High (touches the fragile thumbnail overlay/export render + the
+caption burn filter graph — both High-risk areas; all changes syntax-checked and the
+caption fix unit-tested).
