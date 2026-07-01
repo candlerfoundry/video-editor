@@ -62,7 +62,7 @@ CORS(app)
 
 # Bump this whenever the frontend/backend contract changes (the frontend
 # carries a matching EXPECTED_BACKEND_BUILD and warns when they differ).
-BACKEND_BUILD = "2026-07-01-editor2"
+BACKEND_BUILD = "2026-07-01-editor3"
 
 CREATE_NO_WINDOW = 0x08000000 if platform.system() == 'Windows' else 0
 
@@ -2414,6 +2414,80 @@ def detect_speakers():
     except Exception as exc:
         logger.warning("[detect_speakers] %s", exc)
         return jsonify({'two_speakers': False, 'checked': False})
+
+
+@app.route('/detect_speaker_frame', methods=['POST'])
+def detect_speaker_frame():
+    """Sample a few frames across a clip and ask Claude Vision for the MAIN
+    speaker's horizontal centre (fraction of frame width, 0=left..1=right), so a
+    wide/horizontal talk can be auto-reframed for the 9:16 crop. Returns
+    {speaker_x, checked}. checked=False => could not determine (keep centred).
+    Forgiving on all errors."""
+    import base64
+    try:
+        data = request.get_json(force=True) or {}
+        filename    = (data.get('filename') or '').strip()
+        source_path = (data.get('source_path') or '').strip()
+        def _f(v, d):
+            try: return float(v)
+            except Exception: return d
+        cs = max(0.0, _f(data.get('clip_start'), 0.0))
+        ce = _f(data.get('clip_end'), cs + 1.0)
+        if ce <= cs:
+            ce = cs + 1.0
+        path = source_path if (source_path and os.path.isfile(source_path)) else (find_video_in_dropbox(filename) or '')
+        if not path or not os.path.isfile(path) or not FFMPEG_EXE:
+            return jsonify({'speaker_x': 0.5, 'checked': False})
+        # Sample 3 frames across the clip (moving speakers -> the model averages).
+        times = [cs + (ce - cs) * frac for frac in (0.25, 0.5, 0.75)]
+        tmp = tempfile.mkdtemp()
+        images = []
+        try:
+            for i, t in enumerate(times):
+                fp = os.path.join(tmp, f'f{i}.jpg')
+                subprocess.run([FFMPEG_EXE, '-y', '-ss', f'{t:.2f}', '-i', path,
+                                '-frames:v', '1', '-vf', 'scale=640:-1', '-q:v', '4', fp],
+                               capture_output=True, creationflags=CREATE_NO_WINDOW)
+                if os.path.isfile(fp):
+                    with open(fp, 'rb') as fh:
+                        images.append(base64.b64encode(fh.read()).decode())
+        finally:
+            shutil.rmtree(tmp, ignore_errors=True)
+        if not images:
+            return jsonify({'speaker_x': 0.5, 'checked': False})
+        key = read_api_key()
+        if not key:
+            return jsonify({'speaker_x': 0.5, 'checked': False})
+        client = anthropic.Anthropic(api_key=key)
+        content = [{"type": "image", "source": {"type": "base64", "media_type": "image/jpeg", "data": b}} for b in images]
+        content.append({"type": "text", "text": (
+            "These frames are sampled across ONE short video clip. Find the MAIN SPEAKER — "
+            "the person the clip is about (usually the one talking; on a stage or in an "
+            "interview, the largest / most prominent person). Estimate that person's "
+            "horizontal CENTER as a fraction of the frame width: 0.0 = left edge, 0.5 = "
+            "middle, 1.0 = right edge. Keep it consistent across the frames (average if the "
+            "person moves). If there is only one person, use them. If the shot is already "
+            "well centered on the main speaker, or you are unsure, reply 0.5. "
+            "Reply with ONLY JSON: {\"x\": 0.5, \"confident\": true}.")})
+        msg = client.messages.create(
+            model="claude-sonnet-4-6", max_tokens=120,
+            messages=[{"role": "user", "content": content}])
+        raw = msg.content[0].text.strip()
+        st = raw.find('{'); en = raw.rfind('}')
+        out = {'speaker_x': 0.5, 'checked': True}
+        if st != -1 and en != -1:
+            obj = json.loads(raw[st:en + 1])
+            try:
+                x = min(0.98, max(0.02, float(obj.get('x', 0.5))))
+            except Exception:
+                x = 0.5
+            out = {'speaker_x': x, 'checked': True, 'confident': bool(obj.get('confident', True))}
+        logger.info("[detect_speaker_frame] %s [%.1f-%.1f] -> %s",
+                    filename or os.path.basename(path), cs, ce, out)
+        return jsonify(out)
+    except Exception as exc:
+        logger.warning("[detect_speaker_frame] %s", exc)
+        return jsonify({'speaker_x': 0.5, 'checked': False})
 
 
 @app.route('/caption_emphasis', methods=['POST'])

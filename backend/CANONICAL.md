@@ -2600,3 +2600,20 @@ Five items from Emily. Handshake bumped (new /export_clip form field `reframe_x`
   syncSpeedButtons/applyPreviewSpeed. NOTE: this is a manual reframe (no auto face detection);
   auto speaker-centering would need a vision pass like /detect_speakers.
 Deploy: push (Netlify) + redeploy server.py + rebuild zip + restart launcher + hard-refresh.
+
+## 2026-07-01 — Auto speaker detection -> reframe (build `2026-07-01-editor3`)
+Follow-up to #3 (manual reframe): auto-center the 9:16 crop on the speaker for wide talks.
+- BACKEND: new route POST /detect_speaker_frame {source_path|filename, clip_start, clip_end}
+  samples 3 frames across the clip (25/50/75%), sends them in ONE Claude Vision call, and asks
+  for the MAIN speaker's horizontal centre as a fraction 0..1. Returns {speaker_x, checked}.
+  Forgiving: 0.5/checked:false on any failure. Mirrors the /detect_speakers pattern (no OpenCV,
+  read_api_key, CREATE_NO_WINDOW, temp cleanup).
+- FRONTEND: reframeXFromFraction(f)=clamp((f-0.5)/0.341797,-1,1) — the exact inverse of the
+  preview/export mapping (visible-centre f = 0.5 + 0.341797*r for a 16:9 source in a 9:16 crop),
+  so the detected fraction maps to the same reframe_x used by object-position preview and the
+  backend crop. autoReframeSpeaker() POSTs and applies it; "✦ Auto-frame speaker" button +
+  status. maybeAutoReframe() auto-runs ONCE per clip on landscape sources (videoWidth>1.2*height)
+  with no saved/user reframe and split-screen off, hooked into both clip-load paths after
+  _autoDetectSplit(). Result persists in caption_style.reframe_x. It's advisory — the manual
+  Reframe slider still overrides.
+- Handshake bumped (new route). Deploy: push + redeploy server.py + rebuild zip + restart launcher.

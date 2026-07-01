@@ -2672,8 +2672,9 @@
                   <span style="font-size:10px;font-weight:700;letter-spacing:0.06em;text-transform:uppercase;color:var(--muted);">Reframe</span>
                   <input type="range" id="clip-reframe-slider" min="-100" max="100" step="1" value="0" style="width:130px;accent-color:var(--orange);" oninput="setReframeX(this.value)" title="Slide the vertical 9:16 crop left/right so the speaker stays in frame on wide/horizontal talks">
                   <span id="clip-reframe-readout" style="font-size:12px;font-weight:700;color:var(--text);min-width:56px;text-align:center;">Center</span>
+                  <button type="button" class="btn btn-sm" id="btn-auto-frame" onclick="autoReframeSpeaker(false)" title="Let AI find the speaker and center the crop on them">&#10022; Auto-frame speaker</button>
                   <button type="button" class="btn-ghost btn-sm" onclick="resetReframe()" title="Re-center the crop">Center</button>
-                  <span style="font-size:11px;color:var(--muted);">moves the crop left/right for wide shots (e.g. TheoEd)</span>
+                  <span id="clip-reframe-status" style="font-size:11px;color:var(--green);"></span>
                 </div>
                 <p style="font-size:11px;color:var(--muted);margin:6px 0 0;">Burns exactly as shown. <strong>Click a word</strong> to toggle emphasis &#183; <strong>double-click</strong> (or &#9998;) to edit text &#8212; <strong>Enter makes a second line</strong> &#183; <strong>drag</strong> the captions to reposition.</p>
               </div>
@@ -3176,7 +3177,7 @@
   // Must match BACKEND_BUILD in server.py — bumped together whenever the
   // frontend/backend contract changes. A mismatch means the user is running
   // an old backend (launcher not restarted after a deploy).
-  const EXPECTED_BACKEND_BUILD = '2026-07-01-editor2';
+  const EXPECTED_BACKEND_BUILD = '2026-07-01-editor3';
 
   if (document.fonts && document.fonts.load) { document.fonts.load("700 64px 'Handmade Sans'").catch(function(){}); }
   let _staleBackendWarned = false;
@@ -4844,6 +4845,7 @@
     syncSpeedButtons();   // reflect restored/sticky clip speed in the buttons
     syncSplitScreenUI();  // reflect restored/sticky split-screen choice
     _autoDetectSplit();   // POD default now; Claude-vision confirms + auto-frames
+    maybeAutoReframe();   // wide/TheoEd single-speaker clips: auto-center on the speaker
 
     const vid = document.getElementById('edit-video');
     vid.src = getPlayableVideoUrl('clips');
@@ -4990,6 +4992,7 @@
     syncSpeedButtons();   // reflect restored/sticky clip speed in the buttons
     syncSplitScreenUI();  // reflect restored/sticky split-screen choice
     _autoDetectSplit();   // POD default now; Claude-vision confirms + auto-frames
+    maybeAutoReframe();   // wide/TheoEd single-speaker clips: auto-center on the speaker
     if (editorCaptionStyle.show) setTimeout(() => runAiEmphasis(false), 400);
 
     const vid = document.getElementById('edit-video');
@@ -11681,6 +11684,65 @@
     const ro = document.getElementById('clip-reframe-readout');
     if (ro) ro.textContent = Math.abs(r) < 0.005 ? 'Center' : (r < 0 ? ('Left ' + Math.round(-r * 100) + '%') : ('Right ' + Math.round(r * 100) + '%'));
   }
+  // ── Auto speaker detection -> reframe (Claude Vision) ──
+  const AUTO_FRAME_LABEL = '\u2726 Auto-frame speaker';
+  let _reframeAutoRunFor = null;
+  // Exact inverse of the preview/export mapping: visible-centre fraction
+  // f = 0.5 + 0.341797*r  (16:9 source in a 9:16 crop) -> r for a target f.
+  function reframeXFromFraction(f) {
+    return Math.max(-1, Math.min(1, (((typeof f === 'number' ? f : 0.5)) - 0.5) / 0.341797));
+  }
+  function setReframeStatus(msg) {
+    const el = document.getElementById('clip-reframe-status'); if (el) el.textContent = msg || '';
+  }
+  async function autoReframeSpeaker(silent) {
+    const btn = document.getElementById('btn-auto-frame');
+    const body = {
+      clip_start: editorInTime, clip_end: editorOutTime,
+      source_path: (_clipFile && _clipFile.source_path) || (activeProject && (activeProject.source_path || (activeProject.source_video && activeProject.source_video.path))) || '',
+      filename: (_clipFile && _clipFile.name) || (activeProject && activeProject.source_filename) || '',
+    };
+    if (!body.source_path && !body.filename) { if (!silent) setReframeStatus('No source video to analyze'); return; }
+    if (btn) { btn.disabled = true; btn.textContent = 'Detecting\u2026'; }
+    if (!silent) setReframeStatus('');
+    try {
+      const r = await fetch(BACKEND + '/detect_speaker_frame', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+      const j = await r.json();
+      if (j && j.checked && typeof j.speaker_x === 'number') {
+        const rx = reframeXFromFraction(j.speaker_x);
+        if (typeof pushEditorUndo === 'function') pushEditorUndo('reframe');
+        editorCaptionStyle.reframe_x = rx;
+        applyReframePreview(); syncReframe();
+        try { autosaveClipEdits(); } catch (_) {}
+        setReframeStatus(Math.abs(rx) < 0.03 ? 'Speaker is already centered' : '\u2713 Framed on the speaker');
+      } else if (!silent) {
+        setReframeStatus('Could not detect a speaker \u2014 left as-is');
+      }
+    } catch (e) {
+      if (!silent) setReframeStatus('Auto-frame failed');
+    } finally {
+      if (btn) { btn.disabled = false; btn.innerHTML = AUTO_FRAME_LABEL; }
+    }
+  }
+  // Auto-run once per clip on landscape/wide sources with no saved reframe.
+  function maybeAutoReframe() {
+    if (_editorSplitScreen) return;                 // split has its own framing
+    if (Math.abs(getReframeX()) > 0.02) return;     // user/saved value present
+    const clipKey = (typeof _editCandidate !== 'undefined' && _editCandidate) ? clipEditKey(_editCandidate) : null;
+    if (clipKey && _reframeAutoRunFor === clipKey) return;
+    const v = document.getElementById('edit-video'); if (!v) return;
+    const run = function () {
+      const vw = v.videoWidth, vh = v.videoHeight;
+      if (!vw || !vh) return;
+      if (vw <= vh * 1.2) return;                    // only wide/landscape clips need reframing
+      if (_editorSplitScreen) return;
+      if (Math.abs(getReframeX()) > 0.02) return;
+      _reframeAutoRunFor = clipKey || true;
+      autoReframeSpeaker(true);
+    };
+    if (v.videoWidth) run(); else v.addEventListener('loadedmetadata', run, { once: true });
+  }
+
   function setClipSpeed(v) {
     const s = clampClipSpeed(v);
     pushEditorUndo('speed');
