@@ -2617,3 +2617,26 @@ Follow-up to #3 (manual reframe): auto-center the 9:16 crop on the speaker for w
   _autoDetectSplit(). Result persists in caption_style.reframe_x. It's advisory — the manual
   Reframe slider still overrides.
 - Handshake bumped (new route). Deploy: push + redeploy server.py + rebuild zip + restart launcher.
+
+## 2026-07-02 — Montserrat added as a real thumbnail font (frontend-only)
+Emily asked for three new thumbnail fonts; only Montserrat is deliverable now (Big Caslon &
+Berthold Akzidenz Grotesk are proprietary and BLOCKED pending licensed webfont files — see the
+#7 pattern). Montserrat is already loaded via the Google Fonts <link> (weights 400–700, OFL).
+- THE SNAG: 'Montserrat' was a RESERVED sentinel. The old backend default leaked the bare,
+  unquoted string 'Montserrat' into drafts (see "ROOT CAUSE … backend default was Montserrat",
+  June 30). thumbSafeFont() coerced any 'Montserrat' -> 'Handmade Sans' so those drafts render
+  as intended, and backend normalize_text_box still maps None/''/'Montserrat' -> Handmade Sans.
+- FIX (zero legacy regression): picker option value is the QUOTED "'Montserrat'" (matching the
+  quoting convention of every other option, e.g. "'Handmade Sans'"). thumbSafeFont() now compares
+  the value WITHOUT stripping quotes, so ONLY the bare legacy sentinel 'Montserrat' is coerced;
+  the quoted "'Montserrat'" passes through and renders the true Montserrat face. Render paths
+  append ", sans-serif", and the export/gallery preload strips quotes -> loads "Montserrat"
+  correctly. Backend passes "'Montserrat'" (with quotes) through untouched (!= 'Montserrat').
+- Added the option to BOTH pickers (#thumb-font-select, #dlg-font-select) and preloaded Montserrat
+  at init (document.fonts.load) alongside Handmade Sans; the export path already awaits
+  document.fonts.ready. Canvas renders headline text at weight 700 (Montserrat Bold).
+- NO backend contract change, NO handshake bump (mirrors §43 Handmade Sans). Deploy: git push ->
+  Netlify redeploys index.html; hard-refresh. No server.py copy / zip / launcher restart needed.
+- BLOCKED FOR LATER: Big Caslon + Akzidenz Grotesk need Emily to drop licensed .otf/.woff2 files
+  into an accessible folder (webfont license required to self-host publicly), then self-host per §43.
+Regression risk: Low (additive; existing fonts + legacy Montserrat sentinel untouched).

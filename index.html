@@ -2947,6 +2947,7 @@
                     <div class="thumb-control-label">Font</div>
                     <select class="thumb-font-select" id="thumb-font-select" onchange="updateThumbText();renderThumbCanvas()">
                   <option value="'Handmade Sans'" style="font-family:'Handmade Sans'">Handmade Sans</option>
+                  <option value="'Montserrat'" style="font-family:'Montserrat',sans-serif">Montserrat</option>
                   <option value="'Covered By Your Grace'" style="font-family:'Covered By Your Grace'">Covered By Your Grace</option>
                   <option value="'Permanent Marker'" style="font-family:'Permanent Marker'">Permanent Marker</option>
                   <option value="'Rock Salt'" style="font-family:'Rock Salt'">Rock Salt</option>
@@ -3179,7 +3180,7 @@
   // an old backend (launcher not restarted after a deploy).
   const EXPECTED_BACKEND_BUILD = '2026-07-01-editor3';
 
-  if (document.fonts && document.fonts.load) { document.fonts.load("700 64px 'Handmade Sans'").catch(function(){}); }
+  if (document.fonts && document.fonts.load) { document.fonts.load("700 64px 'Handmade Sans'").catch(function(){}); document.fonts.load("700 64px 'Montserrat'").catch(function(){}); }
   let _staleBackendWarned = false;
   function showStaleBackendBanner(stale) {
     let el = document.getElementById('stale-backend-banner');
@@ -7041,13 +7042,17 @@
   }
 
   // Largest 700-weight font size whose wrapped text fits inside box.width x box.height.
-  // "Montserrat" is never a selectable thumbnail font — it only ever appears as the old
-  // backend default that leaked in. Treat it as the real default (Handmade Sans) everywhere
-  // it renders, so existing drafts display in the intended font without needing a re-save.
+  // The BARE, unquoted "Montserrat" only ever appears as the old backend default that leaked
+  // into drafts — treat it as Handmade Sans everywhere it renders, so those drafts display in
+  // the intended font without a re-save. (The real Montserrat picker option stores the QUOTED
+  // "'Montserrat'", which is distinct and renders the true Montserrat face — see thumbSafeFont.)
   function thumbSafeFont(f) {
     if (!f) return 'Handmade Sans';
-    var bare = String(f).replace(/['"]/g, '').trim();
-    return bare === 'Montserrat' ? 'Handmade Sans' : f;
+    // The legacy leaked backend default was the bare, UNQUOTED string 'Montserrat'
+    // (never user-chosen) -> keep rendering those drafts as Handmade Sans. The real
+    // Montserrat picker option stores the QUOTED "'Montserrat'", which is distinct
+    // from the sentinel and passes through to render the true Montserrat face.
+    return String(f).trim() === 'Montserrat' ? 'Handmade Sans' : f;
   }
   function fitFontSizeToBox(box) {
     const ctx = _txMeasureCtx;
@@ -12652,6 +12657,7 @@
                 <div class="thumb-editor-label">Font</div>
                 <select class="thumb-editor-select" id="dlg-font-select" onchange="dlgUpdateText()">
                   <option value="'Handmade Sans'" style="font-family:'Handmade Sans'">Handmade Sans</option>
+                  <option value="'Montserrat'" style="font-family:'Montserrat',sans-serif">Montserrat</option>
                   <option value="'Covered By Your Grace'" style="font-family:'Covered By Your Grace'">Covered By Your Grace</option>
                   <option value="'Permanent Marker'" style="font-family:'Permanent Marker'">Permanent Marker</option>
                   <option value="'Rock Salt'" style="font-family:'Rock Salt'">Rock Salt</option>
