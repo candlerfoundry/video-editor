@@ -2640,3 +2640,64 @@ Berthold Akzidenz Grotesk are proprietary and BLOCKED pending licensed webfont f
 - BLOCKED FOR LATER: Big Caslon + Akzidenz Grotesk need Emily to drop licensed .otf/.woff2 files
   into an accessible folder (webfont license required to self-host publicly), then self-host per §43.
 Regression risk: Low (additive; existing fonts + legacy Montserrat sentinel untouched).
+
+## Photo Motion — keyframed pan/zoom over a still image (build `2026-07-10-photomotion`)
+NEW feature, additive. A "Create → Photo Motion" screen (new tab) that turns ONE high-res
+still image into a 9:16 video with a CapCut-style keyframed pan/zoom (Ken Burns) + optional
+music, exported to Dropbox + a Video Shorts & Social Airtable record. Built in two waves:
+1A (frontend-only framing) then 1B (keyframe timeline + backend render route + this handshake bump).
+
+### The camera model (must stay identical frontend ↔ backend)
+The "camera" is `{zoom, ox, oy}`: zoom 1..6 (cover-fit × zoom), ox/oy normalized offsets -1..1.
+The crop rectangle is computed the SAME way on both sides — frontend `pmDrawFrame` (index.html)
+and backend `_pm_crop_box` (server.py):
+  cover = max(W/natW, H/natH); scale = cover*zoom; sw=W/scale, sh=H/scale;
+  sx=(natW-sw)/2*(1+ox); sy=(natH-sh)/2*(1+oy).
+Easing MUST match too: frontend `pmEaseJS` == backend `_pm_ease` (linear / ease=cubic-in-out /
+ease-in=f^3 / ease-out=1-(1-f)^3 / hold=0). This equality is WHY the on-screen preview equals the
+export — do not change one without the other.
+
+### BACKEND (server.py) — route POST /export_photo_motion (multipart)
+Fields: `image` (file, required), `keyframes` (JSON `[{t,zoom,ox,oy,ease}]`, required, forgiving),
+`duration` (sec; defaults to max keyframe t; clamped 0.5..120), `fps` (12..60, default 30),
+`suggested_name`, `target_folder`, `clip_type` (Airtable Type), `content_title`, `ig_caption`,
+`cover_frame`, `thumbnail` (file), `music` (file, optional).
+- Render: `render_photo_motion_video` opens the image with PIL (flattens alpha over black),
+  and for each of `round(duration*fps)` frames interpolates the camera (`_pm_interp_camera`) and
+  crops with `img.resize((1080,1920), LANCZOS, box=float_box)`. The FLOAT `box` on a high-res
+  source = sub-pixel-smooth motion, which sidesteps ffmpeg `zoompan`'s integer-jitter on slow pans
+  (no 8000px pre-upscale hack needed). Frames are piped raw (rgb24) to ffmpeg stdin →
+  `libx264 -crf 18 -preset veryfast -pix_fmt yuv420p -t {duration} -movflags +faststart`. Optional
+  music = second `-i` input, `-map 0:v:0 -map 1:a:0 -c:a aac`. No music → `-an`.
+- Publish tail MIRRORS /export_clip: saves the mp4 into the local `Social Media Clips/<folder>/`
+  (Dropbox desktop client syncs it), `get_or_create_shared_link`, optional thumbnail save +
+  `_burn_cover_frame` IG cover, creates a `tbll0KDqmrAlwQuAx` record (Status/Type/Content Title/
+  Clip - Dropbox URL/Thumbnail - Dropbox URL/IG caption), retries once without an invalid Type, and
+  `_background_link_and_patch` for the big-file sync race. NO item_code/source-record linking (photo
+  motion has no source video). Helpers reused unchanged; export_clip itself is UNTOUCHED.
+- PIL + numpy only (no OpenCV), consistent with the rest of the backend. Whisper/anthropic
+  unaffected.
+
+### FRONTEND (index.html) — `#tab-photomotion`, all `_pm*` / `pm*` names
+1A: full-res upload (`pmUploadImage`, keeps ≤4096px), a 9:16 canvas (`pm-canvas`, 1080x1920)
+drawn by `pmDrawFrame`; drag-to-pan + cursor-anchored scroll-to-zoom (`pmZoomAt`) + zoom slider +
+reset/replace. NO touch/pinch — mouse only.
+1B: keyframe timeline under the canvas (playhead + draggable diamonds), Duration, "◆ Add / update
+keyframe" (captures `_pmCam` at the playhead; updates the keyframe within 0.05s else inserts),
+select/retime/delete, per-keyframe Ease dropdown, Play/Pause preview (`pmPlayToggle`, rAF, sets
+`_pmCam = pmInterpCam(t)`), and Export (`pmExport` → FormData → /export_photo_motion → shows the
+Dropbox + Airtable links). `EXPECTED_BACKEND_BUILD` bumped to match.
+
+### Deploy (handshake bumped → full deploy)
+git push (Netlify redeploys index.html) + copy server.py next to the exe + rebuild the flat zip
+(`zip -j foundry-video-editor-backend.zip backend/server.py backend/start_server.bat
+backend/requirements.txt`) + restart launcher + hard-refresh. Confirm via the build handshake
+(no amber banner).
+
+### NEXT (Photo Motion): 1C keyframed TEXT overlays (text box → transparent PNG rendered client-
+side, composited per-frame in the PIL loop with interpolated pos/scale/opacity/rotation — same
+easing), 1D background-music upload UI + thumbnail creation (reuse the composer) + polish. Also
+planned: image-project persistence (a `source_kind` + new /projects event so Photo Motion projects
+appear in Recent Projects).
+Regression risk: Low — fully additive; new route + new screen; export_clip and all existing routes
+untouched; new frontend is a self-contained `_pm*` module.

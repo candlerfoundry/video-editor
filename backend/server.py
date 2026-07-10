@@ -62,7 +62,7 @@ CORS(app)
 
 # Bump this whenever the frontend/backend contract changes (the frontend
 # carries a matching EXPECTED_BACKEND_BUILD and warns when they differ).
-BACKEND_BUILD = "2026-07-01-editor3"
+BACKEND_BUILD = "2026-07-10-photomotion"
 
 CREATE_NO_WINDOW = 0x08000000 if platform.system() == 'Windows' else 0
 
@@ -3564,6 +3564,308 @@ def export_thumbnail():
         "cover_burned": cover_burned,
         "first_frame_b64": first_frame_b64,
         "folder_name": folder_name,
+    })
+
+
+# =============================================================================
+# PHOTO MOTION (Feature 1B) — keyframed pan/zoom over a still image -> 9:16 video
+# Renders frame-by-frame with PIL (float-box LANCZOS crop = sub-pixel-smooth,
+# no zoompan jitter) piped to ffmpeg. The camera model (zoom + normalized
+# offsets ox/oy) matches the frontend's drawImageCoverZoomed math EXACTLY, so
+# the on-screen preview equals the export. Forgiving on keyframe input.
+# =============================================================================
+PM_MAX_ZOOM = 6.0
+PM_OUT_W, PM_OUT_H = 1080, 1920
+
+
+def _pm_ease(kind, f):
+    # Easing for the segment LEADING OUT of a keyframe. Must match the JS.
+    if kind == 'linear':
+        return f
+    if kind == 'hold':
+        return 0.0
+    if kind == 'ease-in':
+        return f * f * f
+    if kind == 'ease-out':
+        return 1.0 - (1.0 - f) ** 3
+    # default 'ease' = cubic in-out
+    return 4.0 * f * f * f if f < 0.5 else 1.0 - ((-2.0 * f + 2.0) ** 3) / 2.0
+
+
+def _pm_clamp_cam(z, ox, oy):
+    z = max(1.0, min(PM_MAX_ZOOM, z))
+    return z, max(-1.0, min(1.0, ox)), max(-1.0, min(1.0, oy))
+
+
+def _pm_interp_camera(keyframes, tq):
+    """Interpolate (zoom, ox, oy) at time tq from a list of keyframes.
+    Forgiving: missing fields default; single keyframe = static hold."""
+    kfs = sorted(keyframes, key=lambda k: float(k.get('t', 0) or 0))
+    def val(k):
+        return (float(k.get('zoom', 1) or 1), float(k.get('ox', 0) or 0), float(k.get('oy', 0) or 0))
+    if tq <= float(kfs[0].get('t', 0) or 0):
+        return _pm_clamp_cam(*val(kfs[0]))
+    if tq >= float(kfs[-1].get('t', 0) or 0):
+        return _pm_clamp_cam(*val(kfs[-1]))
+    for i in range(len(kfs) - 1):
+        a, b = kfs[i], kfs[i + 1]
+        ta, tb = float(a.get('t', 0) or 0), float(b.get('t', 0) or 0)
+        if ta <= tq < tb:
+            span = (tb - ta) or 1e-9
+            e = _pm_ease(a.get('ease', 'ease'), (tq - ta) / span)
+            za, oxa, oya = val(a)
+            zb, oxb, oyb = val(b)
+            return _pm_clamp_cam(za + (zb - za) * e, oxa + (oxb - oxa) * e, oya + (oyb - oya) * e)
+    return _pm_clamp_cam(*val(kfs[-1]))
+
+
+def _pm_crop_box(nat_w, nat_h, z, ox, oy):
+    # Same cover-fit + zoom + normalized-offset math as the frontend camera.
+    cover = max(PM_OUT_W / nat_w, PM_OUT_H / nat_h)
+    scale = cover * z
+    sw, sh = PM_OUT_W / scale, PM_OUT_H / scale
+    sx = (nat_w - sw) / 2.0 * (1.0 + ox)
+    sy = (nat_h - sh) / 2.0 * (1.0 + oy)
+    return (sx, sy, sx + sw, sy + sh)
+
+
+def render_photo_motion_video(image_path, keyframes, duration, fps, output_path, music_path=None):
+    """Render a keyframed pan/zoom video from a single still image.
+    Returns (ok: bool, err: str)."""
+    from PIL import Image as PILImage
+
+    try:
+        img = PILImage.open(image_path)
+        if img.mode != 'RGB':
+            # Flatten any alpha over black (video has no alpha channel).
+            rgba = img.convert('RGBA')
+            bg = PILImage.new('RGB', rgba.size, (0, 0, 0))
+            bg.paste(rgba, (0, 0), rgba)
+            img = bg
+    except Exception as exc:
+        return False, "could not open image: %s" % exc
+
+    nat_w, nat_h = img.size
+    if not nat_w or not nat_h:
+        return False, "image has zero size"
+
+    total_frames = max(1, int(round(duration * fps)))
+
+    cmd = [FFMPEG_EXE, "-y",
+           "-f", "rawvideo", "-pix_fmt", "rgb24",
+           "-s", "%dx%d" % (PM_OUT_W, PM_OUT_H), "-r", str(fps), "-i", "-"]
+    if music_path:
+        cmd += ["-i", music_path]
+    cmd += ["-c:v", "libx264", "-crf", "18", "-preset", "veryfast", "-pix_fmt", "yuv420p"]
+    if music_path:
+        cmd += ["-c:a", "aac", "-b:a", "192k", "-map", "0:v:0", "-map", "1:a:0"]
+    else:
+        cmd += ["-an"]
+    cmd += ["-t", "%.3f" % duration, "-movflags", "+faststart", output_path]
+
+    logger.info("[photomotion] Rendering %d frames @ %dfps (%.2fs) from %dx%d image",
+                total_frames, fps, duration, nat_w, nat_h)
+    proc = subprocess.Popen(cmd, stdin=subprocess.PIPE, stdout=subprocess.DEVNULL,
+                            stderr=subprocess.PIPE, creationflags=CREATE_NO_WINDOW)
+    try:
+        for n in range(total_frames):
+            z, ox, oy = _pm_interp_camera(keyframes, n / float(fps))
+            box = _pm_crop_box(nat_w, nat_h, z, ox, oy)
+            frame = img.resize((PM_OUT_W, PM_OUT_H), PILImage.LANCZOS, box=box)
+            proc.stdin.write(frame.tobytes())
+        proc.stdin.close()
+    except BrokenPipeError:
+        pass  # ffmpeg died early; error captured below
+    except Exception as exc:
+        try:
+            proc.kill()
+        except Exception:
+            pass
+        return False, "frame render error: %s" % exc
+
+    err = proc.stderr.read().decode("utf-8", errors="replace")
+    rc = proc.wait()
+    if rc != 0 or not os.path.isfile(output_path):
+        return False, err[-600:]
+    return True, ""
+
+
+@app.route("/export_photo_motion", methods=["POST"])
+def export_photo_motion():
+    """Render a keyframed pan/zoom (Ken Burns) clip from ONE still image, save it
+    to the Social Media Clips Dropbox folder, and create a Video Shorts & Social
+    Airtable record — mirroring /export_clip's publish tail. Multipart form:
+      image (file, required), keyframes (JSON [{t,zoom,ox,oy,ease}], required),
+      duration (sec), fps, suggested_name, target_folder, clip_type, content_title,
+      ig_caption, cover_frame, thumbnail (file), music (file, optional)."""
+    import urllib.request
+
+    if not FFMPEG_EXE:
+        return jsonify({"error": "ffmpeg not found. Expected at Dropbox\\Scripts\\FFMPEG\\ffmpeg.exe"}), 500
+
+    image_file = request.files.get("image")
+    if not (image_file and image_file.filename):
+        return jsonify({"error": "no image uploaded"}), 400
+
+    try:
+        keyframes = json.loads(request.form.get("keyframes", "[]"))
+    except Exception:
+        keyframes = []
+    if not isinstance(keyframes, list) or not keyframes:
+        return jsonify({"error": "no keyframes provided"}), 400
+
+    try:
+        duration = float(request.form.get("duration", "0") or 0)
+    except Exception:
+        duration = 0.0
+    if duration <= 0:
+        try:
+            duration = max(float(k.get("t", 0) or 0) for k in keyframes)
+        except Exception:
+            duration = 0.0
+    duration = max(0.5, min(120.0, duration))
+    try:
+        fps = int(float(request.form.get("fps", "30") or 30))
+    except Exception:
+        fps = 30
+    fps = max(12, min(60, fps))
+
+    suggested_name = (request.form.get("suggested_name") or "Photo Motion").strip()
+    target_folder  = sanitize_social_media_relative_path(request.form.get("target_folder", ""))
+    clip_type      = (request.form.get("clip_type") or "").strip()
+    content_title  = (request.form.get("content_title") or "").strip()
+    ig_caption     = (request.form.get("ig_caption") or "").strip()
+    cover_frame    = str(request.form.get("cover_frame", "")).lower() in ("1", "true", "on", "yes")
+    thumbnail_file = request.files.get("thumbnail")
+    music_file     = request.files.get("music")
+
+    output_name = suggested_name if suggested_name.lower().endswith(".mp4") else suggested_name + ".mp4"
+    base_name   = os.path.splitext(output_name)[0]
+    folder_name = target_folder or sanitize_social_media_relative_path(base_name)
+    clips_folder = build_social_media_local_path(folder_name)
+    os.makedirs(clips_folder, exist_ok=True)
+    output_path  = os.path.join(clips_folder, output_name)
+
+    tmp_dir = tempfile.mkdtemp(prefix="pm_export_")
+    thumb_local_path = None
+    thumb_dbx_path   = None
+    try:
+        img_in = os.path.join(tmp_dir, "source_image")
+        image_file.save(img_in)
+
+        music_path = None
+        if music_file and music_file.filename:
+            music_path = os.path.join(tmp_dir, "music_in")
+            music_file.save(music_path)
+
+        ok, err = render_photo_motion_video(img_in, keyframes, duration, fps, output_path, music_path)
+        if not ok:
+            return jsonify({"error": "render failed: " + (err or "")}), 500
+
+        # Optional thumbnail save + Instagram cover-frame burn (same as /export_clip).
+        if thumbnail_file and thumbnail_file.filename:
+            thumb_name       = base_name + " - Thumbnail.png"
+            thumb_dir        = os.path.join(clips_folder, "Thumbnails")
+            os.makedirs(thumb_dir, exist_ok=True)
+            thumb_local_path = os.path.join(thumb_dir, thumb_name)
+            thumbnail_file.save(thumb_local_path)
+            thumb_dbx_path   = build_social_media_dropbox_path(folder_name + "/Thumbnails", thumb_name)
+
+        if cover_frame and thumb_local_path:
+            burned_path = os.path.join(tmp_dir, "burned.mp4")
+            rb = _burn_cover_frame(thumb_local_path, output_path, burned_path)
+            if rb.returncode == 0 and os.path.isfile(burned_path):
+                shutil.move(burned_path, output_path)
+                logger.info("[photomotion] Burned thumbnail as cover frame")
+            else:
+                err2 = rb.stderr.decode("utf-8", errors="replace")[-400:]
+                logger.warning("[photomotion] Cover-frame burn failed (clip kept without it): %s", err2)
+    finally:
+        shutil.rmtree(tmp_dir, ignore_errors=True)
+
+    # ── Dropbox shared links ──
+    clip_url  = None
+    thumb_url = None
+    dropbox_error = None
+    try:
+        dbx = get_dropbox_client()
+        clip_url = get_or_create_shared_link(dbx, build_social_media_dropbox_path(folder_name, output_name))
+        if thumb_dbx_path:
+            thumb_url = get_or_create_shared_link(dbx, thumb_dbx_path)
+    except FileNotFoundError:
+        dropbox_error = "dropbox_credentials.json not found in Dropbox/Scripts"
+        logger.warning("dropbox_credentials.json not found; skipping Dropbox link generation")
+    except ImportError:
+        dropbox_error = "the 'dropbox' Python package is not installed (pip install dropbox)"
+        logger.warning("dropbox package not installed; skipping link generation")
+    except Exception as de:
+        dropbox_error = str(de)[:300]
+        logger.warning("Dropbox error during shared-link generation: %s", de)
+
+    # ── Airtable record (Video Shorts & Social) ──
+    airtable_key       = read_airtable_api_key()
+    airtable_record_id = None
+    airtable_url       = None
+    airtable_error     = None
+    if not airtable_key:
+        airtable_error = "Airtable API key not found at Dropbox/Scripts/airtable_api_key.txt"
+    if airtable_key:
+        fields = {"Status": "Draft"}
+        if clip_type:      fields["Type"] = clip_type
+        if content_title:  fields["Content Title"] = content_title
+        if clip_url:       fields["Clip - Dropbox URL"] = clip_url
+        if thumb_url:      fields["Thumbnail - Dropbox URL"] = thumb_url
+        if ig_caption:     fields["IG Social Media Caption"] = ig_caption
+
+        def _create_shorts_record(fields_payload):
+            payload = json.dumps({"fields": fields_payload}).encode("utf-8")
+            at_req = urllib.request.Request(
+                "https://api.airtable.com/v0/appiL0Z2RilcAT2Cw/tbll0KDqmrAlwQuAx",
+                data=payload,
+                headers={"Authorization": "Bearer " + airtable_key, "Content-Type": "application/json"},
+                method="POST",
+            )
+            with urllib.request.urlopen(at_req, timeout=15) as resp:
+                return json.loads(resp.read()).get("id")
+
+        try:
+            airtable_record_id = _create_shorts_record(fields)
+        except Exception as ae:
+            # Invalid single-select Type fails the whole record — retry once without it.
+            if "Type" in fields:
+                logger.warning("Airtable record creation failed (%s); retrying without Type", ae)
+                fields.pop("Type", None)
+                try:
+                    airtable_record_id = _create_shorts_record(fields)
+                except Exception as ae2:
+                    airtable_error = str(ae2)[:300]
+                    logger.warning("Airtable record creation failed: %s", airtable_error)
+            else:
+                airtable_error = str(ae)[:300]
+                logger.warning("Airtable record creation failed: %s", airtable_error)
+
+        if airtable_record_id:
+            airtable_url = "https://airtable.com/appiL0Z2RilcAT2Cw/tbll0KDqmrAlwQuAx/" + airtable_record_id
+
+    # Link failed without a hard error — almost always the big-file sync race.
+    if not clip_url:
+        _background_link_and_patch(
+            build_social_media_dropbox_path(folder_name, output_name),
+            airtable_record_id, "Clip - Dropbox URL")
+        if not dropbox_error or "not_found" in (dropbox_error or ""):
+            dropbox_error = ("clip is still syncing to Dropbox — the share link will be "
+                             "added to Airtable automatically within a few minutes")
+
+    return jsonify({
+        "success":               True,
+        "output_filename":       output_name,
+        "folder_name":           folder_name,
+        "clip_dropbox_url":      clip_url,
+        "thumbnail_dropbox_url": thumb_url,
+        "airtable_record_id":    airtable_record_id,
+        "airtable_url":          airtable_url,
+        "airtable_error":        airtable_error,
+        "dropbox_error":         dropbox_error,
     })
 
 
