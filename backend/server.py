@@ -62,7 +62,7 @@ CORS(app)
 
 # Bump this whenever the frontend/backend contract changes (the frontend
 # carries a matching EXPECTED_BACKEND_BUILD and warns when they differ).
-BACKEND_BUILD = "2026-07-10-photomotion"
+BACKEND_BUILD = "2026-07-10-photomotion-text"
 
 CREATE_NO_WINDOW = 0x08000000 if platform.system() == 'Windows' else 0
 
@@ -3629,9 +3629,54 @@ def _pm_crop_box(nat_w, nat_h, z, ox, oy):
     return (sx, sy, sx + sw, sy + sh)
 
 
-def render_photo_motion_video(image_path, keyframes, duration, fps, output_path, music_path=None):
-    """Render a keyframed pan/zoom video from a single still image.
-    Returns (ok: bool, err: str)."""
+def _pm_interp_overlay(kfs, t):
+    """Interpolate a text overlay's transform (x, y, scale, rot) at time t.
+    x/y are normalized 0..1 (center in the 1080x1920 output). Matches the JS."""
+    ks = sorted(kfs, key=lambda k: float(k.get('t', 0) or 0))
+    def val(k):
+        return (float(k.get('x', 0.5) or 0.5), float(k.get('y', 0.5) or 0.5),
+                float(k.get('scale', 1) or 1), float(k.get('rot', 0) or 0))
+    if not ks:
+        return (0.5, 0.5, 1.0, 0.0)
+    if t <= float(ks[0].get('t', 0) or 0):
+        return val(ks[0])
+    if t >= float(ks[-1].get('t', 0) or 0):
+        return val(ks[-1])
+    for i in range(len(ks) - 1):
+        a, b = ks[i], ks[i + 1]
+        ta, tb = float(a.get('t', 0) or 0), float(b.get('t', 0) or 0)
+        if ta <= t < tb:
+            e = _pm_ease(a.get('ease', 'ease'), (t - ta) / ((tb - ta) or 1e-9))
+            xa, ya, sa, ra = val(a)
+            xb, yb, sb, rb = val(b)
+            return (xa + (xb - xa) * e, ya + (yb - ya) * e, sa + (sb - sa) * e, ra + (rb - ra) * e)
+    return val(ks[-1])
+
+
+def _pm_overlay_opacity(ov, t):
+    """Opacity 0..1 from a text overlay's visible window + fade in/out. Matches the JS."""
+    t0 = float(ov.get('tStart', 0) or 0)
+    t1 = float(ov.get('tEnd', 0) or 0)
+    if t1 <= 0:
+        t1 = 1e9
+    if t < t0 or t > t1:
+        return 0.0
+    op = 1.0
+    fi = float(ov.get('fadeIn', 0) or 0)
+    fo = float(ov.get('fadeOut', 0) or 0)
+    if fi > 0 and t < t0 + fi:
+        op *= max(0.0, (t - t0) / fi)
+    if fo > 0 and t1 < 1e8 and t > t1 - fo:
+        op *= max(0.0, (t1 - t) / fo)
+    return max(0.0, min(1.0, op))
+
+
+def render_photo_motion_video(image_path, keyframes, duration, fps, output_path,
+                              music_path=None, overlays=None):
+    """Render a keyframed pan/zoom video from a single still image, with optional
+    keyframed text overlays (each a pre-rendered transparent PNG that is pasted
+    per-frame at an interpolated transform + opacity). Returns (ok, err)."""
+    import base64 as _b64
     from PIL import Image as PILImage
 
     try:
@@ -3649,6 +3694,24 @@ def render_photo_motion_video(image_path, keyframes, duration, fps, output_path,
     if not nat_w or not nat_h:
         return False, "image has zero size"
 
+    # Decode text overlays (transparent PNGs rendered client-side). Each is pasted
+    # per-frame at an interpolated transform, so PIL only moves a picture — no font
+    # work server-side, and the on-screen preview equals the export.
+    ov_list = []
+    for ov in (overlays or []):
+        try:
+            raw = _b64.b64decode(ov.get('png', '') or '')
+            if not raw:
+                continue
+            im = PILImage.open(io.BytesIO(raw)).convert('RGBA')
+            ov_list.append({
+                'img': im, 'kfs': ov.get('keyframes') or [],
+                'tStart': ov.get('tStart', 0), 'tEnd': ov.get('tEnd', 0),
+                'fadeIn': ov.get('fadeIn', 0), 'fadeOut': ov.get('fadeOut', 0),
+            })
+        except Exception as exc:
+            logger.warning("[photomotion] skipped a bad overlay: %s", exc)
+
     total_frames = max(1, int(round(duration * fps)))
 
     cmd = [FFMPEG_EXE, "-y",
@@ -3658,7 +3721,9 @@ def render_photo_motion_video(image_path, keyframes, duration, fps, output_path,
         cmd += ["-i", music_path]
     cmd += ["-c:v", "libx264", "-crf", "18", "-preset", "veryfast", "-pix_fmt", "yuv420p"]
     if music_path:
-        cmd += ["-c:a", "aac", "-b:a", "192k", "-map", "0:v:0", "-map", "1:a:0"]
+        fade_st = max(0.0, duration - 1.0)
+        cmd += ["-c:a", "aac", "-b:a", "192k", "-map", "0:v:0", "-map", "1:a:0",
+                "-af", "afade=t=out:st=%.2f:d=1.0" % fade_st]
     else:
         cmd += ["-an"]
     cmd += ["-t", "%.3f" % duration, "-movflags", "+faststart", output_path]
@@ -3669,9 +3734,31 @@ def render_photo_motion_video(image_path, keyframes, duration, fps, output_path,
                             stderr=subprocess.PIPE, creationflags=CREATE_NO_WINDOW)
     try:
         for n in range(total_frames):
-            z, ox, oy = _pm_interp_camera(keyframes, n / float(fps))
+            t = n / float(fps)
+            z, ox, oy = _pm_interp_camera(keyframes, t)
             box = _pm_crop_box(nat_w, nat_h, z, ox, oy)
             frame = img.resize((PM_OUT_W, PM_OUT_H), PILImage.LANCZOS, box=box)
+            if ov_list:
+                frame = frame.convert('RGBA')
+                for ov in ov_list:
+                    op = _pm_overlay_opacity(ov, t)
+                    if op <= 0.002:
+                        continue
+                    x, y, sc, rot = _pm_interp_overlay(ov['kfs'], t)
+                    im = ov['img']
+                    w = max(1, int(round(im.width * sc)))
+                    h = max(1, int(round(im.height * sc)))
+                    im2 = im.resize((w, h), PILImage.LANCZOS)
+                    if abs(rot) > 0.01:
+                        # Negate: canvas rotates clockwise for +deg, PIL counter-clockwise.
+                        im2 = im2.rotate(-rot, expand=True, resample=PILImage.BICUBIC)
+                    if op < 0.998:
+                        alpha = im2.split()[3].point(lambda v, o=op: int(v * o))
+                        im2.putalpha(alpha)
+                    px = int(round(x * PM_OUT_W - im2.width / 2.0))
+                    py = int(round(y * PM_OUT_H - im2.height / 2.0))
+                    frame.alpha_composite(im2, (px, py))
+                frame = frame.convert('RGB')
             proc.stdin.write(frame.tobytes())
         proc.stdin.close()
     except BrokenPipeError:
@@ -3713,6 +3800,13 @@ def export_photo_motion():
         keyframes = []
     if not isinstance(keyframes, list) or not keyframes:
         return jsonify({"error": "no keyframes provided"}), 400
+
+    try:
+        overlays = json.loads(request.form.get("overlays", "[]"))
+    except Exception:
+        overlays = []
+    if not isinstance(overlays, list):
+        overlays = []
 
     try:
         duration = float(request.form.get("duration", "0") or 0)
@@ -3758,7 +3852,8 @@ def export_photo_motion():
             music_path = os.path.join(tmp_dir, "music_in")
             music_file.save(music_path)
 
-        ok, err = render_photo_motion_video(img_in, keyframes, duration, fps, output_path, music_path)
+        ok, err = render_photo_motion_video(img_in, keyframes, duration, fps, output_path,
+                                            music_path=music_path, overlays=overlays)
         if not ok:
             return jsonify({"error": "render failed: " + (err or "")}), 500
 

@@ -2290,6 +2290,16 @@
     #tab-photomotion .pm-status a { color: var(--orange); }
     #tab-photomotion .pm-status.pm-ok { color: var(--success, #2D6A4F); }
     #tab-photomotion .pm-status.pm-err { color: var(--error, #CC2200); }
+    #tab-photomotion .pm-layer-row { display: flex; flex-wrap: wrap; gap: 6px; margin: 4px 0 6px; }
+    #tab-photomotion .pm-layer-chip { font-family: var(--font); font-size: 12px; padding: 5px 10px; border-radius: 14px; border: 1px solid var(--border-2); background: var(--surface); color: var(--text-2); cursor: pointer; }
+    #tab-photomotion .pm-layer-chip:hover { border-color: var(--orange); color: var(--orange); }
+    #tab-photomotion .pm-layer-chip.pm-layer-on { background: var(--orange-tint); border-color: var(--orange); color: var(--orange); font-weight: 600; }
+    #tab-photomotion .pm-layer-active { font-size: 12px; color: var(--muted); align-self: center; }
+    #tab-photomotion .pm-subtitle { font-size: 11px; font-weight: 600; letter-spacing: 0.05em; text-transform: uppercase; color: var(--muted); margin: 14px 0 8px; }
+    #tab-photomotion .pm-textarea { width: 100%; box-sizing: border-box; font-family: var(--font); font-size: 13px; padding: 8px 10px; border: 1px solid var(--border-2); border-radius: 7px; resize: vertical; margin-bottom: 10px; }
+    #tab-photomotion .pm-check { display: inline-flex; align-items: center; gap: 4px; font-size: 12.5px; color: var(--text-2); width: auto; }
+    #tab-photomotion .pm-music-name { font-size: 12px; color: var(--muted); font-style: italic; }
+    #tab-photomotion #pm-text-panel .pm-field > span { width: 84px; }
   </style>
 </head>
 <body>
@@ -3205,10 +3215,17 @@
                 <span>Duration</span>
                 <input type="number" id="pm-duration" min="1" max="120" step="0.5" value="6" onchange="pmSetDuration(this.value)"> <span style="width:auto;color:var(--muted);">seconds</span>
               </div>
-              <div class="pm-ctl-actions">
-                <button class="btn btn-sm" type="button" onclick="pmAddOrUpdateKeyframe()" title="Capture the current framing at the playhead">&#9670; Add / update keyframe</button>
+
+              <div class="pm-layer-row" id="pm-text-list"></div>
+              <div class="pm-ctl-actions" style="margin:4px 0 14px;">
+                <button class="btn-ghost btn-sm" type="button" onclick="pmAddText()">+ Add text</button>
+                <span class="pm-layer-active">Layer: <b id="pm-layer-label">Camera</b></span>
               </div>
-              <div class="pm-kf-info" id="pm-kf-info">No keyframe selected.</div>
+
+              <div class="pm-ctl-actions">
+                <button class="btn btn-sm" type="button" onclick="pmAddOrUpdateKeyframe()" title="Capture the current camera/text at the playhead">&#9670; Add / update keyframe</button>
+              </div>
+              <div class="pm-kf-info" id="pm-kf-info">Scrub the timeline or select a keyframe (◆).</div>
               <div class="pm-field" id="pm-ease-field" style="display:none;">
                 <span>Ease</span>
                 <select id="pm-kf-ease" onchange="pmSetKfEase(this.value)">
@@ -3221,6 +3238,49 @@
               </div>
               <div class="pm-ctl-actions" id="pm-kf-actions" style="display:none;">
                 <button class="btn-ghost btn-sm" type="button" onclick="pmDeleteKf()">Delete keyframe</button>
+              </div>
+
+              <!-- Text layer editing panel -->
+              <div id="pm-text-panel" style="display:none;">
+                <div class="pm-subtitle">Text</div>
+                <textarea id="pm-tx-text" rows="2" class="pm-textarea" oninput="pmTxEdit('text', this.value, true)" placeholder="Type your text (Enter for a new line)"></textarea>
+                <div class="pm-field">
+                  <span>Font</span>
+                  <select id="pm-tx-font" onchange="pmTxEdit('font', this.value, true)">
+                    <option value="Inter">Inter (sans)</option>
+                    <option value="Georgia">Georgia (serif)</option>
+                    <option value="Montserrat">Montserrat</option>
+                    <option value="Handmade Sans">Handmade Sans</option>
+                  </select>
+                </div>
+                <div class="pm-field">
+                  <span>Size</span>
+                  <input type="number" id="pm-tx-size" min="18" max="240" step="2" value="72" onchange="pmTxEdit('size', parseInt(this.value)||72, true)">
+                  <input type="color" id="pm-tx-color" value="#ffffff" oninput="pmTxEdit('color', this.value, true)" style="width:34px;height:30px;padding:0;border:1px solid var(--border-2);border-radius:6px;">
+                  <label class="pm-check"><input type="checkbox" id="pm-tx-bold" checked onchange="pmTxEdit('bold', this.checked, true)"> Bold</label>
+                  <label class="pm-check"><input type="checkbox" id="pm-tx-stroke" checked onchange="pmTxEdit('stroke', this.checked, true)"> Outline</label>
+                </div>
+                <div class="pm-field">
+                  <span>Scale</span>
+                  <input type="range" id="pm-tx-scale" min="0.2" max="3" step="0.02" value="1" oninput="pmSetTextScaleRot(this.value, null)">
+                  <span style="width:auto;">Rotate</span>
+                  <input type="range" id="pm-tx-rot" min="-45" max="45" step="1" value="0" oninput="pmSetTextScaleRot(null, this.value)">
+                </div>
+                <div class="pm-subtitle">Appears</div>
+                <div class="pm-field">
+                  <span>Start / End</span>
+                  <input type="number" id="pm-tx-start" min="0" max="120" step="0.1" value="0" onchange="pmTxEdit('tStart', parseFloat(this.value)||0, false)">
+                  <input type="number" id="pm-tx-end" min="0" max="120" step="0.1" value="6" onchange="pmTxEdit('tEnd', parseFloat(this.value)||0, false)">
+                </div>
+                <div class="pm-field">
+                  <span>Fade in / out</span>
+                  <input type="number" id="pm-tx-fadein" min="0" max="10" step="0.1" value="0.4" onchange="pmTxEdit('fadeIn', parseFloat(this.value)||0, false)">
+                  <input type="number" id="pm-tx-fadeout" min="0" max="10" step="0.1" value="0.4" onchange="pmTxEdit('fadeOut', parseFloat(this.value)||0, false)">
+                </div>
+                <div class="pm-ctl-actions">
+                  <button class="btn-ghost btn-sm" type="button" onclick="pmDeleteText()">Delete this text</button>
+                </div>
+                <div class="pm-note" style="margin-top:6px;">Drag the text on the canvas to move it — that sets a keyframe at the playhead. Move the playhead and drag again to make it travel.</div>
               </div>
             </div>
 
@@ -3241,6 +3301,13 @@
                   <option value="Blog Promo">Blog Promo</option>
                   <option value="Course Promo">Course Promo</option>
                 </select>
+              </div>
+              <div class="pm-field">
+                <span>Music</span>
+                <button class="btn-ghost btn-sm" type="button" onclick="document.getElementById('pm-music-input').click()">Add music</button>
+                <span class="pm-music-name" id="pm-music-name">No music</span>
+                <button class="btn-ghost btn-sm" id="pm-music-remove" type="button" onclick="pmClearMusic()" style="display:none;">Remove</button>
+                <input type="file" id="pm-music-input" accept="audio/*" style="display:none;" onchange="pmAddMusic(this)">
               </div>
               <div class="pm-ctl-actions">
                 <button class="btn" id="pm-export-btn" type="button" onclick="pmExport()">Export to Dropbox + Airtable</button>
@@ -3312,6 +3379,7 @@
     const ctx = canvas.getContext('2d');
     ctx.clearRect(0, 0, 1080, 1920);
     pmDrawFrame(ctx, _pmImgEl, 1080, 1920, _pmCam);
+    pmDrawTexts(ctx);
   }
   function pmDrawThrottled() {
     if (!_pmRaf) _pmRaf = requestAnimationFrame(() => { _pmRaf = null; pmDraw(); });
@@ -3426,6 +3494,7 @@
     document.addEventListener('mousedown', function (e) {
       const w = wrapEl();
       if (!w || !w.contains(e.target) || !_pmImgEl) return;
+      if (_pmActiveText) return;   // a text layer is active → dragging moves the text, not the camera
       pan = { sx: e.clientX, sy: e.clientY, ox: _pmCam.ox, oy: _pmCam.oy };
       w.classList.add('pm-panning');
       e.preventDefault();
@@ -3484,8 +3553,11 @@
     pmPlayStop();
     _pmKeyframes = [{ id: ++_pmKfSeq, t: 0, zoom: _pmCam.zoom, ox: _pmCam.ox, oy: _pmCam.oy, ease: 'ease' }];
     _pmSelKf = _pmKeyframes[0].id;
+    _pmTexts = []; _pmActiveText = null; _pmDragText = null; _pmTextSeq = 0;
+    pmClearMusic();
     const dur = document.getElementById('pm-duration'); if (dur) dur.value = _pmDuration;
     const st = document.getElementById('pm-status'); if (st) { st.textContent = ''; st.className = 'pm-status'; }
+    pmRenderTextList();
     pmRenderTimeline();
   }
 
@@ -3493,11 +3565,18 @@
   function pmTimeToX(t) { return Math.max(0, Math.min(1, t / (_pmDuration || 1))) * pmTrackW(); }
   function pmXToTime(x) { return Math.max(0, Math.min(1, x / (pmTrackW() || 1))) * _pmDuration; }
 
+  function pmActiveKfs() {
+    if (_pmActiveText) { const tx = _pmTexts.find(x => x.id === _pmActiveText); if (tx) return tx.kfs; }
+    return _pmKeyframes;
+  }
+  function pmActiveText() { return _pmTexts.find(x => x.id === _pmActiveText) || null; }
+
   function pmRenderTimeline() {
     const track = document.getElementById('pm-track');
     if (!track) return;
+    const kfs = pmActiveKfs();
     track.querySelectorAll('.pm-kf').forEach(el => el.remove());
-    _pmKeyframes.forEach(k => {
+    kfs.forEach(k => {
       const d = document.createElement('div');
       d.className = 'pm-kf' + (k.id === _pmSelKf ? ' pm-kf-active' : '');
       d.style.left = pmTimeToX(k.t) + 'px';
@@ -3506,42 +3585,63 @@
     });
     const ph = document.getElementById('pm-playhead'); if (ph) ph.style.left = pmTimeToX(_pmPlayhead) + 'px';
     const tm = document.getElementById('pm-time'); if (tm) tm.textContent = _pmPlayhead.toFixed(1) + 's / ' + _pmDuration.toFixed(1) + 's';
+    const lbl = document.getElementById('pm-layer-label');
+    if (lbl) { const tx = pmActiveText(); lbl.textContent = tx ? ('Text: ' + (tx.text.split('\n')[0] || 'text').slice(0, 16)) : 'Camera'; }
     pmRenderKfPanel();
   }
   function pmRenderKfPanel() {
-    const k = _pmKeyframes.find(x => x.id === _pmSelKf);
+    const kfs = pmActiveKfs();
+    const k = kfs.find(x => x.id === _pmSelKf);
     const info = document.getElementById('pm-kf-info');
     const easeF = document.getElementById('pm-ease-field');
     const actF = document.getElementById('pm-kf-actions');
-    if (!k) { if (info) info.textContent = 'Scrub the timeline or select a keyframe (◆).'; if (easeF) easeF.style.display = 'none'; if (actF) actF.style.display = 'none'; return; }
-    if (info) info.textContent = 'Keyframe at ' + k.t.toFixed(1) + 's — zoom ' + k.zoom.toFixed(2) + '×';
+    if (!k) { if (info) info.textContent = _pmActiveText ? 'Drag the text or use the sliders to set keyframes.' : 'Scrub the timeline or select a keyframe (◆).'; if (easeF) easeF.style.display = 'none'; if (actF) actF.style.display = 'none'; return; }
+    if (info) info.textContent = _pmActiveText
+      ? ('Keyframe at ' + k.t.toFixed(1) + 's — pos ' + Math.round((k.x || .5) * 100) + ',' + Math.round((k.y || .5) * 100) + ' · ' + (k.scale || 1).toFixed(2) + '×')
+      : ('Keyframe at ' + k.t.toFixed(1) + 's — zoom ' + k.zoom.toFixed(2) + '×');
     if (easeF) { easeF.style.display = 'flex'; const s = document.getElementById('pm-kf-ease'); if (s) s.value = k.ease; }
-    if (actF) actF.style.display = _pmKeyframes.length > 1 ? 'flex' : 'none';
+    if (actF) actF.style.display = kfs.length > 1 ? 'flex' : 'none';
   }
 
+  function pmCurrentTextTransform() {
+    const tx = pmActiveText(); if (!tx) return { x: 0.5, y: 0.5, scale: 1, rot: 0 };
+    if (_pmDragText && _pmDragText.id === tx.id) return { x: _pmDragText.x, y: _pmDragText.y, scale: _pmDragText.scale, rot: _pmDragText.rot };
+    return pmInterpText(tx.kfs, _pmPlayhead);
+  }
   function pmAddOrUpdateKeyframe() {
     if (!_pmImgEl) return;
     pmPlayStop();
+    const kfs = pmActiveKfs();
     const eps = 0.05;
-    let k = _pmKeyframes.find(x => Math.abs(x.t - _pmPlayhead) <= eps);
-    if (k) { k.zoom = _pmCam.zoom; k.ox = _pmCam.ox; k.oy = _pmCam.oy; }
-    else { k = { id: ++_pmKfSeq, t: _pmPlayhead, zoom: _pmCam.zoom, ox: _pmCam.ox, oy: _pmCam.oy, ease: 'ease' }; _pmKeyframes.push(k); }
+    let k = kfs.find(x => Math.abs(x.t - _pmPlayhead) <= eps);
+    if (_pmActiveText) {
+      const tr = pmCurrentTextTransform();
+      if (k) { k.x = tr.x; k.y = tr.y; k.scale = tr.scale; k.rot = tr.rot; }
+      else { k = { id: ++_pmKfSeq, t: _pmPlayhead, x: tr.x, y: tr.y, scale: tr.scale, rot: tr.rot, ease: 'ease' }; kfs.push(k); }
+    } else {
+      if (k) { k.zoom = _pmCam.zoom; k.ox = _pmCam.ox; k.oy = _pmCam.oy; }
+      else { k = { id: ++_pmKfSeq, t: _pmPlayhead, zoom: _pmCam.zoom, ox: _pmCam.ox, oy: _pmCam.oy, ease: 'ease' }; kfs.push(k); }
+    }
     _pmSelKf = k.id;
     pmRenderTimeline();
   }
   function pmSelectKf(id) {
-    const k = _pmKeyframes.find(x => x.id === id); if (!k) return;
-    _pmSelKf = id; _pmPlayhead = k.t;
-    _pmCam = { zoom: k.zoom, ox: k.ox, oy: k.oy }; pmSyncZoomSlider(); pmDraw();
+    const kfs = pmActiveKfs();
+    const k = kfs.find(x => x.id === id); if (!k) return;
+    _pmSelKf = id; _pmPlayhead = k.t; _pmDragText = null;
+    if (!_pmActiveText) { _pmCam = { zoom: k.zoom, ox: k.ox, oy: k.oy }; pmSyncZoomSlider(); }
+    pmDraw();
     pmRenderTimeline();
   }
   function pmDeleteKf() {
-    if (_pmKeyframes.length <= 1) return;
-    _pmKeyframes = _pmKeyframes.filter(x => x.id !== _pmSelKf);
-    _pmSelKf = _pmKeyframes[0].id;
+    const kfs = pmActiveKfs();
+    if (kfs.length <= 1) return;
+    const i = kfs.findIndex(x => x.id === _pmSelKf);
+    if (i >= 0) kfs.splice(i, 1);
+    _pmSelKf = kfs[0].id;
     pmSelectKf(_pmSelKf);
   }
-  function pmSetKfEase(v) { const k = _pmKeyframes.find(x => x.id === _pmSelKf); if (k) k.ease = v; }
+  function pmSetKfEase(v) { const kfs = pmActiveKfs(); const k = kfs.find(x => x.id === _pmSelKf); if (k) k.ease = v; }
   function pmSetDuration(v) {
     _pmDuration = Math.max(1, Math.min(120, parseFloat(v) || 6));
     _pmKeyframes.forEach(k => { if (k.t > _pmDuration) k.t = _pmDuration; });
@@ -3564,6 +3664,7 @@
       if (_pmPlayhead >= _pmDuration - 0.001) _pmPlayhead = 0;
       const icon = document.getElementById('pm-play-icon'); if (icon) icon.innerHTML = '<path d="M6 5h4v14H6zM14 5h4v14h-4z"/>';
       const startT = _pmPlayhead, t0 = performance.now();
+      pmMusicPlayFrom(startT);
       const step = (now) => {
         if (!_pmPlaying) return;
         let t = startT + (now - t0) / 1000;
@@ -3578,6 +3679,7 @@
     _pmPlaying = false;
     if (_pmPlayRaf) { cancelAnimationFrame(_pmPlayRaf); _pmPlayRaf = null; }
     const icon = document.getElementById('pm-play-icon'); if (icon) icon.innerHTML = '<path d="M8 5v14l11-7z"/>';
+    pmMusicPause();
   }
 
   // Timeline interaction: click/drag to scrub, drag diamonds to retime, click to select.
@@ -3632,6 +3734,19 @@
       fd.append('suggested_name', name);
       if (type) fd.append('clip_type', type);
       fd.append('content_title', name);
+      // Text overlays — each rendered to a transparent PNG here so the backend just
+      // pastes it (preview == export). Wait for webfonts so measurements are right.
+      try { if (document.fonts && document.fonts.ready) await document.fonts.ready; } catch (e) {}
+      const overlays = _pmTexts.map(tx => {
+        pmRenderTextPng(tx);
+        return {
+          png: tx.png.toDataURL('image/png').split(',')[1],
+          tStart: tx.tStart, tEnd: tx.tEnd, fadeIn: tx.fadeIn, fadeOut: tx.fadeOut,
+          keyframes: tx.kfs.map(k => ({ t: k.t, x: k.x, y: k.y, scale: k.scale, rot: k.rot, ease: k.ease })),
+        };
+      });
+      fd.append('overlays', JSON.stringify(overlays));
+      if (_pmMusicFile) fd.append('music', _pmMusicFile, _pmMusicFile.name || 'music');
       const resp = await fetch(BACKEND + '/export_photo_motion', { method: 'POST', body: fd });
       const data = await resp.json().catch(() => ({}));
       if (!resp.ok || data.error) { st.className = 'pm-status pm-err'; st.textContent = 'Export failed: ' + (data.error || ('HTTP ' + resp.status)); }
@@ -3646,6 +3761,219 @@
     } catch (err) { st.className = 'pm-status pm-err'; st.textContent = 'Export error: ' + err.message + ' (is your local server running?)'; }
     finally { if (btn) btn.disabled = false; }
   }
+  // ── Photo Motion 1C: text overlays (keyframed) + background music ──
+  let _pmTexts     = [];     // [{id,text,font,size,color,bold,stroke,tStart,tEnd,fadeIn,fadeOut,kfs:[{t,x,y,scale,rot,ease}],png,pngW,pngH}]
+  let _pmActiveText = null;  // id of the selected text layer (null = camera)
+  let _pmDragText  = null;   // {id,x,y,scale,rot} live drag override
+  let _pmTextSeq   = 0;
+  let _pmMusicFile = null;   // File for export
+  let _pmMusicEl   = null;   // HTMLAudioElement for preview
+
+  function pmFontStack(name) {
+    switch (name) {
+      case 'Georgia':       return 'Georgia, "Times New Roman", serif';
+      case 'Montserrat':    return "'Montserrat', sans-serif";
+      case 'Handmade Sans': return "'Handmade Sans', sans-serif";
+      default:              return 'Inter, sans-serif';
+    }
+  }
+  // Interp a text overlay transform (matches backend _pm_interp_overlay)
+  function pmInterpText(kfs, t) {
+    const ks = (kfs || []).slice().sort((a, b) => a.t - b.t);
+    if (!ks.length) return { x: 0.5, y: 0.5, scale: 1, rot: 0 };
+    const v = k => ({ x: k.x != null ? k.x : .5, y: k.y != null ? k.y : .5, scale: k.scale != null ? k.scale : 1, rot: k.rot || 0 });
+    if (t <= ks[0].t) return v(ks[0]);
+    const last = ks[ks.length - 1];
+    if (t >= last.t) return v(last);
+    for (let i = 0; i < ks.length - 1; i++) {
+      const a = ks[i], b = ks[i + 1];
+      if (a.t <= t && t < b.t) {
+        const e = pmEaseJS(a.ease, (t - a.t) / ((b.t - a.t) || 1e-9));
+        const A = v(a), B = v(b);
+        return { x: A.x + (B.x - A.x) * e, y: A.y + (B.y - A.y) * e, scale: A.scale + (B.scale - A.scale) * e, rot: A.rot + (B.rot - A.rot) * e };
+      }
+    }
+    return v(last);
+  }
+  // Opacity from visible window + fade (matches backend _pm_overlay_opacity)
+  function pmTextOpacity(tx, t) {
+    let t0 = tx.tStart || 0, t1 = (tx.tEnd && tx.tEnd > 0) ? tx.tEnd : 1e9;
+    if (t < t0 || t > t1) return 0;
+    let op = 1;
+    if (tx.fadeIn > 0 && t < t0 + tx.fadeIn) op *= Math.max(0, (t - t0) / tx.fadeIn);
+    if (tx.fadeOut > 0 && t1 < 1e8 && t > t1 - tx.fadeOut) op *= Math.max(0, (t1 - t) / tx.fadeOut);
+    return Math.max(0, Math.min(1, op));
+  }
+  // Render a text box to a transparent offscreen canvas (its "PNG")
+  function pmRenderTextPng(tx) {
+    const size = tx.size, pad = Math.round(size * 0.35), lh = Math.round(size * 1.25);
+    const lines = (tx.text || ' ').split('\n');
+    const weight = tx.bold ? '700' : '500';
+    const font = weight + ' ' + size + 'px ' + pmFontStack(tx.font);
+    const meas = document.createElement('canvas').getContext('2d');
+    meas.font = font;
+    let maxW = 1;
+    lines.forEach(ln => { maxW = Math.max(maxW, meas.measureText(ln || ' ').width); });
+    const strokeW = tx.stroke ? Math.max(2, size * 0.14) : 0;
+    const w = Math.ceil(maxW + pad * 2 + strokeW);
+    const h = Math.ceil(lh * lines.length + pad * 2);
+    const off = document.createElement('canvas');
+    off.width = w; off.height = h;
+    const c = off.getContext('2d');
+    c.font = font; c.textAlign = 'center'; c.textBaseline = 'middle'; c.lineJoin = 'round';
+    lines.forEach((ln, i) => {
+      const x = w / 2, y = pad + lh * i + lh / 2;
+      if (tx.stroke) { c.strokeStyle = 'rgba(0,0,0,0.85)'; c.lineWidth = strokeW; c.strokeText(ln || ' ', x, y); }
+      c.fillStyle = tx.color; c.fillText(ln || ' ', x, y);
+    });
+    tx.png = off; tx.pngW = w; tx.pngH = h;
+  }
+  function pmDrawTexts(ctx) {
+    const t = _pmPlayhead;
+    _pmTexts.forEach(tx => {
+      const op = pmTextOpacity(tx, t);
+      const isActive = tx.id === _pmActiveText;
+      if (op <= 0.002 && !isActive) return;
+      if (!tx.png) pmRenderTextPng(tx);
+      let tr = (_pmDragText && _pmDragText.id === tx.id) ? _pmDragText : pmInterpText(tx.kfs, t);
+      ctx.save();
+      ctx.globalAlpha = isActive ? Math.max(0.35, op) : op;   // keep the selected text visible while editing
+      ctx.translate(tr.x * 1080, tr.y * 1920);
+      ctx.rotate((tr.rot || 0) * Math.PI / 180);
+      ctx.scale(tr.scale || 1, tr.scale || 1);
+      ctx.drawImage(tx.png, -tx.pngW / 2, -tx.pngH / 2);
+      ctx.restore();
+      if (isActive) {
+        ctx.save();
+        ctx.translate(tr.x * 1080, tr.y * 1920);
+        ctx.rotate((tr.rot || 0) * Math.PI / 180);
+        ctx.strokeStyle = '#E8541A'; ctx.lineWidth = 3; ctx.setLineDash([10, 8]);
+        const hw = (tx.pngW * (tr.scale || 1)) / 2, hh = (tx.pngH * (tr.scale || 1)) / 2;
+        ctx.strokeRect(-hw, -hh, hw * 2, hh * 2);
+        ctx.restore();
+      }
+    });
+  }
+
+  function pmAddText() {
+    if (!_pmImgEl) return;
+    const tx = {
+      id: 'txt' + (++_pmTextSeq), text: 'Your text', font: 'Inter', size: 72,
+      color: '#ffffff', bold: true, stroke: true,
+      tStart: 0, tEnd: _pmDuration, fadeIn: 0.4, fadeOut: 0.4,
+      kfs: [{ id: ++_pmKfSeq, t: 0, x: 0.5, y: 0.72, scale: 1, rot: 0, ease: 'ease' }],
+      png: null, pngW: 0, pngH: 0,
+    };
+    pmRenderTextPng(tx);
+    _pmTexts.push(tx);
+    pmSelectText(tx.id);
+    pmRenderTextList();
+  }
+  function pmSelectText(id) {
+    _pmActiveText = id; _pmDragText = null;
+    const kfs = pmActiveKfs(); _pmSelKf = kfs.length ? kfs[0].id : null;
+    pmRenderTextList(); pmRenderTextControls(); pmDraw(); pmRenderTimeline();
+  }
+  function pmSelectCamera() {
+    _pmActiveText = null; _pmDragText = null;
+    _pmSelKf = _pmKeyframes.length ? _pmKeyframes[0].id : null;
+    pmRenderTextList(); pmRenderTextControls(); pmDraw(); pmRenderTimeline();
+  }
+  function pmDeleteText() {
+    const tx = pmActiveText(); if (!tx) return;
+    _pmTexts = _pmTexts.filter(x => x.id !== tx.id);
+    pmSelectCamera();
+  }
+  function pmRenderTextList() {
+    const box = document.getElementById('pm-text-list'); if (!box) return;
+    let html = '<button class="pm-layer-chip' + (!_pmActiveText ? ' pm-layer-on' : '') + '" onclick="pmSelectCamera()">◈ Camera</button>';
+    _pmTexts.forEach(tx => {
+      const label = (tx.text.split('\n')[0] || 'text').slice(0, 14);
+      html += '<button class="pm-layer-chip' + (tx.id === _pmActiveText ? ' pm-layer-on' : '') + '" onclick="pmSelectText(\'' + tx.id + '\')">T ' + label.replace(/</g, '&lt;') + '</button>';
+    });
+    box.innerHTML = html;
+    const tp = document.getElementById('pm-text-panel'); if (tp) tp.style.display = _pmActiveText ? 'block' : 'none';
+  }
+  function pmRenderTextControls() {
+    const tx = pmActiveText(); if (!tx) return;
+    const set = (id, v) => { const el = document.getElementById(id); if (el) el.value = v; };
+    set('pm-tx-text', tx.text); set('pm-tx-font', tx.font); set('pm-tx-size', tx.size);
+    set('pm-tx-color', tx.color); set('pm-tx-start', tx.tStart); set('pm-tx-end', tx.tEnd);
+    set('pm-tx-fadein', tx.fadeIn); set('pm-tx-fadeout', tx.fadeOut);
+    const b = document.getElementById('pm-tx-bold'); if (b) b.checked = !!tx.bold;
+    const s = document.getElementById('pm-tx-stroke'); if (s) s.checked = !!tx.stroke;
+    const tr = pmCurrentTextTransform();
+    set('pm-tx-scale', (tr.scale || 1).toFixed(2)); set('pm-tx-rot', Math.round(tr.rot || 0));
+  }
+  function pmTxEdit(prop, val, rerender) {
+    const tx = pmActiveText(); if (!tx) return;
+    tx[prop] = val;
+    if (rerender) pmRenderTextPng(tx);
+    pmDraw(); pmRenderTextList();
+  }
+  function pmSetTextScaleRot(scale, rot) {
+    const tx = pmActiveText(); if (!tx) return;
+    const tr = pmCurrentTextTransform();
+    if (scale != null) tr.scale = parseFloat(scale) || 1;
+    if (rot != null) tr.rot = parseFloat(rot) || 0;
+    pmCaptureActiveTextKf(tr); _pmDragText = null; pmDraw(); pmRenderTimeline();
+  }
+  function pmCaptureActiveTextKf(tr) {
+    const tx = pmActiveText(); if (!tx) return;
+    const eps = 0.05;
+    let k = tx.kfs.find(x => Math.abs(x.t - _pmPlayhead) <= eps);
+    if (k) { k.x = tr.x; k.y = tr.y; k.scale = tr.scale; k.rot = tr.rot; }
+    else { k = { id: ++_pmKfSeq, t: _pmPlayhead, x: tr.x, y: tr.y, scale: tr.scale, rot: tr.rot, ease: 'ease' }; tx.kfs.push(k); }
+    _pmSelKf = k.id;
+  }
+
+  // Drag the active text on the canvas → auto-keyframe at the playhead.
+  (function () {
+    let drag = null;
+    const wrapEl = () => document.getElementById('pm-canvas-wrap');
+    document.addEventListener('mousedown', function (e) {
+      const w = wrapEl(); if (!w || !w.contains(e.target) || !_pmImgEl || !_pmActiveText) return;
+      pmPlayStop();
+      const tr = pmCurrentTextTransform();
+      const rect = w.getBoundingClientRect();
+      drag = { sx: e.clientX, sy: e.clientY, ox: tr.x, oy: tr.y, scale: tr.scale, rot: tr.rot, rw: rect.width, rh: rect.height };
+      e.preventDefault();
+    });
+    document.addEventListener('mousemove', function (e) {
+      if (!drag) return;
+      const nx = Math.max(0, Math.min(1, drag.ox + (e.clientX - drag.sx) / drag.rw));
+      const ny = Math.max(0, Math.min(1, drag.oy + (e.clientY - drag.sy) / drag.rh));
+      _pmDragText = { id: _pmActiveText, x: nx, y: ny, scale: drag.scale, rot: drag.rot };
+      pmDrawThrottled();
+    });
+    document.addEventListener('mouseup', function () {
+      if (!drag) return;
+      if (_pmDragText) { pmCaptureActiveTextKf(_pmDragText); }
+      drag = null; _pmDragText = null;
+      pmDraw(); pmRenderTimeline();
+    });
+  })();
+
+  // ── Music ──
+  function pmAddMusic(input) {
+    const f = input.files && input.files[0]; input.value = '';
+    if (!f) return;
+    _pmMusicFile = f;
+    if (_pmMusicEl) { try { _pmMusicEl.pause(); } catch (e) {} }
+    _pmMusicEl = new Audio(URL.createObjectURL(f));
+    _pmMusicEl.loop = false;
+    const lbl = document.getElementById('pm-music-name'); if (lbl) lbl.textContent = f.name;
+    const rm = document.getElementById('pm-music-remove'); if (rm) rm.style.display = 'inline-flex';
+  }
+  function pmClearMusic() {
+    _pmMusicFile = null;
+    if (_pmMusicEl) { try { _pmMusicEl.pause(); } catch (e) {} _pmMusicEl = null; }
+    const lbl = document.getElementById('pm-music-name'); if (lbl) lbl.textContent = 'No music';
+    const rm = document.getElementById('pm-music-remove'); if (rm) rm.style.display = 'none';
+  }
+  function pmMusicPlayFrom(t) { if (_pmMusicEl) { try { _pmMusicEl.currentTime = t; _pmMusicEl.play(); } catch (e) {} } }
+  function pmMusicPause() { if (_pmMusicEl) { try { _pmMusicEl.pause(); } catch (e) {} } }
+
   // ============ end PHOTO MOTION (1A) ============
 
   // ── Drag/drop styling ──
@@ -3713,7 +4041,7 @@
   // Must match BACKEND_BUILD in server.py — bumped together whenever the
   // frontend/backend contract changes. A mismatch means the user is running
   // an old backend (launcher not restarted after a deploy).
-  const EXPECTED_BACKEND_BUILD = '2026-07-10-photomotion';
+  const EXPECTED_BACKEND_BUILD = '2026-07-10-photomotion-text';
 
   if (document.fonts && document.fonts.load) { document.fonts.load("700 64px 'Handmade Sans'").catch(function(){}); document.fonts.load("700 64px 'Montserrat'").catch(function(){}); }
   let _staleBackendWarned = false;

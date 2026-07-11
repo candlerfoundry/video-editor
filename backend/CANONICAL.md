@@ -2701,3 +2701,49 @@ planned: image-project persistence (a `source_kind` + new /projects event so Pho
 appear in Recent Projects).
 Regression risk: Low — fully additive; new route + new screen; export_clip and all existing routes
 untouched; new frontend is a self-contained `_pm*` module.
+
+## Photo Motion 1C — keyframed text overlays + background music (build `2026-07-10-photomotion-text`)
+Additive extension of Photo Motion. Adds keyframed TEXT overlays and an optional background-music
+track. Same "preview == export" principle: text is rendered to a transparent PNG in the browser and
+the backend only *pastes/moves* that picture — no server-side font work.
+
+### The overlay model (frontend ↔ backend must stay identical)
+Each text overlay = `{png (base64), tStart, tEnd, fadeIn, fadeOut, keyframes:[{t,x,y,scale,rot,ease}]}`.
+- x/y are normalized 0..1 = the text's CENTER in the 1080x1920 output (screen space, composited
+  AFTER the camera crop — text stays put while the image pans beneath it).
+- Transform interpolation: frontend `pmInterpText` == backend `_pm_interp_overlay` (same easing as
+  the camera). Opacity from window+fade: frontend `pmTextOpacity` == backend `_pm_overlay_opacity`.
+- Rotation sign: canvas rotates clockwise for +deg; PIL rotates counter-clockwise, so the backend
+  uses `im.rotate(-rot, expand=True)` to match. Keep this negation if either side changes.
+
+### BACKEND (server.py)
+- `render_photo_motion_video(..., overlays=None)`: decodes each overlay PNG once (RGBA), and per
+  frame — after the image crop — pastes each visible overlay via `frame.alpha_composite`, resized by
+  the interpolated `scale`, rotated by `-rot`, alpha scaled by the window/fade opacity, centered at
+  `(x*1080, y*1920)`. Helpers `_pm_interp_overlay` + `_pm_overlay_opacity` added.
+- Music: `-af afade=t=out:st=(duration-1):d=1.0` gives a 1s tail fade so the track never cuts hard.
+- Route `/export_photo_motion` gains an `overlays` JSON form field (forgiving) and already accepted
+  `music`. Build bumped `2026-07-10-photomotion` → `2026-07-10-photomotion-text`.
+
+### FRONTEND (index.html)
+- Text layers: `_pmTexts[]` (text/font/size/color/bold/outline/window/fade + a transform keyframe
+  track). `pmRenderTextPng` draws each box to an offscreen transparent canvas; `pmDrawTexts`
+  composites them onto the 9:16 canvas at the playhead (drag override for the active one, with a
+  dashed selection box).
+- The keyframe TIMELINE is now per-LAYER: `pmActiveKfs()` returns the camera track or the selected
+  text's track; a chip row (`◈ Camera` + one chip per text) switches layers; ◆/ease/delete/retime
+  operate on the active layer. Dragging a text on the canvas auto-keyframes it at the playhead
+  (`pmCaptureActiveTextKf`); the camera-pan handler yields when a text layer is active.
+- Music: `pmAddMusic`/`pmClearMusic` load an `<audio>` for the Play preview (played from the
+  playhead) and attach the file to the export FormData. Export renders each text PNG (after
+  `document.fonts.ready`) and sends `overlays` + `music`.
+- `EXPECTED_BACKEND_BUILD` bumped to match.
+
+### Deploy: same as 1B (git push + copy server.py next to the exe + rebuild flat zip + restart
+launcher + hard-refresh). Handshake reads `2026-07-10-photomotion-text`.
+
+### NEXT (Photo Motion): 1D thumbnail creation (reuse the composer to pick/compose a cover from the
+image or a frame) + polish; image-project persistence (source_kind + /projects event → Recent
+Projects); optional: text scale-up crispness (render PNG at 2x), music trim/loop options, on-canvas
+text scale/rotate handles.
+Regression risk: Low — additive; overlays/music optional; camera-only clips render exactly as before.
