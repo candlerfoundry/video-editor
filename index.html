@@ -2270,7 +2270,11 @@
     #tab-photomotion .pm-note { font-size: 12.5px; color: var(--text-2); line-height: 1.65; background: var(--orange-tint); border-radius: 10px; padding: 13px 15px; }
 
     /* Photo Motion — timeline + transport (Feature 1B) */
-    #tab-photomotion .pm-transport { display: flex; align-items: center; gap: 12px; width: 340px; }
+    #tab-photomotion .pm-transport { display: grid; grid-template-columns: auto auto 1fr; column-gap: 12px; row-gap: 5px; align-items: center; width: 340px; }
+    #tab-photomotion .pm-transport .pm-play-btn { grid-row: 1; grid-column: 1; }
+    #tab-photomotion .pm-transport .pm-time { grid-row: 1; grid-column: 2; }
+    #tab-photomotion .pm-transport .pm-track { grid-row: 1; grid-column: 3; }
+    #tab-photomotion .pm-transport .pm-text-bars { grid-row: 2; grid-column: 3; }
     #tab-photomotion .pm-play-btn { display: inline-flex; align-items: center; justify-content: center; width: 34px; height: 34px; border-radius: 50%; background: var(--orange); border: none; color: #fff; cursor: pointer; flex: 0 0 auto; box-shadow: 0 2px 8px rgba(232,84,26,0.25); }
     #tab-photomotion .pm-play-btn:hover { background: var(--orange-hover); }
     #tab-photomotion .pm-time { font-family: monospace; font-size: 12px; color: var(--text-2); flex: 0 0 auto; }
@@ -2300,6 +2304,14 @@
     #tab-photomotion .pm-check { display: inline-flex; align-items: center; gap: 4px; font-size: 12.5px; color: var(--text-2); width: auto; }
     #tab-photomotion .pm-music-name { font-size: 12px; color: var(--muted); font-style: italic; }
     #tab-photomotion #pm-text-panel .pm-field > span { width: 84px; }
+    #tab-photomotion .pm-kf-badge { position: absolute; top: 8px; left: 8px; background: var(--orange); color: #fff; font-size: 11px; font-weight: 600; padding: 3px 8px; border-radius: 6px; box-shadow: 0 2px 6px rgba(0,0,0,0.28); pointer-events: none; z-index: 3; }
+    #tab-photomotion .pm-minimap-wrap { margin: 4px 0 16px; }
+    #tab-photomotion .pm-minimap { width: 258px; max-width: 100%; display: block; border: 1px solid var(--border-2); border-radius: 8px; cursor: pointer; background: #0d0d0f; }
+    #tab-photomotion .pm-minimap-cap { font-size: 11.5px; color: var(--muted); margin-top: 6px; line-height: 1.45; }
+    #tab-photomotion .pm-text-bars { position: relative; height: 18px; }
+    #tab-photomotion .pm-tbar { position: absolute; top: 0; height: 18px; line-height: 17px; background: rgba(232,84,26,0.15); border: 1px solid rgba(232,84,26,0.5); border-radius: 4px; font-size: 10.5px; color: var(--orange); padding: 0 5px; overflow: hidden; white-space: nowrap; cursor: pointer; box-sizing: border-box; }
+    #tab-photomotion .pm-tbar:hover { background: rgba(232,84,26,0.28); }
+    #tab-photomotion .pm-tbar-on { background: var(--orange); color: #fff; border-color: var(--orange); }
   </style>
 </head>
 <body>
@@ -3184,8 +3196,9 @@
           <div class="pm-stage">
             <div id="pm-canvas-wrap">
               <canvas id="pm-canvas" width="1080" height="1920"></canvas>
+              <div id="pm-kf-badge" class="pm-kf-badge" style="display:none;">◆ On keyframe</div>
             </div>
-            <div class="pm-hint">Drag to pan &middot; Scroll to zoom &middot; frame a shot, then add a keyframe</div>
+            <div class="pm-hint">Drag to pan &middot; Scroll to zoom &middot; hold <b>Shift</b> for fine control</div>
             <div class="pm-transport">
               <button class="pm-play-btn" id="pm-play-btn" type="button" onclick="pmPlayToggle()" title="Play / pause preview">
                 <svg id="pm-play-icon" width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>
@@ -3195,6 +3208,7 @@
                 <div class="pm-track-rail"></div>
                 <div class="pm-playhead" id="pm-playhead" style="left:0;"></div>
               </div>
+              <div id="pm-text-bars" class="pm-text-bars"></div>
             </div>
           </div>
           <div class="pm-controls">
@@ -3211,6 +3225,10 @@
 
             <div class="pm-section">
               <div class="pm-ctl-title">Motion &mdash; keyframes</div>
+              <div class="pm-minimap-wrap">
+                <canvas id="pm-minimap" class="pm-minimap" onclick="pmMinimapClick(event)" title="Each numbered box is where a camera keyframe frames the image. Click one to jump to it. The dashed box is the current view."></canvas>
+                <div class="pm-minimap-cap">The numbered boxes are your camera keyframes, shown on the image. Click one to jump to it.</div>
+              </div>
               <div class="pm-field">
                 <span>Duration</span>
                 <input type="number" id="pm-duration" min="1" max="120" step="0.5" value="6" onchange="pmSetDuration(this.value)"> <span style="width:auto;color:var(--muted);">seconds</span>
@@ -3380,6 +3398,8 @@
     ctx.clearRect(0, 0, 1080, 1920);
     pmDrawFrame(ctx, _pmImgEl, 1080, 1920, _pmCam);
     pmDrawTexts(ctx);
+    pmDrawMinimap();
+    pmUpdateKfBadge();
   }
   function pmDrawThrottled() {
     if (!_pmRaf) _pmRaf = requestAnimationFrame(() => { _pmRaf = null; pmDraw(); });
@@ -3486,7 +3506,8 @@
       const rect = w.getBoundingClientRect();
       const u = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
       const v = Math.max(0, Math.min(1, (e.clientY - rect.top)  / rect.height));
-      const factor = e.deltaY < 0 ? 1.08 : 1 / 1.08;
+      const step = e.shiftKey ? 1.02 : 1.05;   // gentler; Shift = fine
+      const factor = e.deltaY < 0 ? step : 1 / step;
       pmZoomAt(_pmCam.zoom * factor, u, v);
     }, { passive: false });
 
@@ -3503,11 +3524,18 @@
       if (!pan) return;
       const w = wrapEl();
       const rect = w ? w.getBoundingClientRect() : { width: 340, height: 604 };
-      const zoom = _pmCam.zoom;
-      const dx = (e.clientX - pan.sx) / rect.width  * 2 * zoom;
-      const dy = (e.clientY - pan.sy) / rect.height * 2 * zoom;
-      _pmCam.ox = Math.max(-1, Math.min(1, pan.ox - dx));
-      _pmCam.oy = Math.max(-1, Math.min(1, pan.oy - dy));
+      // Direct manipulation: the image tracks the cursor 1:1 (hold Shift for fine control).
+      const natW = _pmImgNatW, natH = _pmImgNatH;
+      const cover = Math.max(1080 / natW, 1920 / natH);
+      const sw = 1080 / (cover * _pmCam.zoom), sh = 1920 / (cover * _pmCam.zoom);
+      const marginX = natW - sw, marginY = natH - sh;
+      const fine = e.shiftKey ? 0.3 : 1;
+      const dxImg = (e.clientX - pan.sx) / rect.width  * sw * fine;
+      const dyImg = (e.clientY - pan.sy) / rect.height * sh * fine;
+      const dox = marginX > 0 ? (2 * dxImg / marginX) : 0;
+      const doy = marginY > 0 ? (2 * dyImg / marginY) : 0;
+      _pmCam.ox = Math.max(-1, Math.min(1, pan.ox - dox));
+      _pmCam.oy = Math.max(-1, Math.min(1, pan.oy - doy));
       pmDrawThrottled();
     });
     document.addEventListener('mouseup', function () {
@@ -3588,6 +3616,8 @@
     const lbl = document.getElementById('pm-layer-label');
     if (lbl) { const tx = pmActiveText(); lbl.textContent = tx ? ('Text: ' + (tx.text.split('\n')[0] || 'text').slice(0, 16)) : 'Camera'; }
     pmRenderKfPanel();
+    pmRenderTextBars();
+    pmDrawMinimap();
   }
   function pmRenderKfPanel() {
     const kfs = pmActiveKfs();
@@ -3853,6 +3883,22 @@
         ctx.restore();
       }
     });
+    // Active text's motion path — its keyframes drawn ON the image.
+    const at = pmActiveText();
+    if (at && at.kfs.length > 1) {
+      const ks = at.kfs.slice().sort((a, b) => a.t - b.t);
+      ctx.save();
+      ctx.strokeStyle = 'rgba(232,84,26,0.7)'; ctx.lineWidth = 2; ctx.setLineDash([8, 6]);
+      ctx.beginPath();
+      ks.forEach((k, i) => { const X = (k.x || .5) * 1080, Y = (k.y || .5) * 1920; if (i === 0) ctx.moveTo(X, Y); else ctx.lineTo(X, Y); });
+      ctx.stroke(); ctx.setLineDash([]);
+      ks.forEach(k => {
+        ctx.beginPath(); ctx.fillStyle = (k.id === _pmSelKf) ? '#E8541A' : '#fff';
+        ctx.strokeStyle = '#E8541A'; ctx.lineWidth = 2;
+        ctx.arc((k.x || .5) * 1080, (k.y || .5) * 1920, 11, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+      });
+      ctx.restore();
+    }
   }
 
   function pmAddText() {
@@ -3941,8 +3987,9 @@
     });
     document.addEventListener('mousemove', function (e) {
       if (!drag) return;
-      const nx = Math.max(0, Math.min(1, drag.ox + (e.clientX - drag.sx) / drag.rw));
-      const ny = Math.max(0, Math.min(1, drag.oy + (e.clientY - drag.sy) / drag.rh));
+      const fine = e.shiftKey ? 0.3 : 1;   // hold Shift for fine control
+      const nx = Math.max(0, Math.min(1, drag.ox + (e.clientX - drag.sx) / drag.rw * fine));
+      const ny = Math.max(0, Math.min(1, drag.oy + (e.clientY - drag.sy) / drag.rh * fine));
       _pmDragText = { id: _pmActiveText, x: nx, y: ny, scale: drag.scale, rot: drag.rot };
       pmDrawThrottled();
     });
@@ -3973,6 +4020,66 @@
   }
   function pmMusicPlayFrom(t) { if (_pmMusicEl) { try { _pmMusicEl.currentTime = t; _pmMusicEl.play(); } catch (e) {} } }
   function pmMusicPause() { if (_pmMusicEl) { try { _pmMusicEl.pause(); } catch (e) {} } }
+
+  // ── Mini-map: the full image with each camera keyframe's frame drawn on it ──
+  function pmCropBoxImg(natW, natH, zoom, ox, oy) {
+    const cover = Math.max(1080 / natW, 1920 / natH), scale = cover * zoom;
+    const sw = 1080 / scale, sh = 1920 / scale;
+    return { sx: (natW - sw) / 2 * (1 + ox), sy: (natH - sh) / 2 * (1 + oy), sw, sh };
+  }
+  function pmDrawMinimap() {
+    const mc = document.getElementById('pm-minimap'); if (!mc || !_pmImgEl) return;
+    const natW = _pmImgNatW, natH = _pmImgNatH;
+    const MW = 258, MH = Math.max(1, Math.round(MW * natH / natW)), sc = MW / natW;
+    if (mc.width !== MW) mc.width = MW;
+    if (mc.height !== MH) mc.height = MH;
+    const ctx = mc.getContext('2d');
+    ctx.clearRect(0, 0, MW, MH);
+    ctx.drawImage(_pmImgEl, 0, 0, MW, MH);
+    ctx.fillStyle = 'rgba(0,0,0,0.30)'; ctx.fillRect(0, 0, MW, MH);
+    const cams = _pmKeyframes.slice().sort((a, b) => a.t - b.t);
+    cams.forEach((k, i) => {
+      const b = pmCropBoxImg(natW, natH, k.zoom, k.ox, k.oy);
+      const on = (k.id === _pmSelKf && !_pmActiveText);
+      ctx.strokeStyle = on ? '#E8541A' : 'rgba(255,255,255,0.85)';
+      ctx.lineWidth = on ? 3 : 1.5;
+      ctx.strokeRect(b.sx * sc, b.sy * sc, b.sw * sc, b.sh * sc);
+      ctx.fillStyle = on ? '#E8541A' : 'rgba(255,255,255,0.95)';
+      ctx.font = 'bold 12px Inter, sans-serif';
+      ctx.fillText(String(i + 1), b.sx * sc + 4, b.sy * sc + 15);
+    });
+    const c = pmInterpCam(_pmPlayhead), cb = pmCropBoxImg(natW, natH, c.zoom, c.ox, c.oy);
+    ctx.strokeStyle = '#F6A85D'; ctx.lineWidth = 2; ctx.setLineDash([5, 4]);
+    ctx.strokeRect(cb.sx * sc, cb.sy * sc, cb.sw * sc, cb.sh * sc);
+    ctx.setLineDash([]);
+  }
+  function pmMinimapClick(e) {
+    if (!_pmImgEl || !_pmKeyframes.length) return;
+    const mc = document.getElementById('pm-minimap'); const rect = mc.getBoundingClientRect();
+    const mx = (e.clientX - rect.left) / rect.width * _pmImgNatW, my = (e.clientY - rect.top) / rect.height * _pmImgNatH;
+    let best = null, bd = Infinity;
+    _pmKeyframes.forEach(k => { const b = pmCropBoxImg(_pmImgNatW, _pmImgNatH, k.zoom, k.ox, k.oy); const dx = b.sx + b.sw / 2 - mx, dy = b.sy + b.sh / 2 - my; const d = dx * dx + dy * dy; if (d < bd) { bd = d; best = k; } });
+    if (best) { if (_pmActiveText) pmSelectCamera(); pmSelectKf(best.id); }
+  }
+  function pmUpdateKfBadge() {
+    const b = document.getElementById('pm-kf-badge'); if (!b) return;
+    const on = pmActiveKfs().some(k => Math.abs(k.t - _pmPlayhead) <= 0.05);
+    b.style.display = on ? 'block' : 'none';
+    b.textContent = _pmActiveText ? '◆ On text keyframe' : '◆ On camera keyframe';
+  }
+  // Text timing bars under the timeline (align text to the camera motion).
+  function pmRenderTextBars() {
+    const box = document.getElementById('pm-text-bars'); if (!box) return;
+    const W = pmTrackW();
+    let html = '';
+    _pmTexts.forEach(tx => {
+      const x0 = Math.max(0, Math.min(1, (tx.tStart || 0) / (_pmDuration || 1))) * W;
+      const x1 = Math.max(0, Math.min(1, ((tx.tEnd && tx.tEnd > 0 ? tx.tEnd : _pmDuration)) / (_pmDuration || 1))) * W;
+      const label = (tx.text.split('\n')[0] || 'text').slice(0, 14).replace(/</g, '&lt;');
+      html += '<div class="pm-tbar' + (tx.id === _pmActiveText ? ' pm-tbar-on' : '') + '" style="left:' + x0 + 'px;width:' + Math.max(8, x1 - x0) + 'px;" onclick="pmSelectText(\'' + tx.id + '\')">' + label + '</div>';
+    });
+    box.innerHTML = html;
+  }
 
   // ============ end PHOTO MOTION (1A) ============
 
