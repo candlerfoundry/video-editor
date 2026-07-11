@@ -2747,3 +2747,48 @@ image or a frame) + polish; image-project persistence (source_kind + /projects e
 Projects); optional: text scale-up crispness (render PNG at 2x), music trim/loop options, on-canvas
 text scale/rotate handles.
 Regression risk: Low — additive; overlays/music optional; camera-only clips render exactly as before.
+
+## Photo Motion Studio — UI model rework (frontend-only; no contract change)
+A beginner-focused rework of the Photo Motion editing UI. The camera model `{zoom, ox, oy}`,
+crop math, easing, keyframe data shape, and the /export_photo_motion contract are ALL UNCHANGED —
+an old backend renders these projects identically. This section documents the UI model.
+
+### Explore + Preview dual view
+The editor is now a `.pm-studio` grid: `#pm-explore` (the FULL artwork, responsive, replaces the
+old 258px minimap which is deleted) | `#pm-canvas-wrap` (the 9:16 preview, now responsive
+`clamp(420px, 62vh, 780px)` tall instead of fixed 340x604) | accordion controls (`details.pm-acc`:
+Shot & framing / Text / Music / Export). Below, full-width: the shot strip (`#pm-shot-strip`) and
+a timeline panel (`#pm-timeline-panel`) holding the transport.
+- `pmExploreLayout()` pre-scales the artwork ONCE into an offscreen `_pmExploreBase` at display
+  resolution (perf: no per-frame full-res resample); a ResizeObserver on `#pm-explore-wrap`
+  re-lays-out on resize. `pmDrawExplore()` blits the base, dims outside the current frame,
+  re-brightens inside it, draws every camera keyframe as a numbered box, and draws the current
+  frame box with corner handles + rule-of-thirds guides.
+- **`pmBoxToCam(sx, sy, sw)` is the exact inverse of `pmCropBoxImg`/backend `_pm_crop_box`:**
+  `zoom = clamp(1080/(cover*sw), 1, 6)`, then `ox = mx>0 ? clamp(2*sx/mx − 1, −1, 1) : 0`
+  (`mx = natW − sw`), same for oy. Edge clamping falls out of the ox/oy clamp. If either side of
+  the crop math ever changes, this inverse MUST change with it.
+- Explore gestures: drag inside box = pan; drag a corner = zoom (9:16 locked, anchored at the
+  opposite corner); click empty artwork = center the frame there; click inside another shot's box
+  = select that shot; wheel = zoom about the cursor (Shift = fine). The old preview-canvas
+  drag/wheel/slider interactions still work unchanged.
+
+### The pmSetCam funnel + auto-keyframe rule (shot == keyframe)
+- EVERY user camera mutation goes through `pmSetCam(cam)` and each completed gesture calls
+  `pmCamGestureEnd()` → `pmAutoKeyframeCam()` upserts a keyframe at the playhead (eps 0.05s).
+  **Camera moves can no longer be silently lost** (the old failure mode: pan/zoom then forget to
+  click "Add keyframe").
+- Scrub/playback interpolation assigns `_pmCam` DIRECTLY (in `pmSetPlayhead`) and must NEVER go
+  through `pmSetCam`/`pmCamGestureEnd` — that separation is what stops scrubbing from spraying
+  keyframes. Keep it.
+- A "shot" IS a camera keyframe — no second array. `#pm-shot-strip` renders time-sorted
+  `_pmKeyframes` as numbered 72x128 crop thumbnails (via the shared `pmDrawFrame`, which produces
+  the exact export crop at any W:H = 9:16). Numbers match the timeline diamonds (which now carry
+  digits) and the explore-canvas boxes. `pmAddShot()` places the next keyframe at
+  `last.t + PM_SHOT_HOLD (2.5s)`, auto-growing the duration (cap 120s), keeping the user's
+  current framing. ‹ › transport buttons step between shots.
+- `pmSetDuration` now clamps TEXT keyframes and text visibility windows too when shrinking
+  (previously only camera kfs — orphaned-text bug fixed).
+- `pmToast()` (bottom-center pill) confirms every shot add/update. `#pm-guide` is a 3-step
+  onboarding strip (frame → add shot → play) that checks off live and hides permanently via
+  localStorage `pm_guide_done`.

@@ -2249,18 +2249,35 @@
     .el-cell img { max-width: 100%; max-height: 100%; object-fit: contain; display: block; }
     .elem-controls { border-top: 1px solid var(--border); margin-top: 10px; padding-top: 4px; }
 
-    /* ── Photo Motion (Feature 1A) ── */
+    /* ── Photo Motion (Studio) ── */
     #tab-photomotion .pm-empty { display: flex; align-items: center; justify-content: center; min-height: 440px; }
     #tab-photomotion .pm-empty-inner { text-align: center; color: var(--text-2); max-width: 340px; }
     #tab-photomotion .pm-empty-inner svg { color: var(--border-2); margin-bottom: 16px; }
     #tab-photomotion .pm-empty-inner p { margin: 0 0 18px; font-size: 14px; line-height: 1.6; }
-    #tab-photomotion .pm-editor { display: flex; gap: 44px; align-items: flex-start; flex-wrap: wrap; }
-    #tab-photomotion .pm-stage { display: flex; flex-direction: column; align-items: center; gap: 10px; }
-    #tab-photomotion #pm-canvas-wrap { position: relative; width: 340px; height: 604px; border: 1px solid var(--border-2); border-radius: 12px; overflow: hidden; background: #0d0d0f; box-shadow: var(--shadow-md); touch-action: none; }
+    #tab-photomotion .pm-editor { display: flex; flex-direction: column; gap: 18px; }
+    #tab-photomotion .pm-studio { display: grid; grid-template-columns: minmax(360px, 1fr) auto minmax(260px, 330px); gap: 24px; align-items: start; }
+    @media (max-width: 1280px) {
+      #tab-photomotion .pm-studio { grid-template-columns: 1fr minmax(260px, 330px); }
+      #tab-photomotion .pm-explore-col { grid-column: 1 / -1; }
+    }
+    @media (max-width: 900px) {
+      #tab-photomotion .pm-studio { grid-template-columns: 1fr; }
+    }
+    #tab-photomotion .pm-explore-col, #tab-photomotion .pm-preview-col { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+    #tab-photomotion .pm-preview-col { align-items: center; }
+    #tab-photomotion #pm-explore-wrap { position: relative; width: 100%; text-align: center; }
+    #tab-photomotion #pm-explore { display: block; margin: 0 auto; max-width: 100%; border: 1px solid var(--border-2); border-radius: 12px; background: #0d0d0f; box-shadow: var(--shadow-md); touch-action: none; cursor: crosshair; }
+    #tab-photomotion #pm-canvas-wrap { position: relative; aspect-ratio: 9 / 16; height: clamp(420px, 62vh, 780px); width: auto; border: 1px solid var(--border-2); border-radius: 12px; overflow: hidden; background: #0d0d0f; box-shadow: var(--shadow-md); touch-action: none; }
     #tab-photomotion #pm-canvas { width: 100%; height: 100%; display: block; cursor: grab; }
     #tab-photomotion #pm-canvas-wrap.pm-panning #pm-canvas { cursor: grabbing; }
     #tab-photomotion .pm-hint { font-size: 12px; color: var(--muted); letter-spacing: 0.02em; }
-    #tab-photomotion .pm-controls { flex: 1; min-width: 250px; max-width: 380px; }
+    #tab-photomotion .pm-controls { min-width: 0; }
+    #tab-photomotion details.pm-acc { border: 1px solid var(--border); border-radius: 10px; background: var(--surface); margin-bottom: 12px; }
+    #tab-photomotion details.pm-acc summary { cursor: pointer; list-style: none; padding: 12px 14px; font-size: 12px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: var(--text-2); user-select: none; display: flex; align-items: center; gap: 8px; }
+    #tab-photomotion details.pm-acc summary::-webkit-details-marker { display: none; }
+    #tab-photomotion details.pm-acc summary::before { content: '\203A'; display: inline-block; transition: transform 150ms ease; color: var(--muted); font-size: 14px; line-height: 1; }
+    #tab-photomotion details.pm-acc[open] summary::before { transform: rotate(90deg); }
+    #tab-photomotion .pm-acc-body { padding: 2px 14px 14px; }
     #tab-photomotion .pm-ctl-title { font-size: 12px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: var(--text-2); margin-bottom: 16px; }
     #tab-photomotion .pm-ctl-row { display: flex; align-items: center; gap: 12px; margin-bottom: 16px; font-size: 13px; color: var(--text); }
     #tab-photomotion .pm-ctl-row > span { width: 46px; color: var(--text-2); }
@@ -2269,21 +2286,30 @@
     #tab-photomotion .pm-meta { font-size: 12px; color: var(--muted); margin-bottom: 20px; font-family: monospace; }
     #tab-photomotion .pm-note { font-size: 12.5px; color: var(--text-2); line-height: 1.65; background: var(--orange-tint); border-radius: 10px; padding: 13px 15px; }
 
-    /* Photo Motion — timeline + transport (Feature 1B) */
-    #tab-photomotion .pm-transport { display: grid; grid-template-columns: auto auto 1fr; column-gap: 12px; row-gap: 5px; align-items: center; width: 340px; }
-    #tab-photomotion .pm-transport .pm-play-btn { grid-row: 1; grid-column: 1; }
+    /* Photo Motion — timeline + transport */
+    #tab-photomotion #pm-timeline-panel { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 14px 18px; }
+    #tab-photomotion .pm-timeline-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
+    #tab-photomotion .pm-save-status { font-size: 12px; color: var(--muted); }
+    #tab-photomotion .pm-transport { display: grid; grid-template-columns: auto auto 1fr; column-gap: 12px; row-gap: 5px; align-items: center; width: 100%; }
+    #tab-photomotion .pm-trans-btns { grid-row: 1; grid-column: 1; display: flex; align-items: center; gap: 6px; }
     #tab-photomotion .pm-transport .pm-time { grid-row: 1; grid-column: 2; }
     #tab-photomotion .pm-transport .pm-track { grid-row: 1; grid-column: 3; }
     #tab-photomotion .pm-transport .pm-text-bars { grid-row: 2; grid-column: 3; }
+    #tab-photomotion .pm-transport #pm-waveform { grid-row: 3; grid-column: 3; }
+    #tab-photomotion #pm-waveform { width: 100%; height: 36px; display: block; border-radius: 6px; }
     #tab-photomotion .pm-play-btn { display: inline-flex; align-items: center; justify-content: center; width: 34px; height: 34px; border-radius: 50%; background: var(--orange); border: none; color: #fff; cursor: pointer; flex: 0 0 auto; box-shadow: 0 2px 8px rgba(232,84,26,0.25); }
     #tab-photomotion .pm-play-btn:hover { background: var(--orange-hover); }
     #tab-photomotion .pm-time { font-family: monospace; font-size: 12px; color: var(--text-2); flex: 0 0 auto; }
     #tab-photomotion .pm-track { position: relative; flex: 1; height: 30px; cursor: pointer; }
     #tab-photomotion .pm-track-rail { position: absolute; top: 13px; left: 0; right: 0; height: 4px; border-radius: 2px; background: var(--border-2); }
     #tab-photomotion .pm-playhead { position: absolute; top: 3px; width: 2px; height: 24px; background: var(--orange); border-radius: 1px; transform: translateX(-1px); pointer-events: none; }
-    #tab-photomotion .pm-kf { position: absolute; top: 8px; width: 14px; height: 14px; background: #fff; border: 2px solid var(--orange); transform: translate(-7px,0) rotate(45deg); border-radius: 3px; cursor: grab; transition: background 120ms, box-shadow 120ms; }
+    #tab-photomotion .pm-kf { position: absolute; top: 8px; width: 14px; height: 14px; background: #fff; border: 2px solid var(--orange); transform: translate(-7px,0) rotate(45deg); border-radius: 3px; cursor: grab; transition: background 120ms, box-shadow 120ms; display: flex; align-items: center; justify-content: center; }
     #tab-photomotion .pm-kf:hover { background: var(--orange-tint); }
     #tab-photomotion .pm-kf.pm-kf-active { background: var(--orange); box-shadow: 0 0 0 3px var(--orange-tint); }
+    #tab-photomotion .pm-kf > span { display: block; transform: rotate(-45deg); font-size: 8px; font-weight: 700; color: var(--orange); line-height: 1; pointer-events: none; }
+    #tab-photomotion .pm-kf.pm-kf-active > span { color: #fff; }
+    #tab-photomotion .pm-marker { position: absolute; top: 2px; width: 2px; height: 26px; background: rgba(232,84,26,0.55); border-radius: 1px; transform: translateX(-1px); cursor: pointer; }
+    #tab-photomotion .pm-marker.pm-marker-hot { background: var(--orange); box-shadow: 0 0 0 2px var(--orange-tint); }
     #tab-photomotion .pm-section { margin-top: 22px; padding-top: 20px; border-top: 1px solid var(--border); }
     #tab-photomotion .pm-kf-info { font-size: 12.5px; color: var(--text-2); margin: 10px 0; min-height: 18px; }
     #tab-photomotion .pm-field { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; font-size: 13px; color: var(--text); }
@@ -2305,9 +2331,28 @@
     #tab-photomotion .pm-music-name { font-size: 12px; color: var(--muted); font-style: italic; }
     #tab-photomotion #pm-text-panel .pm-field > span { width: 84px; }
     #tab-photomotion .pm-kf-badge { position: absolute; top: 8px; left: 8px; background: var(--orange); color: #fff; font-size: 11px; font-weight: 600; padding: 3px 8px; border-radius: 6px; box-shadow: 0 2px 6px rgba(0,0,0,0.28); pointer-events: none; z-index: 3; }
-    #tab-photomotion .pm-minimap-wrap { margin: 4px 0 16px; }
-    #tab-photomotion .pm-minimap { width: 258px; max-width: 100%; display: block; border: 1px solid var(--border-2); border-radius: 8px; cursor: pointer; background: #0d0d0f; }
-    #tab-photomotion .pm-minimap-cap { font-size: 11.5px; color: var(--muted); margin-top: 6px; line-height: 1.45; }
+    /* Shot strip — the storyboard of camera keyframes */
+    #tab-photomotion #pm-shot-strip { display: flex; gap: 10px; overflow-x: auto; padding: 4px 2px 8px; }
+    #tab-photomotion .pm-shot-card { position: relative; flex: 0 0 auto; width: 76px; border: 2px solid var(--border-2); border-radius: 10px; background: var(--surface); cursor: pointer; padding: 0; overflow: hidden; transition: border-color 150ms ease, box-shadow 150ms ease; }
+    #tab-photomotion .pm-shot-card:hover { border-color: rgba(232,84,26,0.5); }
+    #tab-photomotion .pm-shot-card.pm-shot-on { border-color: var(--orange); box-shadow: 0 0 0 3px var(--orange-tint); }
+    #tab-photomotion .pm-shot-card canvas { display: block; width: 72px; height: 128px; }
+    #tab-photomotion .pm-shot-num { position: absolute; top: 4px; left: 4px; background: var(--orange); color: #fff; font-size: 10px; font-weight: 700; width: 17px; height: 17px; border-radius: 50%; display: flex; align-items: center; justify-content: center; }
+    #tab-photomotion .pm-shot-time { position: absolute; bottom: 0; left: 0; right: 0; background: rgba(0,0,0,0.55); color: #fff; font-size: 10px; font-family: monospace; text-align: center; padding: 2px 0; }
+    #tab-photomotion .pm-shot-x { position: absolute; top: 2px; right: 2px; width: 18px; height: 18px; border-radius: 50%; border: none; background: rgba(0,0,0,0.55); color: #fff; font-size: 12px; line-height: 1; cursor: pointer; display: none; align-items: center; justify-content: center; padding: 0; }
+    #tab-photomotion .pm-shot-card:hover .pm-shot-x { display: flex; }
+    #tab-photomotion .pm-shot-add { flex: 0 0 auto; width: 76px; min-height: 132px; border: 2px dashed var(--border-2); border-radius: 10px; background: none; color: var(--text-2); font-family: var(--font); font-size: 11.5px; cursor: pointer; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; transition: border-color 150ms ease, background 150ms ease; }
+    #tab-photomotion .pm-shot-add:hover { border-color: var(--orange); background: var(--orange-tint); color: var(--orange); }
+    #tab-photomotion .pm-shot-add b { font-size: 20px; font-weight: 500; line-height: 1; }
+    /* Toast + onboarding guide */
+    #tab-photomotion #pm-toast { position: fixed; bottom: 30px; left: 50%; transform: translateX(-50%) translateY(8px); background: #1A1A1A; color: #fff; font-size: 13px; padding: 9px 18px; border-radius: 999px; opacity: 0; pointer-events: none; transition: opacity 180ms ease, transform 180ms ease; z-index: 300; box-shadow: 0 4px 16px rgba(0,0,0,0.25); white-space: nowrap; }
+    #tab-photomotion #pm-toast.pm-toast-show { opacity: 1; transform: translateX(-50%) translateY(0); }
+    #tab-photomotion #pm-guide { display: flex; gap: 18px; flex-wrap: wrap; background: var(--orange-tint); border-radius: 10px; padding: 12px 16px; }
+    #tab-photomotion .pm-guide-step { display: flex; align-items: center; gap: 8px; font-size: 12.5px; color: var(--text-2); line-height: 1.4; }
+    #tab-photomotion .pm-guide-num { width: 20px; height: 20px; flex: 0 0 auto; border-radius: 50%; background: var(--orange); color: #fff; font-size: 11px; font-weight: 700; display: flex; align-items: center; justify-content: center; }
+    #tab-photomotion .pm-guide-step.pm-guide-done { opacity: 0.55; }
+    #tab-photomotion .pm-guide-step.pm-guide-done .pm-guide-num { background: var(--success, #2D6A4F); }
+    #tab-photomotion .pm-tbar-handle { position: absolute; top: 0; bottom: 0; width: 7px; cursor: ew-resize; }
     #tab-photomotion .pm-text-bars { position: relative; height: 18px; }
     #tab-photomotion .pm-tbar { position: absolute; top: 0; height: 18px; line-height: 17px; background: rgba(232,84,26,0.15); border: 1px solid rgba(232,84,26,0.5); border-radius: 4px; font-size: 10.5px; color: var(--orange); padding: 0 5px; overflow: hidden; white-space: nowrap; cursor: pointer; box-sizing: border-box; }
     #tab-photomotion .pm-tbar:hover { background: rgba(232,84,26,0.28); }
@@ -3174,7 +3219,7 @@
         <div class="section-hero-bg" style="background-image: url('Graphic_3.png')"></div>
         <div class="section-hero-text fade-up">
           <h1>Photo Motion</h1>
-          <p>Upload a high-resolution image and frame your shot &mdash; drag to pan, scroll to zoom. Keyframed motion, text overlays, music, and export are coming next.</p>
+          <p>Turn one large artwork into a moving 9:16 reel. Compose shots on the full image, add text observations, set it to music &mdash; then export straight to Dropbox + Airtable.</p>
         </div>
       </div>
       <div class="panel-body">
@@ -3187,76 +3232,77 @@
               <circle cx="8.5" cy="8.5" r="1.6"/>
               <path d="M21 15l-5-5L5 21"/>
             </svg>
-            <p>Upload a high-resolution image to begin. You&rsquo;ll frame it into a 9:16 shot &mdash; the starting point for a moving-photo reel.</p>
+            <p>Upload a high-resolution image to begin. You&rsquo;ll explore the full artwork on a large canvas and frame the 9:16 shots that become a moving reel.</p>
             <button class="btn" type="button" onclick="document.getElementById('pm-upload-input').click()">Upload image</button>
           </div>
         </div>
 
         <div id="pm-editor" class="pm-editor" style="display:none;">
-          <div class="pm-stage">
-            <div id="pm-canvas-wrap">
-              <canvas id="pm-canvas" width="1080" height="1920"></canvas>
-              <div id="pm-kf-badge" class="pm-kf-badge" style="display:none;">◆ On keyframe</div>
-            </div>
-            <div class="pm-hint">Drag to pan &middot; Scroll to zoom &middot; hold <b>Shift</b> for fine control</div>
-            <div class="pm-transport">
-              <button class="pm-play-btn" id="pm-play-btn" type="button" onclick="pmPlayToggle()" title="Play / pause preview">
-                <svg id="pm-play-icon" width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>
-              </button>
-              <span class="pm-time" id="pm-time">0.0s / 6.0s</span>
-              <div class="pm-track" id="pm-track">
-                <div class="pm-track-rail"></div>
-                <div class="pm-playhead" id="pm-playhead" style="left:0;"></div>
-              </div>
-              <div id="pm-text-bars" class="pm-text-bars"></div>
-            </div>
+          <div id="pm-guide" style="display:none;">
+            <div class="pm-guide-step" id="pm-guide-1"><span class="pm-guide-num">1</span><span>Drag the orange box on your artwork to compose the first view</span></div>
+            <div class="pm-guide-step" id="pm-guide-2"><span class="pm-guide-num">2</span><span>Click <b>+ Add shot</b> &mdash; each shot is a camera stop the video glides between</span></div>
+            <div class="pm-guide-step" id="pm-guide-3"><span class="pm-guide-num">3</span><span>Press play to watch it move &mdash; keep adding shots to build the story</span></div>
           </div>
-          <div class="pm-controls">
-            <div class="pm-ctl-title">Framing</div>
-            <label class="pm-ctl-row">
-              <span>Zoom</span>
-              <input type="range" id="pm-zoom-slider" min="1" max="6" step="0.01" value="1" oninput="pmZoomSliderInput(this.value)">
-            </label>
-            <div class="pm-ctl-actions">
-              <button class="btn-ghost btn-sm" type="button" onclick="pmResetFraming()">Reset framing</button>
-              <button class="btn-ghost btn-sm" type="button" onclick="document.getElementById('pm-upload-input').click()">Replace image</button>
+          <div class="pm-studio">
+            <div class="pm-explore-col">
+              <div id="pm-explore-wrap">
+                <canvas id="pm-explore"></canvas>
+              </div>
+              <div class="pm-hint">Drag the orange box to frame &middot; drag a corner or scroll to zoom &middot; click anywhere on the artwork to jump there</div>
             </div>
-            <div class="pm-meta" id="pm-meta"></div>
+            <div class="pm-preview-col">
+              <div id="pm-canvas-wrap">
+                <canvas id="pm-canvas" width="1080" height="1920"></canvas>
+                <div id="pm-kf-badge" class="pm-kf-badge" style="display:none;">◆ On keyframe</div>
+              </div>
+              <div class="pm-hint">Live 9:16 preview &mdash; exactly what exports &middot; drag to pan, scroll to zoom</div>
+            </div>
+            <div class="pm-controls">
+              <details class="pm-acc" open>
+                <summary>Shot &amp; framing</summary>
+                <div class="pm-acc-body">
+                  <div class="pm-ctl-actions">
+                    <button class="btn btn-sm" type="button" onclick="pmAddShot()" title="Add the next camera stop 2.5s after the last one">+ Add shot</button>
+                    <button class="btn-ghost btn-sm" type="button" onclick="pmAddOrUpdateKeyframe()" title="Capture the current camera/text at the playhead">&#9670; Set keyframe here</button>
+                  </div>
+                  <label class="pm-ctl-row">
+                    <span>Zoom</span>
+                    <input type="range" id="pm-zoom-slider" min="1" max="6" step="0.01" value="1" oninput="pmZoomSliderInput(this.value)" onchange="pmCamGestureEnd()">
+                  </label>
+                  <div class="pm-ctl-actions">
+                    <button class="btn-ghost btn-sm" type="button" onclick="pmResetFraming()">Reset framing</button>
+                    <button class="btn-ghost btn-sm" type="button" onclick="document.getElementById('pm-upload-input').click()">Replace image</button>
+                  </div>
+                  <div class="pm-meta" id="pm-meta"></div>
+                  <div class="pm-field">
+                    <span>Duration</span>
+                    <input type="number" id="pm-duration" min="1" max="120" step="0.5" value="6" onchange="pmSetDuration(this.value)"> <span style="width:auto;color:var(--muted);">seconds</span>
+                  </div>
+                  <div class="pm-kf-info" id="pm-kf-info">Scrub the timeline or select a shot.</div>
+                  <div class="pm-field" id="pm-ease-field" style="display:none;">
+                    <span>Ease</span>
+                    <select id="pm-kf-ease" onchange="pmSetKfEase(this.value)">
+                      <option value="ease">Smooth (ease in-out)</option>
+                      <option value="ease-in">Ease in</option>
+                      <option value="ease-out">Ease out</option>
+                      <option value="linear">Linear</option>
+                      <option value="hold">Hold (no motion)</option>
+                    </select>
+                  </div>
+                  <div class="pm-ctl-actions" id="pm-kf-actions" style="display:none;">
+                    <button class="btn-ghost btn-sm" type="button" onclick="pmDeleteKf()">Delete keyframe</button>
+                  </div>
+                </div>
+              </details>
 
-            <div class="pm-section">
-              <div class="pm-ctl-title">Motion &mdash; keyframes</div>
-              <div class="pm-minimap-wrap">
-                <canvas id="pm-minimap" class="pm-minimap" onclick="pmMinimapClick(event)" title="Each numbered box is where a camera keyframe frames the image. Click one to jump to it. The dashed box is the current view."></canvas>
-                <div class="pm-minimap-cap">The numbered boxes are your camera keyframes, shown on the image. Click one to jump to it.</div>
-              </div>
-              <div class="pm-field">
-                <span>Duration</span>
-                <input type="number" id="pm-duration" min="1" max="120" step="0.5" value="6" onchange="pmSetDuration(this.value)"> <span style="width:auto;color:var(--muted);">seconds</span>
-              </div>
-
-              <div class="pm-layer-row" id="pm-text-list"></div>
-              <div class="pm-ctl-actions" style="margin:4px 0 14px;">
-                <button class="btn-ghost btn-sm" type="button" onclick="pmAddText()">+ Add text</button>
-                <span class="pm-layer-active">Layer: <b id="pm-layer-label">Camera</b></span>
-              </div>
-
-              <div class="pm-ctl-actions">
-                <button class="btn btn-sm" type="button" onclick="pmAddOrUpdateKeyframe()" title="Capture the current camera/text at the playhead">&#9670; Add / update keyframe</button>
-              </div>
-              <div class="pm-kf-info" id="pm-kf-info">Scrub the timeline or select a keyframe (◆).</div>
-              <div class="pm-field" id="pm-ease-field" style="display:none;">
-                <span>Ease</span>
-                <select id="pm-kf-ease" onchange="pmSetKfEase(this.value)">
-                  <option value="ease">Smooth (ease in-out)</option>
-                  <option value="ease-in">Ease in</option>
-                  <option value="ease-out">Ease out</option>
-                  <option value="linear">Linear</option>
-                  <option value="hold">Hold (no motion)</option>
-                </select>
-              </div>
-              <div class="pm-ctl-actions" id="pm-kf-actions" style="display:none;">
-                <button class="btn-ghost btn-sm" type="button" onclick="pmDeleteKf()">Delete keyframe</button>
-              </div>
+              <details class="pm-acc" id="pm-acc-text">
+                <summary>Text</summary>
+                <div class="pm-acc-body">
+                  <div class="pm-layer-row" id="pm-text-list"></div>
+                  <div class="pm-ctl-actions" style="margin:4px 0 10px;">
+                    <button class="btn-ghost btn-sm" type="button" onclick="pmAddText()">+ Add text</button>
+                    <span class="pm-layer-active">Layer: <b id="pm-layer-label">Camera</b></span>
+                  </div>
 
               <!-- Text layer editing panel -->
               <div id="pm-text-panel" style="display:none;">
@@ -3300,40 +3346,78 @@
                 </div>
                 <div class="pm-note" style="margin-top:6px;">Drag the text on the canvas to move it — that sets a keyframe at the playhead. Move the playhead and drag again to make it travel.</div>
               </div>
-            </div>
+                </div>
+              </details>
 
-            <div class="pm-section">
-              <div class="pm-ctl-title">Export</div>
-              <div class="pm-field">
-                <span>Name</span>
-                <input type="text" id="pm-name" placeholder="Photo Motion" value="">
-              </div>
-              <div class="pm-field">
-                <span>Type</span>
-                <select id="pm-type">
-                  <option value="">(none)</option>
-                  <option value="Podcast Clip">Podcast Clip</option>
-                  <option value="3MB Clip">3MB Clip</option>
-                  <option value="TheoEd Clip">TheoEd Clip</option>
-                  <option value="Unstuck">Unstuck</option>
-                  <option value="Blog Promo">Blog Promo</option>
-                  <option value="Course Promo">Course Promo</option>
-                </select>
-              </div>
-              <div class="pm-field">
-                <span>Music</span>
-                <button class="btn-ghost btn-sm" type="button" onclick="document.getElementById('pm-music-input').click()">Add music</button>
-                <span class="pm-music-name" id="pm-music-name">No music</span>
-                <button class="btn-ghost btn-sm" id="pm-music-remove" type="button" onclick="pmClearMusic()" style="display:none;">Remove</button>
-                <input type="file" id="pm-music-input" accept="audio/*" style="display:none;" onchange="pmAddMusic(this)">
-              </div>
-              <div class="pm-ctl-actions">
-                <button class="btn" id="pm-export-btn" type="button" onclick="pmExport()">Export to Dropbox + Airtable</button>
-              </div>
-              <div class="pm-status" id="pm-status"></div>
-              <div class="pm-note" style="margin-top:14px;">Renders your keyframed pan/zoom to a 9:16 video on your local server, saves it to Dropbox, and creates a Video Shorts &amp; Social record. Text overlays, music, and thumbnails come next.</div>
+              <details class="pm-acc" id="pm-acc-music">
+                <summary>Music</summary>
+                <div class="pm-acc-body">
+                  <div class="pm-ctl-actions" style="margin-bottom:8px;">
+                    <button class="btn-ghost btn-sm" type="button" onclick="document.getElementById('pm-music-input').click()">Add music</button>
+                    <span class="pm-music-name" id="pm-music-name">No music</span>
+                    <button class="btn-ghost btn-sm" id="pm-music-remove" type="button" onclick="pmClearMusic()" style="display:none;">Remove</button>
+                    <input type="file" id="pm-music-input" accept="audio/*" style="display:none;" onchange="pmAddMusic(this)">
+                  </div>
+                </div>
+              </details>
+
+              <details class="pm-acc" open id="pm-acc-export">
+                <summary>Export</summary>
+                <div class="pm-acc-body">
+                  <div class="pm-field">
+                    <span>Name</span>
+                    <input type="text" id="pm-name" placeholder="Photo Motion" value="">
+                  </div>
+                  <div class="pm-field">
+                    <span>Type</span>
+                    <select id="pm-type">
+                      <option value="">(none)</option>
+                      <option value="Podcast Clip">Podcast Clip</option>
+                      <option value="3MB Clip">3MB Clip</option>
+                      <option value="TheoEd Clip">TheoEd Clip</option>
+                      <option value="Unstuck">Unstuck</option>
+                      <option value="Blog Promo">Blog Promo</option>
+                      <option value="Course Promo">Course Promo</option>
+                    </select>
+                  </div>
+                  <div class="pm-ctl-actions">
+                    <button class="btn" id="pm-export-btn" type="button" onclick="pmExport()">Export to Dropbox + Airtable</button>
+                  </div>
+                  <div class="pm-status" id="pm-status"></div>
+                  <div class="pm-note" style="margin-top:14px;">Renders your keyframed pan/zoom &mdash; with text overlays and music &mdash; to a 9:16 video on your local server, saves it to Dropbox, and creates a Video Shorts &amp; Social record.</div>
+                </div>
+              </details>
             </div>
           </div>
+
+          <div>
+            <div class="pm-ctl-title" style="margin-bottom:8px;">Shots</div>
+            <div id="pm-shot-strip"></div>
+          </div>
+
+          <div id="pm-timeline-panel">
+            <div class="pm-timeline-head">
+              <div class="pm-ctl-title" style="margin-bottom:0;">Timeline</div>
+              <div class="pm-save-status" id="pm-save-status"></div>
+            </div>
+            <div class="pm-transport">
+              <div class="pm-trans-btns">
+                <button class="pm-play-btn" id="pm-play-btn" type="button" onclick="pmPlayToggle()" title="Play / pause preview">
+                  <svg id="pm-play-icon" width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>
+                </button>
+                <button class="btn-ghost btn-sm" type="button" onclick="pmPrevShot()" title="Previous shot">&#8249;</button>
+                <button class="btn-ghost btn-sm" type="button" onclick="pmNextShot()" title="Next shot">&#8250;</button>
+              </div>
+              <span class="pm-time" id="pm-time">0.0s / 6.0s</span>
+              <div class="pm-track" id="pm-track">
+                <div class="pm-track-rail"></div>
+                <div class="pm-playhead" id="pm-playhead" style="left:0;"></div>
+              </div>
+              <div id="pm-text-bars" class="pm-text-bars"></div>
+            </div>
+          </div>
+
+          <div id="pm-toast"></div>
         </div>
       </div>
     </div>
@@ -3398,7 +3482,7 @@
     ctx.clearRect(0, 0, 1080, 1920);
     pmDrawFrame(ctx, _pmImgEl, 1080, 1920, _pmCam);
     pmDrawTexts(ctx);
-    pmDrawMinimap();
+    pmDrawExplore();
     pmUpdateKfBadge();
   }
   function pmDrawThrottled() {
@@ -3428,6 +3512,8 @@
     _pmCam = { zoom: 1, ox: 0, oy: 0 };
     pmInitMotion();
     pmUpdateUI();
+    pmExploreLayout();   // size the explore canvas once the editor is visible
+    pmRenderGuide();
     pmDraw();
   }
 
@@ -3477,24 +3563,21 @@
     const sw2 = W / scale2, sh2 = H / scale2;
     const sx2 = px - u * sw2, sy2 = py - v * sh2;
     const mx = natW - sw2, my = natH - sh2;
-    _pmCam = {
+    pmSetCam({
       zoom: newZoom,
       ox: mx > 0 ? Math.max(-1, Math.min(1, 2 * sx2 / mx - 1)) : 0,
       oy: my > 0 ? Math.max(-1, Math.min(1, 2 * sy2 / my - 1)) : 0,
-    };
-    pmSyncZoomSlider();
-    pmDrawThrottled();
+    });
   }
 
   function pmZoomSliderInput(val) {
     pmZoomAt(parseFloat(val) || 1, 0.5, 0.5);   // slider zooms toward center
   }
   function pmResetFraming() {
-    _pmCam = { zoom: 1, ox: 0, oy: 0 };
-    pmSyncZoomSlider();
-    pmDraw();
+    pmSetCam({ zoom: 1, ox: 0, oy: 0 });
+    pmCamGestureEnd();
   }
-  function pmOnEnter() { if (_pmImgEl) { pmDraw(); pmRenderTimeline(); } }
+  function pmOnEnter() { if (_pmImgEl) { pmExploreLayout(); pmDraw(); pmRenderTimeline(); } }
 
   // ── Interaction: scroll to zoom (cursor-anchored) + drag to pan ──
   (function () {
@@ -3509,6 +3592,7 @@
       const step = e.shiftKey ? 1.02 : 1.05;   // gentler; Shift = fine
       const factor = e.deltaY < 0 ? step : 1 / step;
       pmZoomAt(_pmCam.zoom * factor, u, v);
+      pmWheelCommitSoon();   // a wheel burst counts as one framing gesture
     }, { passive: false });
 
     let pan = null;
@@ -3534,12 +3618,16 @@
       const dyImg = (e.clientY - pan.sy) / rect.height * sh * fine;
       const dox = marginX > 0 ? (2 * dxImg / marginX) : 0;
       const doy = marginY > 0 ? (2 * dyImg / marginY) : 0;
-      _pmCam.ox = Math.max(-1, Math.min(1, pan.ox - dox));
-      _pmCam.oy = Math.max(-1, Math.min(1, pan.oy - doy));
-      pmDrawThrottled();
+      pmSetCam({ zoom: _pmCam.zoom, ox: pan.ox - dox, oy: pan.oy - doy });
+      pan.moved = true;
     });
     document.addEventListener('mouseup', function () {
-      if (pan) { pan = null; const w = wrapEl(); if (w) w.classList.remove('pm-panning'); }
+      if (pan) {
+        const moved = pan.moved;
+        pan = null;
+        const w = wrapEl(); if (w) w.classList.remove('pm-panning');
+        if (moved) pmCamGestureEnd();   // a completed pan is a reframe → keyframe it
+      }
     });
   })();
   // ── Photo Motion 1B: keyframes, timeline, preview, export ──
@@ -3551,6 +3639,7 @@
   let _pmPlaying   = false;
   let _pmPlayRaf   = null;
   const PM_FPS = 30;
+  const PM_SHOT_HOLD = 2.5;   // seconds a new shot lands after the previous one
 
   // Easing — MUST match the backend _pm_ease (server.py) so preview == export.
   function pmEaseJS(kind, f) {
@@ -3582,6 +3671,7 @@
     _pmKeyframes = [{ id: ++_pmKfSeq, t: 0, zoom: _pmCam.zoom, ox: _pmCam.ox, oy: _pmCam.oy, ease: 'ease' }];
     _pmSelKf = _pmKeyframes[0].id;
     _pmTexts = []; _pmActiveText = null; _pmDragText = null; _pmTextSeq = 0;
+    _pmGuideFramed = false; _pmGuidePlayed = false;
     pmClearMusic();
     const dur = document.getElementById('pm-duration'); if (dur) dur.value = _pmDuration;
     const st = document.getElementById('pm-status'); if (st) { st.textContent = ''; st.className = 'pm-status'; }
@@ -3604,11 +3694,18 @@
     if (!track) return;
     const kfs = pmActiveKfs();
     track.querySelectorAll('.pm-kf').forEach(el => el.remove());
+    const shotNo = {};
+    if (!_pmActiveText) pmSortedCams().forEach((k, i) => { shotNo[k.id] = i + 1; });
     kfs.forEach(k => {
       const d = document.createElement('div');
       d.className = 'pm-kf' + (k.id === _pmSelKf ? ' pm-kf-active' : '');
       d.style.left = pmTimeToX(k.t) + 'px';
       d.dataset.id = k.id;
+      if (!_pmActiveText) {   // camera diamonds carry their shot number
+        const n = document.createElement('span');
+        n.textContent = shotNo[k.id] || '';
+        d.appendChild(n);
+      }
       track.appendChild(d);
     });
     const ph = document.getElementById('pm-playhead'); if (ph) ph.style.left = pmTimeToX(_pmPlayhead) + 'px';
@@ -3617,7 +3714,8 @@
     if (lbl) { const tx = pmActiveText(); lbl.textContent = tx ? ('Text: ' + (tx.text.split('\n')[0] || 'text').slice(0, 16)) : 'Camera'; }
     pmRenderKfPanel();
     pmRenderTextBars();
-    pmDrawMinimap();
+    pmRenderShotStrip();
+    pmDrawExplore();
   }
   function pmRenderKfPanel() {
     const kfs = pmActiveKfs();
@@ -3675,6 +3773,12 @@
   function pmSetDuration(v) {
     _pmDuration = Math.max(1, Math.min(120, parseFloat(v) || 6));
     _pmKeyframes.forEach(k => { if (k.t > _pmDuration) k.t = _pmDuration; });
+    // Text layers must not outlive the clip either (keyframes AND visibility windows).
+    _pmTexts.forEach(tx => {
+      tx.kfs.forEach(k => { if (k.t > _pmDuration) k.t = _pmDuration; });
+      if (tx.tEnd && tx.tEnd > _pmDuration) tx.tEnd = _pmDuration;
+      if (tx.tStart > _pmDuration) tx.tStart = Math.max(0, _pmDuration - 0.5);
+    });
     if (_pmPlayhead > _pmDuration) _pmPlayhead = _pmDuration;
     const dur = document.getElementById('pm-duration'); if (dur) dur.value = _pmDuration;
     pmRenderTimeline();
@@ -3693,6 +3797,7 @@
       _pmSelKf = null; pmRenderKfPanel();
       if (_pmPlayhead >= _pmDuration - 0.001) _pmPlayhead = 0;
       const icon = document.getElementById('pm-play-icon'); if (icon) icon.innerHTML = '<path d="M6 5h4v14H6zM14 5h4v14h-4z"/>';
+      _pmGuidePlayed = true; pmGuideCheck();
       const startT = _pmPlayhead, t0 = performance.now();
       pmMusicPlayFrom(startT);
       const step = (now) => {
@@ -4027,39 +4132,356 @@
     const sw = 1080 / scale, sh = 1920 / scale;
     return { sx: (natW - sw) / 2 * (1 + ox), sy: (natH - sh) / 2 * (1 + oy), sw, sh };
   }
-  function pmDrawMinimap() {
-    const mc = document.getElementById('pm-minimap'); if (!mc || !_pmImgEl) return;
-    const natW = _pmImgNatW, natH = _pmImgNatH;
-    const MW = 258, MH = Math.max(1, Math.round(MW * natH / natW)), sc = MW / natW;
-    if (mc.width !== MW) mc.width = MW;
-    if (mc.height !== MH) mc.height = MH;
-    const ctx = mc.getContext('2d');
-    ctx.clearRect(0, 0, MW, MH);
-    ctx.drawImage(_pmImgEl, 0, 0, MW, MH);
-    ctx.fillStyle = 'rgba(0,0,0,0.30)'; ctx.fillRect(0, 0, MW, MH);
-    const cams = _pmKeyframes.slice().sort((a, b) => a.t - b.t);
-    cams.forEach((k, i) => {
-      const b = pmCropBoxImg(natW, natH, k.zoom, k.ox, k.oy);
-      const on = (k.id === _pmSelKf && !_pmActiveText);
-      ctx.strokeStyle = on ? '#E8541A' : 'rgba(255,255,255,0.85)';
-      ctx.lineWidth = on ? 3 : 1.5;
-      ctx.strokeRect(b.sx * sc, b.sy * sc, b.sw * sc, b.sh * sc);
-      ctx.fillStyle = on ? '#E8541A' : 'rgba(255,255,255,0.95)';
-      ctx.font = 'bold 12px Inter, sans-serif';
-      ctx.fillText(String(i + 1), b.sx * sc + 4, b.sy * sc + 15);
-    });
-    const c = pmInterpCam(_pmPlayhead), cb = pmCropBoxImg(natW, natH, c.zoom, c.ox, c.oy);
-    ctx.strokeStyle = '#F6A85D'; ctx.lineWidth = 2; ctx.setLineDash([5, 4]);
-    ctx.strokeRect(cb.sx * sc, cb.sy * sc, cb.sw * sc, cb.sh * sc);
-    ctx.setLineDash([]);
+  // ── Photo Motion Studio: explore canvas (full artwork + draggable 9:16 frame),
+  //    shot list, auto-keyframe, toast, onboarding guide ──
+  let _pmExploreBase  = null;   // offscreen canvas: artwork pre-scaled to display res
+  let _pmExploreScale = 1;      // explore CSS px per image px
+  let _pmExploreDPR   = 1;
+  let _pmWheelCommitTimer = null;
+  let _pmToastTimer   = null;
+  let _pmGuideFramed  = false;
+  let _pmGuidePlayed  = false;
+
+  // Single funnel for every USER camera mutation (scrub/play interpolation
+  // assigns _pmCam directly and must NOT come through here).
+  function pmSetCam(cam) {
+    _pmCam = {
+      zoom: Math.max(1, Math.min(PM_MAX_ZOOM, cam.zoom || 1)),
+      ox: Math.max(-1, Math.min(1, cam.ox || 0)),
+      oy: Math.max(-1, Math.min(1, cam.oy || 0)),
+    };
+    pmSyncZoomSlider();
+    pmDrawThrottled();
   }
-  function pmMinimapClick(e) {
-    if (!_pmImgEl || !_pmKeyframes.length) return;
-    const mc = document.getElementById('pm-minimap'); const rect = mc.getBoundingClientRect();
-    const mx = (e.clientX - rect.left) / rect.width * _pmImgNatW, my = (e.clientY - rect.top) / rect.height * _pmImgNatH;
-    let best = null, bd = Infinity;
-    _pmKeyframes.forEach(k => { const b = pmCropBoxImg(_pmImgNatW, _pmImgNatH, k.zoom, k.ox, k.oy); const dx = b.sx + b.sw / 2 - mx, dy = b.sy + b.sh / 2 - my; const d = dx * dx + dy * dy; if (d < bd) { bd = d; best = k; } });
-    if (best) { if (_pmActiveText) pmSelectCamera(); pmSelectKf(best.id); }
+  // End of a framing gesture → the reframe is captured as a keyframe (never lost).
+  function pmCamGestureEnd() {
+    if (!_pmImgEl || _pmActiveText) return;
+    pmAutoKeyframeCam();
+    _pmGuideFramed = true;
+    pmGuideCheck();
+  }
+  function pmWheelCommitSoon() {
+    if (_pmWheelCommitTimer) clearTimeout(_pmWheelCommitTimer);
+    _pmWheelCommitTimer = setTimeout(pmCamGestureEnd, 400);
+  }
+
+  function pmSortedCams() { return _pmKeyframes.slice().sort((a, b) => a.t - b.t); }
+  function pmShotIndexOf(id) { return pmSortedCams().findIndex(k => k.id === id); }
+
+  // Inverse of the crop math: a box (image px, top-left + width) → {zoom, ox, oy}.
+  // MUST stay the exact inverse of pmCropBoxImg / backend _pm_crop_box.
+  function pmBoxToCam(sx, sy, sw) {
+    const natW = _pmImgNatW, natH = _pmImgNatH;
+    const cover = Math.max(1080 / natW, 1920 / natH);
+    const zoom = Math.max(1, Math.min(PM_MAX_ZOOM, 1080 / (cover * Math.max(1e-6, sw))));
+    const sw2 = 1080 / (cover * zoom), sh2 = 1920 / (cover * zoom);
+    const mx = natW - sw2, my = natH - sh2;
+    return {
+      zoom,
+      ox: mx > 0 ? Math.max(-1, Math.min(1, 2 * sx / mx - 1)) : 0,
+      oy: my > 0 ? Math.max(-1, Math.min(1, 2 * sy / my - 1)) : 0,
+    };
+  }
+
+  function pmExploreLayout() {
+    const cv = document.getElementById('pm-explore'), wrap = document.getElementById('pm-explore-wrap');
+    if (!cv || !wrap || !_pmImgEl) return;
+    const colW = wrap.clientWidth;
+    if (!colW) return;   // tab hidden — retry on pmOnEnter / resize
+    const capH = Math.max(320, Math.round(window.innerHeight * 0.62));
+    let cssW = colW, cssH = cssW * _pmImgNatH / _pmImgNatW;
+    if (cssH > capH) { cssH = capH; cssW = cssH * _pmImgNatW / _pmImgNatH; }
+    cssW = Math.max(200, Math.round(cssW)); cssH = Math.max(120, Math.round(cssH));
+    _pmExploreDPR = window.devicePixelRatio || 1;
+    _pmExploreScale = cssW / _pmImgNatW;
+    cv.style.width = cssW + 'px'; cv.style.height = cssH + 'px';
+    const bw = Math.round(cssW * _pmExploreDPR), bh = Math.round(cssH * _pmExploreDPR);
+    if (cv.width !== bw) cv.width = bw;
+    if (cv.height !== bh) cv.height = bh;
+    // Pre-scale the artwork ONCE so 4000px+ images stay smooth during drags.
+    _pmExploreBase = document.createElement('canvas');
+    _pmExploreBase.width = bw; _pmExploreBase.height = bh;
+    const bctx = _pmExploreBase.getContext('2d');
+    bctx.imageSmoothingEnabled = true; bctx.imageSmoothingQuality = 'high';
+    bctx.drawImage(_pmImgEl, 0, 0, bw, bh);
+  }
+
+  function pmDrawExplore() {
+    const cv = document.getElementById('pm-explore');
+    if (!cv || !_pmImgEl) return;
+    if (!_pmExploreBase) pmExploreLayout();
+    if (!_pmExploreBase) return;
+    const ctx = cv.getContext('2d');
+    const W = cv.width, H = cv.height, dpr = _pmExploreDPR;
+    const k = _pmExploreScale * dpr;   // device px per image px
+    ctx.clearRect(0, 0, W, H);
+    ctx.drawImage(_pmExploreBase, 0, 0);
+    // Dim the artwork, then re-brighten the current frame region.
+    const cur = pmCropBoxImg(_pmImgNatW, _pmImgNatH, _pmCam.zoom, _pmCam.ox, _pmCam.oy);
+    const bx = cur.sx * k, by = cur.sy * k, bw = cur.sw * k, bh = cur.sh * k;
+    ctx.fillStyle = 'rgba(0,0,0,0.38)';
+    ctx.fillRect(0, 0, W, H);
+    const cx0 = Math.max(0, bx), cy0 = Math.max(0, by);
+    const cx1 = Math.min(W, bx + bw), cy1 = Math.min(H, by + bh);
+    if (cx1 > cx0 && cy1 > cy0) ctx.drawImage(_pmExploreBase, cx0, cy0, cx1 - cx0, cy1 - cy0, cx0, cy0, cx1 - cx0, cy1 - cy0);
+    // Numbered shot boxes (each camera keyframe's frame on the artwork).
+    const cams = pmSortedCams();
+    cams.forEach((kf, i) => {
+      const b = pmCropBoxImg(_pmImgNatW, _pmImgNatH, kf.zoom, kf.ox, kf.oy);
+      const on = (kf.id === _pmSelKf && !_pmActiveText);
+      ctx.strokeStyle = on ? '#E8541A' : 'rgba(255,255,255,0.7)';
+      ctx.lineWidth = (on ? 2.5 : 1.25) * dpr;
+      ctx.strokeRect(b.sx * k, b.sy * k, b.sw * k, b.sh * k);
+      const r = 8.5 * dpr, ncx = b.sx * k + r + 3 * dpr, ncy = b.sy * k + r + 3 * dpr;
+      ctx.beginPath(); ctx.arc(ncx, ncy, r, 0, Math.PI * 2);
+      ctx.fillStyle = on ? '#E8541A' : 'rgba(0,0,0,0.65)'; ctx.fill();
+      ctx.fillStyle = '#fff'; ctx.font = '700 ' + Math.round(10 * dpr) + 'px Inter, sans-serif';
+      ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      ctx.fillText(String(i + 1), ncx, ncy + 0.5 * dpr);
+    });
+    ctx.textAlign = 'start'; ctx.textBaseline = 'alphabetic';
+    // The current frame box (draggable) + rule-of-thirds + corner handles.
+    ctx.strokeStyle = '#E8541A'; ctx.lineWidth = 2.5 * dpr;
+    ctx.strokeRect(bx, by, bw, bh);
+    ctx.strokeStyle = 'rgba(255,255,255,0.35)'; ctx.lineWidth = 1 * dpr;
+    ctx.beginPath();
+    for (let i = 1; i <= 2; i++) {
+      ctx.moveTo(bx + bw * i / 3, by); ctx.lineTo(bx + bw * i / 3, by + bh);
+      ctx.moveTo(bx, by + bh * i / 3); ctx.lineTo(bx + bw, by + bh * i / 3);
+    }
+    ctx.stroke();
+    const hs = 9 * dpr;
+    [[bx, by], [bx + bw, by], [bx, by + bh], [bx + bw, by + bh]].forEach(c => {
+      ctx.fillStyle = '#fff'; ctx.fillRect(c[0] - hs / 2, c[1] - hs / 2, hs, hs);
+      ctx.strokeStyle = '#E8541A'; ctx.lineWidth = 2 * dpr; ctx.strokeRect(c[0] - hs / 2, c[1] - hs / 2, hs, hs);
+    });
+  }
+
+  // Explore interactions: drag box = pan · corner drag = zoom · click = jump · wheel = zoom.
+  (function () {
+    let gest = null;   // {mode:'move'|'nw'|'ne'|'sw'|'se', box, p0, moved}
+    const cvEl = () => document.getElementById('pm-explore');
+    function evtImg(e, cv) {
+      const rect = cv.getBoundingClientRect();
+      return { x: (e.clientX - rect.left) / _pmExploreScale, y: (e.clientY - rect.top) / _pmExploreScale };
+    }
+    function curBox() { return pmCropBoxImg(_pmImgNatW, _pmImgNatH, _pmCam.zoom, _pmCam.ox, _pmCam.oy); }
+    function hitTest(p, b) {
+      const hr = 14 / _pmExploreScale;   // 14 CSS px grab radius, in image units
+      const corners = { nw: [b.sx, b.sy], ne: [b.sx + b.sw, b.sy], sw: [b.sx, b.sy + b.sh], se: [b.sx + b.sw, b.sy + b.sh] };
+      for (const key in corners) {
+        const c = corners[key];
+        if (Math.abs(p.x - c[0]) <= hr && Math.abs(p.y - c[1]) <= hr) return key;
+      }
+      if (p.x >= b.sx && p.x <= b.sx + b.sw && p.y >= b.sy && p.y <= b.sy + b.sh) return 'move';
+      return 'jump';
+    }
+    document.addEventListener('mousedown', function (e) {
+      const cv = cvEl();
+      if (!cv || e.target !== cv || !_pmImgEl) return;
+      pmPlayStop();
+      if (_pmActiveText) pmSelectCamera();   // framing gestures always drive the camera
+      const p = evtImg(e, cv);
+      const b = curBox();
+      const mode = hitTest(p, b);
+      if (mode === 'jump') {
+        // Clicking inside another shot's box selects that shot; otherwise center the frame here.
+        let hitShot = null, hitArea = Infinity;
+        pmSortedCams().forEach(kf => {
+          const sb = pmCropBoxImg(_pmImgNatW, _pmImgNatH, kf.zoom, kf.ox, kf.oy);
+          if (p.x >= sb.sx && p.x <= sb.sx + sb.sw && p.y >= sb.sy && p.y <= sb.sy + sb.sh) {
+            const area = sb.sw * sb.sh;
+            if (area < hitArea) { hitArea = area; hitShot = kf; }
+          }
+        });
+        if (hitShot && hitShot.id !== _pmSelKf) { pmSelectKf(hitShot.id); e.preventDefault(); return; }
+        pmSetCam(pmBoxToCam(p.x - b.sw / 2, p.y - b.sh / 2, b.sw));
+        gest = { mode: 'move', box: curBox(), p0: p, moved: true };
+      } else {
+        gest = { mode, box: b, p0: p, moved: false };
+      }
+      e.preventDefault();
+    });
+    document.addEventListener('mousemove', function (e) {
+      const cv = cvEl();
+      if (!gest && cv && _pmImgEl && e.target === cv) {
+        const hit = hitTest(evtImg(e, cv), curBox());
+        cv.style.cursor = hit === 'move' ? 'move'
+          : (hit === 'nw' || hit === 'se') ? 'nwse-resize'
+          : (hit === 'ne' || hit === 'sw') ? 'nesw-resize' : 'crosshair';
+      }
+      if (!gest || !cv) return;
+      const p = evtImg(e, cv);
+      const b0 = gest.box;
+      if (gest.mode === 'move') {
+        pmSetCam(pmBoxToCam(b0.sx + (p.x - gest.p0.x), b0.sy + (p.y - gest.p0.y), b0.sw));
+      } else {
+        // Corner resize, aspect-locked, anchored at the opposite corner.
+        const anchors = { nw: [b0.sx + b0.sw, b0.sy + b0.sh], ne: [b0.sx, b0.sy + b0.sh], sw: [b0.sx + b0.sw, b0.sy], se: [b0.sx, b0.sy] };
+        const a = anchors[gest.mode];
+        const cover = Math.max(1080 / _pmImgNatW, 1920 / _pmImgNatH);
+        const swMin = 1080 / (cover * PM_MAX_ZOOM), swMax = 1080 / cover;
+        let sw = Math.max(Math.abs(p.x - a[0]), Math.abs(p.y - a[1]) * (b0.sw / b0.sh));
+        sw = Math.max(swMin, Math.min(swMax, sw));
+        const sh = sw * b0.sh / b0.sw;
+        let nsx, nsy;
+        if (gest.mode === 'nw') { nsx = a[0] - sw; nsy = a[1] - sh; }
+        else if (gest.mode === 'ne') { nsx = a[0]; nsy = a[1] - sh; }
+        else if (gest.mode === 'sw') { nsx = a[0] - sw; nsy = a[1]; }
+        else { nsx = a[0]; nsy = a[1]; }
+        pmSetCam(pmBoxToCam(nsx, nsy, sw));
+      }
+      gest.moved = true;
+    });
+    document.addEventListener('mouseup', function () {
+      if (!gest) return;
+      const moved = gest.moved;
+      gest = null;
+      if (moved) pmCamGestureEnd();
+    });
+    document.addEventListener('wheel', function (e) {
+      const cv = cvEl();
+      if (!cv || e.target !== cv || !_pmImgEl) return;
+      e.preventDefault();
+      if (_pmActiveText) pmSelectCamera();
+      const p = evtImg(e, cv);
+      const b = curBox();
+      const step = e.shiftKey ? 1.02 : 1.06;
+      const factor = e.deltaY < 0 ? step : 1 / step;
+      const u = (p.x - b.sx) / b.sw, v = (p.y - b.sy) / b.sh;   // keep this image point under the cursor
+      const newZoom = Math.max(1, Math.min(PM_MAX_ZOOM, _pmCam.zoom * factor));
+      const cover = Math.max(1080 / _pmImgNatW, 1920 / _pmImgNatH);
+      const sw2 = 1080 / (cover * newZoom), sh2 = 1920 / (cover * newZoom);
+      pmSetCam(pmBoxToCam(p.x - u * sw2, p.y - v * sh2, sw2));
+      pmWheelCommitSoon();
+    }, { passive: false });
+    // Keep the explore canvas sized to its column.
+    if (typeof ResizeObserver !== 'undefined') {
+      let raf = null;
+      const ro = new ResizeObserver(() => {
+        if (!_pmImgEl || raf) return;
+        raf = requestAnimationFrame(() => { raf = null; pmExploreLayout(); pmDraw(); pmRenderTimeline(); });
+      });
+      const w = document.getElementById('pm-explore-wrap');
+      if (w) ro.observe(w);
+    }
+  })();
+
+  // ── Shots: a shot IS a camera keyframe; the strip is its storyboard view ──
+  function pmAutoKeyframeCam() {
+    if (!_pmImgEl || _pmActiveText) return;
+    const eps = 0.05;
+    let k = _pmKeyframes.find(x => Math.abs(x.t - _pmPlayhead) <= eps);
+    const isNew = !k;
+    if (k) { k.zoom = _pmCam.zoom; k.ox = _pmCam.ox; k.oy = _pmCam.oy; }
+    else { k = { id: ++_pmKfSeq, t: _pmPlayhead, zoom: _pmCam.zoom, ox: _pmCam.ox, oy: _pmCam.oy, ease: 'ease' }; _pmKeyframes.push(k); }
+    _pmSelKf = k.id;
+    pmRenderTimeline();
+    pmToast('Shot ' + (pmShotIndexOf(k.id) + 1) + (isNew ? ' added' : ' updated') + ' @ ' + _pmPlayhead.toFixed(1) + 's');
+  }
+
+  function pmAddShot() {
+    if (!_pmImgEl) return;
+    pmPlayStop();
+    if (_pmActiveText) pmSelectCamera();
+    const cams = pmSortedCams();
+    const lastT = cams.length ? cams[cams.length - 1].t : 0;
+    const newT = Math.min(120, lastT + PM_SHOT_HOLD);
+    if (cams.some(k => Math.abs(k.t - newT) <= 0.05)) { pmToast('Reached the 120s duration limit'); return; }
+    if (newT > _pmDuration) pmSetDuration(newT);
+    pmSetPlayhead(newT, false);   // keep the user's current framing for the new shot
+    const k = { id: ++_pmKfSeq, t: newT, zoom: _pmCam.zoom, ox: _pmCam.ox, oy: _pmCam.oy, ease: 'ease' };
+    _pmKeyframes.push(k);
+    _pmSelKf = k.id;
+    pmRenderTimeline();
+    pmDraw();
+    const strip = document.getElementById('pm-shot-strip'); if (strip) strip.scrollLeft = strip.scrollWidth;
+    pmToast('Shot ' + (pmShotIndexOf(k.id) + 1) + ' added @ ' + newT.toFixed(1) + 's — reframe it, or add the next');
+    pmGuideCheck();
+  }
+
+  function pmDeleteShot(id) {
+    if (_pmActiveText) pmSelectCamera();
+    if (_pmKeyframes.length <= 1) return;
+    _pmSelKf = id;
+    pmDeleteKf();
+    pmToast('Shot deleted');
+  }
+
+  function pmRenderShotStrip() {
+    const strip = document.getElementById('pm-shot-strip');
+    if (!strip || !_pmImgEl) return;
+    strip.innerHTML = '';
+    pmSortedCams().forEach((k, i) => {
+      const card = document.createElement('div');
+      card.className = 'pm-shot-card' + (k.id === _pmSelKf && !_pmActiveText ? ' pm-shot-on' : '');
+      card.title = 'Shot ' + (i + 1) + ' @ ' + k.t.toFixed(1) + 's — click to jump to it';
+      const cv = document.createElement('canvas');
+      cv.width = 72; cv.height = 128;   // 72/128 == 1080/1920 → the exact export crop
+      pmDrawFrame(cv.getContext('2d'), _pmImgEl, 72, 128, k);
+      card.appendChild(cv);
+      const num = document.createElement('span'); num.className = 'pm-shot-num'; num.textContent = i + 1; card.appendChild(num);
+      const tm = document.createElement('span'); tm.className = 'pm-shot-time'; tm.textContent = k.t.toFixed(1) + 's'; card.appendChild(tm);
+      if (_pmKeyframes.length > 1) {
+        const x = document.createElement('span');
+        x.className = 'pm-shot-x'; x.textContent = '×'; x.title = 'Delete this shot';
+        x.onclick = (e) => { e.stopPropagation(); pmDeleteShot(k.id); };
+        card.appendChild(x);
+      }
+      card.onclick = () => { if (_pmActiveText) pmSelectCamera(); pmSelectKf(k.id); };
+      strip.appendChild(card);
+    });
+    const add = document.createElement('button');
+    add.type = 'button'; add.className = 'pm-shot-add';
+    add.innerHTML = '<b>+</b><span>Add shot</span>';
+    add.title = 'Add the next camera stop ' + PM_SHOT_HOLD.toFixed(1) + 's after the last one';
+    add.onclick = pmAddShot;
+    strip.appendChild(add);
+  }
+
+  function pmPrevShot() { pmStepShot(-1); }
+  function pmNextShot() { pmStepShot(1); }
+  function pmStepShot(dir) {
+    if (!_pmImgEl) return;
+    if (_pmActiveText) pmSelectCamera();
+    const cams = pmSortedCams(); if (!cams.length) return;
+    let i = cams.findIndex(k => k.id === _pmSelKf);
+    if (i < 0) {   // nothing selected: pick the nearest shot to the playhead, then step
+      let bd = Infinity;
+      cams.forEach((k, j) => { const d = Math.abs(k.t - _pmPlayhead); if (d < bd) { bd = d; i = j; } });
+    } else {
+      i += dir;
+    }
+    i = Math.max(0, Math.min(cams.length - 1, i));
+    pmSelectKf(cams[i].id);
+  }
+
+  // ── Toast + onboarding guide ──
+  function pmToast(msg) {
+    const el = document.getElementById('pm-toast'); if (!el) return;
+    el.textContent = msg;
+    el.classList.add('pm-toast-show');
+    if (_pmToastTimer) clearTimeout(_pmToastTimer);
+    _pmToastTimer = setTimeout(() => el.classList.remove('pm-toast-show'), 1800);
+  }
+  function pmRenderGuide() {
+    const g = document.getElementById('pm-guide'); if (!g) return;
+    if (localStorage.getItem('pm_guide_done') === '1') { g.style.display = 'none'; return; }
+    g.style.display = 'flex';
+    pmGuideCheck();
+  }
+  function pmGuideCheck() {
+    const g = document.getElementById('pm-guide');
+    if (!g || g.style.display === 'none') return;
+    const done = [_pmGuideFramed, _pmKeyframes.length >= 2, _pmGuidePlayed];
+    done.forEach((d, i) => {
+      const el = document.getElementById('pm-guide-' + (i + 1));
+      if (el) el.classList.toggle('pm-guide-done', !!d);
+    });
+    if (done[0] && done[1] && done[2]) {
+      try { localStorage.setItem('pm_guide_done', '1'); } catch (e) {}
+      setTimeout(() => { g.style.display = 'none'; }, 1200);
+    }
   }
   function pmUpdateKfBadge() {
     const b = document.getElementById('pm-kf-badge'); if (!b) return;
