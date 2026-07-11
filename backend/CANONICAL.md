@@ -2854,3 +2854,34 @@ rebuild flat zip + restart launcher + hard-refresh. Handshake reads `2026-07-11-
 Regression risk: Low-moderate — export defaults byte-identical without the new fields; video
 project flows untouched (source_kind defaults); new routes/event are additive. Watch: autosave
 chattiness (debounced 1.5s), WebAudio decode on huge files (async, non-blocking).
+
+## Photo Motion Studio — text-clip model + per-shot ripple timing (frontend-only)
+Third Studio pass, from Emily's first real use: new texts all spanned the whole video (stacking
+on top of each other) and "Duration" read as per-shot when it was total. CapCut's mental model
+adopted. NO backend change, NO handshake bump — persistence schema unchanged (texts still
+{tStart,tEnd}, camera kfs still at absolute times).
+
+### Text is a clip that belongs to a shot
+- `pmSegRange(kfId?)` → `{t0,t1,shotNo}`: the segment [shot arrival, next shot arrival or end].
+  "Current shot" = selected camera kf, else the shot at/before the playhead.
+- `pmAddText` defaults the new text to the CURRENT SHOT's segment (fades 0.3/0.3), places its
+  first transform kf at t0, and jumps the playhead to t0 so the text is immediately visible.
+- "Show during" in the text panel: `From [Shot N ▾] Until [Shot M arrives ▾ | the end]` +
+  a [Whole video] button (`pmRenderTxShotSelects` / `pmTxApplyShotRange` / `pmTxWholeVideo`).
+  These are SETTERS — they compute times from shot boundaries at click time; the window stays
+  time-based and freely draggable on the timeline bars afterward. Advanced Start/End number
+  inputs remain, synced.
+- Layer chips display each text's window (`T label · 1.0–4.0s`) so overlap is visible at a glance.
+
+### Per-shot timing (ripple) + end hold
+- Selected shot (except Shot 1) shows "Arrives after previous: [N] s" → `pmRippleRetime`:
+  delta = newGap − oldGap (min gap 0.3s; total capped at 120s), shifts the edited shot AND every
+  later camera kf by delta, drags along every text whose `tStart >= editedShot.oldT − 0.01`
+  (tStart/tEnd/transform kfs all move — texts stay glued to their shots), preserves the tail
+  after the last shot (`_pmDuration += delta`), and NEVER moves beat markers (they belong to the
+  music). Playhead lands on the edited shot.
+- `PM_END_HOLD = 1.5`: `pmAddShot` now sets `duration = max(duration, newT + PM_END_HOLD)` so the
+  final framing holds on screen instead of the video ending on arrival.
+- Presentation: shot cards read `@2.5s ▸2.5s` (arrival ▸ time to next / hold to end); the ease
+  select is labeled "Move to next shot" on the Camera layer ("Ease" on text layers) — same
+  values, wording only; the Duration input is labeled "Total length" and auto-grows.

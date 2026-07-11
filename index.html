@@ -2325,6 +2325,7 @@
     #tab-photomotion .pm-layer-chip:hover { border-color: var(--orange); color: var(--orange); }
     #tab-photomotion .pm-layer-chip.pm-layer-on { background: var(--orange-tint); border-color: var(--orange); color: var(--orange); font-weight: 600; }
     #tab-photomotion .pm-layer-active { font-size: 12px; color: var(--muted); align-self: center; }
+    #tab-photomotion .pm-chip-time { opacity: 0.65; font-size: 10px; font-family: monospace; }
     #tab-photomotion .pm-subtitle { font-size: 11px; font-weight: 600; letter-spacing: 0.05em; text-transform: uppercase; color: var(--muted); margin: 14px 0 8px; }
     #tab-photomotion .pm-textarea { width: 100%; box-sizing: border-box; font-family: var(--font); font-size: 13px; padding: 8px 10px; border: 1px solid var(--border-2); border-radius: 7px; resize: vertical; margin-bottom: 10px; }
     #tab-photomotion .pm-check { display: inline-flex; align-items: center; gap: 4px; font-size: 12.5px; color: var(--text-2); width: auto; }
@@ -3278,12 +3279,16 @@
                   </div>
                   <div class="pm-meta" id="pm-meta"></div>
                   <div class="pm-field">
-                    <span>Duration</span>
-                    <input type="number" id="pm-duration" min="1" max="120" step="0.5" value="6" onchange="pmSetDuration(this.value)"> <span style="width:auto;color:var(--muted);">seconds</span>
+                    <span>Total length</span>
+                    <input type="number" id="pm-duration" min="1" max="120" step="0.5" value="6" onchange="pmSetDuration(this.value)"> <span style="width:auto;color:var(--muted);">seconds (grows as you add shots)</span>
                   </div>
                   <div class="pm-kf-info" id="pm-kf-info">Scrub the timeline or select a shot.</div>
+                  <div class="pm-field" id="pm-gap-field" style="display:none;">
+                    <span>Arrives after previous</span>
+                    <input type="number" id="pm-gap-input" min="0.3" max="120" step="0.1" value="2.5" onchange="pmRippleRetime(this.value)"> <span style="width:auto;color:var(--muted);">s (later shots shift too)</span>
+                  </div>
                   <div class="pm-field" id="pm-ease-field" style="display:none;">
-                    <span>Ease</span>
+                    <span id="pm-ease-label">Ease</span>
                     <select id="pm-kf-ease" onchange="pmSetKfEase(this.value)">
                       <option value="ease">Smooth (ease in-out)</option>
                       <option value="ease-in">Ease in</option>
@@ -3333,11 +3338,21 @@
                   <span style="width:auto;">Rotate</span>
                   <input type="range" id="pm-tx-rot" min="-45" max="45" step="1" value="0" oninput="pmSetTextScaleRot(null, this.value)">
                 </div>
-                <div class="pm-subtitle">Appears</div>
+                <div class="pm-subtitle">Show during</div>
+                <div class="pm-field">
+                  <span>From</span>
+                  <select id="pm-tx-from" onchange="pmTxApplyShotRange()"></select>
+                </div>
+                <div class="pm-field">
+                  <span>Until</span>
+                  <select id="pm-tx-until" onchange="pmTxApplyShotRange()"></select>
+                  <button class="btn-ghost btn-sm" type="button" onclick="pmTxWholeVideo()" title="Show this text for the entire video">Whole video</button>
+                </div>
                 <div class="pm-field">
                   <span>Start / End</span>
                   <input type="number" id="pm-tx-start" min="0" max="120" step="0.1" value="0" onchange="pmTxEdit('tStart', parseFloat(this.value)||0, false)">
                   <input type="number" id="pm-tx-end" min="0" max="120" step="0.1" value="6" onchange="pmTxEdit('tEnd', parseFloat(this.value)||0, false)">
+                  <span style="width:auto;color:var(--muted);">s (fine-tune)</span>
                 </div>
                 <div class="pm-field">
                   <span>Fade in / out</span>
@@ -3347,7 +3362,7 @@
                 <div class="pm-ctl-actions">
                   <button class="btn-ghost btn-sm" type="button" onclick="pmDeleteText()">Delete this text</button>
                 </div>
-                <div class="pm-note" style="margin-top:6px;">Drag the text on the canvas to move it — that sets a keyframe at the playhead. Move the playhead and drag again to make it travel.</div>
+                <div class="pm-note" style="margin-top:6px;">New text plays during the shot you&rsquo;re on — stretch it with <b>Show during</b> or drag its bar on the timeline. Drag the text on the canvas to place it (that sets a keyframe at the playhead; move the playhead and drag again to make it travel).</div>
               </div>
                 </div>
               </details>
@@ -3667,6 +3682,7 @@
   let _pmPlayRaf   = null;
   const PM_FPS = 30;
   const PM_SHOT_HOLD = 2.5;   // seconds a new shot lands after the previous one
+  const PM_END_HOLD  = 1.5;   // the final shot holds on screen this long before the video ends
 
   // Easing — MUST match the backend _pm_ease (server.py) so preview == export.
   function pmEaseJS(kind, f) {
@@ -3752,12 +3768,82 @@
     const info = document.getElementById('pm-kf-info');
     const easeF = document.getElementById('pm-ease-field');
     const actF = document.getElementById('pm-kf-actions');
-    if (!k) { if (info) info.textContent = _pmActiveText ? 'Drag the text or use the sliders to set keyframes.' : 'Scrub the timeline or select a keyframe (◆).'; if (easeF) easeF.style.display = 'none'; if (actF) actF.style.display = 'none'; return; }
-    if (info) info.textContent = _pmActiveText
-      ? ('Keyframe at ' + k.t.toFixed(1) + 's — pos ' + Math.round((k.x || .5) * 100) + ',' + Math.round((k.y || .5) * 100) + ' · ' + (k.scale || 1).toFixed(2) + '×')
-      : ('Keyframe at ' + k.t.toFixed(1) + 's — zoom ' + k.zoom.toFixed(2) + '×');
+    const gapF = document.getElementById('pm-gap-field');
+    const easeLbl = document.getElementById('pm-ease-label');
+    if (easeLbl) easeLbl.textContent = _pmActiveText ? 'Ease' : 'Move to next shot';
+    if (!k) {
+      if (info) info.textContent = _pmActiveText ? 'Drag the text or use the sliders to set keyframes.' : 'Select a shot to adjust its timing and movement.';
+      if (easeF) easeF.style.display = 'none';
+      if (actF) actF.style.display = 'none';
+      if (gapF) gapF.style.display = 'none';
+      return;
+    }
+    if (info) {
+      if (_pmActiveText) {
+        info.textContent = 'Keyframe at ' + k.t.toFixed(1) + 's — pos ' + Math.round((k.x || .5) * 100) + ',' + Math.round((k.y || .5) * 100) + ' · ' + (k.scale || 1).toFixed(2) + '×';
+      } else {
+        const n = pmShotIndexOf(k.id) + 1;
+        info.textContent = 'Shot ' + n + ' — arrives at ' + k.t.toFixed(1) + 's · zoom ' + k.zoom.toFixed(2) + '×';
+      }
+    }
     if (easeF) { easeF.style.display = 'flex'; const s = document.getElementById('pm-kf-ease'); if (s) s.value = k.ease; }
     if (actF) actF.style.display = kfs.length > 1 ? 'flex' : 'none';
+    if (gapF) {
+      if (_pmActiveText) { gapF.style.display = 'none'; }
+      else {
+        const cams = pmSortedCams();
+        const i = cams.findIndex(x => x.id === k.id);
+        if (i > 0) {
+          gapF.style.display = 'flex';
+          const gi = document.getElementById('pm-gap-input');
+          if (gi) gi.value = (cams[i].t - cams[i - 1].t).toFixed(1);
+        } else {
+          gapF.style.display = 'none';   // Shot 1 always starts at 0
+        }
+      }
+    }
+  }
+
+  // CapCut-style ripple retime: "this shot arrives N sec after the previous one."
+  // Moving a shot shifts every LATER shot by the same delta, drags along any text
+  // that starts at/after it (texts stay glued to their shots), preserves the tail
+  // after the last shot, and leaves beat markers alone (they belong to the music).
+  function pmRippleRetime(v) {
+    if (!_pmImgEl || _pmActiveText) return;
+    const cams = pmSortedCams();
+    const i = cams.findIndex(x => x.id === _pmSelKf);
+    if (i <= 0) { pmRenderTimeline(); return; }
+    const oldGap = cams[i].t - cams[i - 1].t;
+    let newGap = Math.max(0.3, parseFloat(v) || oldGap);
+    const lastT = cams[cams.length - 1].t;
+    const tail = Math.max(0, _pmDuration - lastT);
+    let delta = newGap - oldGap;
+    const maxDelta = 120 - (lastT + tail);   // total length is capped at 120s
+    if (delta > maxDelta) { delta = maxDelta; newGap = oldGap + delta; }
+    if (Math.abs(delta) < 0.001) { pmRenderTimeline(); return; }
+    const oldT = cams[i].t;
+    for (let j = i; j < cams.length; j++) cams[j].t = +(cams[j].t + delta).toFixed(3);
+    _pmTexts.forEach(tx => {
+      if ((tx.tStart || 0) >= oldT - 0.01) {
+        tx.tStart = Math.max(0, +((tx.tStart || 0) + delta).toFixed(3));
+        if (tx.tEnd && tx.tEnd > 0) tx.tEnd = Math.max(tx.tStart + 0.2, +(tx.tEnd + delta).toFixed(3));
+        tx.kfs.forEach(k2 => { k2.t = Math.max(0, +(k2.t + delta).toFixed(3)); });
+      }
+    });
+    _pmDuration = Math.max(1, Math.min(120, +(_pmDuration + delta).toFixed(3)));
+    const dur = document.getElementById('pm-duration'); if (dur) dur.value = _pmDuration;
+    // Re-clamp anything that slipped past the (possibly shorter) end.
+    _pmKeyframes.forEach(k2 => { if (k2.t > _pmDuration) k2.t = _pmDuration; });
+    _pmTexts.forEach(tx => {
+      tx.kfs.forEach(k2 => { if (k2.t > _pmDuration) k2.t = _pmDuration; });
+      if (tx.tEnd && tx.tEnd > _pmDuration) tx.tEnd = _pmDuration;
+      if (tx.tStart > _pmDuration) tx.tStart = Math.max(0, _pmDuration - 0.5);
+    });
+    pmSetPlayhead(cams[i].t);
+    pmDraw();
+    pmRenderTimeline();
+    pmToast('Shot ' + (i + 1) + ' now arrives ' + newGap.toFixed(1) + 's after Shot ' + i + ' — later shots moved with it');
+    pmScheduleSave();
   }
 
   function pmCurrentTextTransform() {
@@ -4056,19 +4142,40 @@
     }
   }
 
+  // The shot segment the user is "on": [that shot's arrival, the next shot's arrival
+  // (or the end of the video)]. Text defaults to this window (CapCut text-clip model).
+  function pmSegRange(kfId) {
+    const cams = pmSortedCams();
+    if (!cams.length) return { t0: 0, t1: _pmDuration, shotNo: 1 };
+    let i = -1;
+    if (kfId != null) i = cams.findIndex(k => k.id === kfId);
+    else if (!_pmActiveText && _pmSelKf != null) i = cams.findIndex(k => k.id === _pmSelKf);
+    if (i < 0) {   // fall back to the shot at/before the playhead
+      i = 0;
+      for (let j = 0; j < cams.length; j++) { if (cams[j].t <= _pmPlayhead + 0.001) i = j; }
+    }
+    const t0 = cams[i].t;
+    const t1 = (i + 1 < cams.length) ? cams[i + 1].t : _pmDuration;
+    return { t0, t1: Math.max(t0 + 0.3, t1), shotNo: i + 1, index: i, count: cams.length };
+  }
+
   function pmAddText() {
     if (!_pmImgEl) return;
+    pmPlayStop();
+    const seg = pmSegRange();   // new text belongs to the shot you're on
     const tx = {
       id: 'txt' + (++_pmTextSeq), text: 'Your text', font: 'Inter', size: 72,
       color: '#ffffff', bold: true, stroke: true,
-      tStart: 0, tEnd: _pmDuration, fadeIn: 0.4, fadeOut: 0.4,
-      kfs: [{ id: ++_pmKfSeq, t: 0, x: 0.5, y: 0.72, scale: 1, rot: 0, ease: 'ease' }],
+      tStart: +seg.t0.toFixed(3), tEnd: +seg.t1.toFixed(3), fadeIn: 0.3, fadeOut: 0.3,
+      kfs: [{ id: ++_pmKfSeq, t: +seg.t0.toFixed(3), x: 0.5, y: 0.72, scale: 1, rot: 0, ease: 'ease' }],
       png: null, pngW: 0, pngH: 0,
     };
     pmRenderTextPng(tx);
     _pmTexts.push(tx);
+    pmSetPlayhead(seg.t0);   // jump to where the text plays so it's immediately visible
     pmSelectText(tx.id);
     pmRenderTextList();
+    pmToast('Text added to Shot ' + seg.shotNo + ' — plays ' + seg.t0.toFixed(1) + 's–' + seg.t1.toFixed(1) + 's');
     pmScheduleSave();
   }
   function pmSelectText(id) {
@@ -4092,10 +4199,63 @@
     let html = '<button class="pm-layer-chip' + (!_pmActiveText ? ' pm-layer-on' : '') + '" onclick="pmSelectCamera()">◈ Camera</button>';
     _pmTexts.forEach(tx => {
       const label = (tx.text.split('\n')[0] || 'text').slice(0, 14);
-      html += '<button class="pm-layer-chip' + (tx.id === _pmActiveText ? ' pm-layer-on' : '') + '" onclick="pmSelectText(\'' + tx.id + '\')">T ' + label.replace(/</g, '&lt;') + '</button>';
+      const t1 = (tx.tEnd && tx.tEnd > 0) ? tx.tEnd : _pmDuration;
+      html += '<button class="pm-layer-chip' + (tx.id === _pmActiveText ? ' pm-layer-on' : '') + '" onclick="pmSelectText(\'' + tx.id + '\')">T ' + label.replace(/</g, '&lt;')
+        + ' <span class="pm-chip-time">' + (tx.tStart || 0).toFixed(1) + '–' + t1.toFixed(1) + 's</span></button>';
     });
     box.innerHTML = html;
     const tp = document.getElementById('pm-text-panel'); if (tp) tp.style.display = _pmActiveText ? 'block' : 'none';
+  }
+  // "Show during" selects: expressed in shots, applied as times (a setter — the
+  // window stays time-based and freely draggable on the timeline afterward).
+  function pmRenderTxShotSelects(tx) {
+    const fromSel = document.getElementById('pm-tx-from');
+    const untilSel = document.getElementById('pm-tx-until');
+    if (!fromSel || !untilSel) return;
+    const cams = pmSortedCams();
+    let fromHtml = '', untilHtml = '';
+    cams.forEach((k, i) => {
+      fromHtml += '<option value="' + i + '">Shot ' + (i + 1) + ' (' + k.t.toFixed(1) + 's)</option>';
+      if (i > 0) untilHtml += '<option value="' + i + '">Shot ' + (i + 1) + ' arrives (' + k.t.toFixed(1) + 's)</option>';
+    });
+    untilHtml += '<option value="end">the end (' + _pmDuration.toFixed(1) + 's)</option>';
+    fromSel.innerHTML = fromHtml;
+    untilSel.innerHTML = untilHtml;
+    let fi = 0;
+    cams.forEach((k, i) => { if (k.t <= (tx.tStart || 0) + 0.05) fi = i; });
+    fromSel.value = String(fi);
+    const tEnd = (tx.tEnd && tx.tEnd > 0) ? tx.tEnd : _pmDuration;
+    let uv = 'end';
+    if (tEnd < _pmDuration - 0.05) {
+      let bd = Infinity;
+      for (let i = 1; i < cams.length; i++) { const d = Math.abs(cams[i].t - tEnd); if (d < bd) { bd = d; uv = String(i); } }
+    }
+    untilSel.value = uv;
+  }
+  function pmTxApplyShotRange() {
+    const tx = pmActiveText(); if (!tx) return;
+    const cams = pmSortedCams(); if (!cams.length) return;
+    const fi = Math.min(cams.length - 1, Math.max(0, parseInt(document.getElementById('pm-tx-from').value, 10) || 0));
+    const uvRaw = document.getElementById('pm-tx-until').value;
+    tx.tStart = +cams[fi].t.toFixed(3);
+    if (uvRaw === 'end') tx.tEnd = _pmDuration;
+    else {
+      const ui = parseInt(uvRaw, 10);
+      tx.tEnd = (cams[ui] ? +cams[ui].t.toFixed(3) : _pmDuration);
+    }
+    if (tx.tEnd <= tx.tStart + 0.2) tx.tEnd = Math.min(_pmDuration, tx.tStart + Math.max(0.5, PM_SHOT_HOLD));
+    pmRenderTextControls();
+    pmRenderTextList();
+    pmRenderTextBars();
+    pmDraw();
+    pmScheduleSave();
+  }
+  function pmTxWholeVideo() {
+    const tx = pmActiveText(); if (!tx) return;
+    tx.tStart = 0; tx.tEnd = _pmDuration;
+    pmRenderTextControls(); pmRenderTextList(); pmRenderTextBars(); pmDraw();
+    pmToast('Text now shows for the whole video');
+    pmScheduleSave();
   }
   function pmRenderTextControls() {
     const tx = pmActiveText(); if (!tx) return;
@@ -4107,6 +4267,7 @@
     const s = document.getElementById('pm-tx-stroke'); if (s) s.checked = !!tx.stroke;
     const tr = pmCurrentTextTransform();
     set('pm-tx-scale', (tr.scale || 1).toFixed(2)); set('pm-tx-rot', Math.round(tr.rot || 0));
+    pmRenderTxShotSelects(tx);
   }
   function pmTxEdit(prop, val, rerender) {
     const tx = pmActiveText(); if (!tx) return;
@@ -4642,7 +4803,10 @@
     const lastT = cams.length ? cams[cams.length - 1].t : 0;
     const newT = Math.min(120, lastT + PM_SHOT_HOLD);
     if (cams.some(k => Math.abs(k.t - newT) <= 0.05)) { pmToast('Reached the 120s duration limit'); return; }
-    if (newT > _pmDuration) pmSetDuration(newT);
+    // The final shot always holds on screen (PM_END_HOLD) instead of the video
+    // ending the instant the camera arrives.
+    const wantDur = Math.min(120, newT + PM_END_HOLD);
+    if (wantDur > _pmDuration) pmSetDuration(wantDur);
     pmSetPlayhead(newT, false);   // keep the user's current framing for the new shot
     const k = { id: ++_pmKfSeq, t: newT, zoom: _pmCam.zoom, ox: _pmCam.ox, oy: _pmCam.oy, ease: 'ease' };
     _pmKeyframes.push(k);
@@ -4667,16 +4831,22 @@
     const strip = document.getElementById('pm-shot-strip');
     if (!strip || !_pmImgEl) return;
     strip.innerHTML = '';
-    pmSortedCams().forEach((k, i) => {
+    const cams = pmSortedCams();
+    cams.forEach((k, i) => {
+      const gap = (i + 1 < cams.length) ? (cams[i + 1].t - k.t) : Math.max(0, _pmDuration - k.t);
       const card = document.createElement('div');
       card.className = 'pm-shot-card' + (k.id === _pmSelKf && !_pmActiveText ? ' pm-shot-on' : '');
-      card.title = 'Shot ' + (i + 1) + ' @ ' + k.t.toFixed(1) + 's — click to jump to it';
+      card.title = 'Shot ' + (i + 1) + ' — arrives at ' + k.t.toFixed(1) + 's, ' +
+        ((i + 1 < cams.length) ? ('next shot in ' + gap.toFixed(1) + 's') : ('holds ' + gap.toFixed(1) + 's to the end')) +
+        '. Click to jump to it.';
       const cv = document.createElement('canvas');
       cv.width = 72; cv.height = 128;   // 72/128 == 1080/1920 → the exact export crop
       pmDrawFrame(cv.getContext('2d'), _pmImgEl, 72, 128, k);
       card.appendChild(cv);
       const num = document.createElement('span'); num.className = 'pm-shot-num'; num.textContent = i + 1; card.appendChild(num);
-      const tm = document.createElement('span'); tm.className = 'pm-shot-time'; tm.textContent = k.t.toFixed(1) + 's'; card.appendChild(tm);
+      const tm = document.createElement('span'); tm.className = 'pm-shot-time';
+      tm.textContent = '@' + k.t.toFixed(1) + 's ▸' + gap.toFixed(1) + 's';
+      card.appendChild(tm);
       if (_pmKeyframes.length > 1) {
         const x = document.createElement('span');
         x.className = 'pm-shot-x'; x.textContent = '×'; x.title = 'Delete this shot';
