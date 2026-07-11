@@ -2353,6 +2353,9 @@
     #tab-photomotion .pm-guide-step.pm-guide-done { opacity: 0.55; }
     #tab-photomotion .pm-guide-step.pm-guide-done .pm-guide-num { background: var(--success, #2D6A4F); }
     #tab-photomotion .pm-tbar-handle { position: absolute; top: 0; bottom: 0; width: 7px; cursor: ew-resize; }
+    #tab-photomotion .pm-tbar { cursor: grab; }
+    #tab-photomotion #pm-tap-btn.pm-tap-hot { background: var(--orange); color: #fff; border-color: var(--orange); }
+    .sidebar-photo-chip { display: inline-block; background: var(--orange-tint); color: var(--orange); font-size: 9.5px; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; padding: 1px 6px; border-radius: 8px; vertical-align: 1px; }
     #tab-photomotion .pm-text-bars { position: relative; height: 18px; }
     #tab-photomotion .pm-tbar { position: absolute; top: 0; height: 18px; line-height: 17px; background: rgba(232,84,26,0.15); border: 1px solid rgba(232,84,26,0.5); border-radius: 4px; font-size: 10.5px; color: var(--orange); padding: 0 5px; overflow: hidden; white-space: nowrap; cursor: pointer; box-sizing: border-box; }
     #tab-photomotion .pm-tbar:hover { background: rgba(232,84,26,0.28); }
@@ -3232,7 +3235,7 @@
               <circle cx="8.5" cy="8.5" r="1.6"/>
               <path d="M21 15l-5-5L5 21"/>
             </svg>
-            <p>Upload a high-resolution image to begin. You&rsquo;ll explore the full artwork on a large canvas and frame the 9:16 shots that become a moving reel.</p>
+            <p>Upload a high-resolution image to begin. You&rsquo;ll explore the full artwork on a large canvas and frame the 9:16 shots that become a moving reel. Your work saves automatically and appears in Recent Projects.</p>
             <button class="btn" type="button" onclick="document.getElementById('pm-upload-input').click()">Upload image</button>
           </div>
         </div>
@@ -3355,8 +3358,30 @@
                   <div class="pm-ctl-actions" style="margin-bottom:8px;">
                     <button class="btn-ghost btn-sm" type="button" onclick="document.getElementById('pm-music-input').click()">Add music</button>
                     <span class="pm-music-name" id="pm-music-name">No music</span>
-                    <button class="btn-ghost btn-sm" id="pm-music-remove" type="button" onclick="pmClearMusic()" style="display:none;">Remove</button>
+                    <button class="btn-ghost btn-sm" id="pm-music-remove" type="button" onclick="pmRemoveMusic()" style="display:none;">Remove</button>
                     <input type="file" id="pm-music-input" accept="audio/*" style="display:none;" onchange="pmAddMusic(this)">
+                  </div>
+                  <div id="pm-music-opts" style="display:none;">
+                    <div class="pm-field">
+                      <span>Start at</span>
+                      <input type="number" id="pm-music-offset" min="0" step="0.1" value="0" onchange="pmMusicOptChanged()"> <span style="width:auto;color:var(--muted);">s into the track</span>
+                    </div>
+                    <div class="pm-field">
+                      <span>Volume</span>
+                      <input type="range" id="pm-music-volume" min="0" max="1" step="0.01" value="1" style="flex:1;accent-color:var(--orange);" oninput="pmMusicOptChanged()">
+                    </div>
+                    <div class="pm-field">
+                      <span>Fade in / out</span>
+                      <input type="number" id="pm-music-fadein" min="0" max="30" step="0.1" value="0" onchange="pmMusicOptChanged()">
+                      <input type="number" id="pm-music-fadeout" min="0" max="30" step="0.1" value="1.0" onchange="pmMusicOptChanged()">
+                      <span style="width:auto;color:var(--muted);">s</span>
+                    </div>
+                    <div class="pm-subtitle">Choreograph</div>
+                    <div class="pm-ctl-actions" style="margin-bottom:6px;">
+                      <button class="btn-ghost btn-sm" id="pm-tap-btn" type="button" onclick="pmTapBeat()" title="Press play, then tap this on each beat — drops a marker at the playhead">&#9679; Tap beat</button>
+                      <button class="btn-ghost btn-sm" type="button" onclick="pmClearMarkers()">Clear markers</button>
+                    </div>
+                    <div class="pm-note">Markers show as orange lines on the timeline and waveform. Shots and text edges <b>snap</b> to them while dragging (hold Alt to bypass). Click the waveform to add one; Alt-click to remove.</div>
                   </div>
                 </div>
               </details>
@@ -3414,6 +3439,7 @@
                 <div class="pm-playhead" id="pm-playhead" style="left:0;"></div>
               </div>
               <div id="pm-text-bars" class="pm-text-bars"></div>
+              <canvas id="pm-waveform" style="display:none;" title="Your music track, aligned with the timeline. Click to add a beat marker; Alt-click to remove one."></canvas>
             </div>
           </div>
 
@@ -3535,11 +3561,12 @@
           cv.getContext('2d').drawImage(img, 0, 0, cv.width, cv.height);
           const src2 = cv.toDataURL('image/jpeg', 0.95);
           const img2 = new Image();
-          img2.onload = () => pmSetImage(img2, src2, cv.width, cv.height);
+          img2.onload = () => { pmSetImage(img2, src2, cv.width, cv.height); pmCreateProject(file.name); };
           img2.onerror = () => alert('Could not process that image.');
           img2.src = src2;
         } else {
           pmSetImage(img, reader.result, img.naturalWidth, img.naturalHeight);
+          pmCreateProject(file.name);
         }
       };
       img.onerror = () => alert('Could not read that image file.');
@@ -3672,6 +3699,7 @@
     _pmSelKf = _pmKeyframes[0].id;
     _pmTexts = []; _pmActiveText = null; _pmDragText = null; _pmTextSeq = 0;
     _pmGuideFramed = false; _pmGuidePlayed = false;
+    _pmMarkers = [];
     pmClearMusic();
     const dur = document.getElementById('pm-duration'); if (dur) dur.value = _pmDuration;
     const st = document.getElementById('pm-status'); if (st) { st.textContent = ''; st.className = 'pm-status'; }
@@ -3714,6 +3742,7 @@
     if (lbl) { const tx = pmActiveText(); lbl.textContent = tx ? ('Text: ' + (tx.text.split('\n')[0] || 'text').slice(0, 16)) : 'Camera'; }
     pmRenderKfPanel();
     pmRenderTextBars();
+    pmRenderMarkers();
     pmRenderShotStrip();
     pmDrawExplore();
   }
@@ -3752,6 +3781,7 @@
     }
     _pmSelKf = k.id;
     pmRenderTimeline();
+    pmScheduleSave();
   }
   function pmSelectKf(id) {
     const kfs = pmActiveKfs();
@@ -3768,8 +3798,9 @@
     if (i >= 0) kfs.splice(i, 1);
     _pmSelKf = kfs[0].id;
     pmSelectKf(_pmSelKf);
+    pmScheduleSave();
   }
-  function pmSetKfEase(v) { const kfs = pmActiveKfs(); const k = kfs.find(x => x.id === _pmSelKf); if (k) k.ease = v; }
+  function pmSetKfEase(v) { const kfs = pmActiveKfs(); const k = kfs.find(x => x.id === _pmSelKf); if (k) { k.ease = v; pmScheduleSave(); } }
   function pmSetDuration(v) {
     _pmDuration = Math.max(1, Math.min(120, parseFloat(v) || 6));
     _pmKeyframes.forEach(k => { if (k.t > _pmDuration) k.t = _pmDuration; });
@@ -3782,6 +3813,7 @@
     if (_pmPlayhead > _pmDuration) _pmPlayhead = _pmDuration;
     const dur = document.getElementById('pm-duration'); if (dur) dur.value = _pmDuration;
     pmRenderTimeline();
+    pmScheduleSave();
   }
   function pmSetPlayhead(t, updateCam) {
     _pmPlayhead = Math.max(0, Math.min(_pmDuration, t));
@@ -3805,6 +3837,8 @@
         let t = startT + (now - t0) / 1000;
         if (t >= _pmDuration) { pmSetPlayhead(_pmDuration); pmPlayStop(); return; }
         pmSetPlayhead(t);
+        // Cheap per-frame volume ramp for the music fade-in
+        if (_pmMusicEl && _pmMusic.fadeIn > 0 && t < _pmMusic.fadeIn + 0.1) _pmMusicEl.volume = pmMusicVolumeAt(t);
         _pmPlayRaf = requestAnimationFrame(step);
       };
       _pmPlayRaf = requestAnimationFrame(step);
@@ -3834,15 +3868,20 @@
       if (!mode) return;
       const t = track(); if (!t) return;
       const rect = t.getBoundingClientRect();
-      if (mode === 'scrub') { pmSetPlayhead(pmXToTime(e.clientX - rect.left)); }
+      if (mode === 'scrub') { pmSetPlayhead(pmSnapTime(pmXToTime(e.clientX - rect.left), e.altKey)); }
       else if (mode === 'kf') {
-        const k = _pmKeyframes.find(x => x.id === kfId); if (!k) return;
-        k.t = Math.max(0, Math.min(_pmDuration, pmXToTime(e.clientX - rect.left)));
+        // pmActiveKfs(), NOT _pmKeyframes — retiming must edit the layer the diamond belongs to
+        // (dragging a TEXT diamond used to silently retime the camera track).
+        const k = pmActiveKfs().find(x => x.id === kfId); if (!k) return;
+        k.t = Math.max(0, Math.min(_pmDuration, pmSnapTime(pmXToTime(e.clientX - rect.left), e.altKey)));
         _pmPlayhead = k.t;
         pmRenderTimeline();
       }
     });
-    document.addEventListener('mouseup', function () { mode = null; kfId = null; });
+    document.addEventListener('mouseup', function () {
+      if (mode) pmScheduleSave();
+      mode = null; kfId = null;
+    });
   })();
 
   function pmDataUrlToBlob(dataUrl) {
@@ -3881,7 +3920,13 @@
         };
       });
       fd.append('overlays', JSON.stringify(overlays));
-      if (_pmMusicFile) fd.append('music', _pmMusicFile, _pmMusicFile.name || 'music');
+      if (_pmMusic.file) {
+        fd.append('music', _pmMusic.file, _pmMusic.name || 'music');
+        fd.append('music_start', String(_pmMusic.offset));
+        fd.append('music_volume', String(_pmMusic.volume));
+        fd.append('music_fade_in', String(_pmMusic.fadeIn));
+        fd.append('music_fade_out', String(_pmMusic.fadeOutTail));
+      }
       const resp = await fetch(BACKEND + '/export_photo_motion', { method: 'POST', body: fd });
       const data = await resp.json().catch(() => ({}));
       if (!resp.ok || data.error) { st.className = 'pm-status pm-err'; st.textContent = 'Export failed: ' + (data.error || ('HTTP ' + resp.status)); }
@@ -3901,8 +3946,13 @@
   let _pmActiveText = null;  // id of the selected text layer (null = camera)
   let _pmDragText  = null;   // {id,x,y,scale,rot} live drag override
   let _pmTextSeq   = 0;
-  let _pmMusicFile = null;   // File for export
+  // Music: file + choreography options. offset = where in the TRACK the clip starts;
+  // volume 0..1; fadeIn/fadeOutTail in seconds (fadeOutTail was the old hardcoded 1s).
+  let _pmMusic = { file: null, name: '', url: null, audioDur: 0, peaks: null,
+                   offset: 0, volume: 1, fadeIn: 0, fadeOutTail: 1.0 };
   let _pmMusicEl   = null;   // HTMLAudioElement for preview
+  let _pmMarkers   = [];     // [{t}] beat markers in VIDEO time — choreography aids, never exported
+  const PM_SNAP_PX = 8;      // snap radius in track pixels
 
   function pmFontStack(name) {
     switch (name) {
@@ -4019,6 +4069,7 @@
     _pmTexts.push(tx);
     pmSelectText(tx.id);
     pmRenderTextList();
+    pmScheduleSave();
   }
   function pmSelectText(id) {
     _pmActiveText = id; _pmDragText = null;
@@ -4034,6 +4085,7 @@
     const tx = pmActiveText(); if (!tx) return;
     _pmTexts = _pmTexts.filter(x => x.id !== tx.id);
     pmSelectCamera();
+    pmScheduleSave();
   }
   function pmRenderTextList() {
     const box = document.getElementById('pm-text-list'); if (!box) return;
@@ -4061,6 +4113,8 @@
     tx[prop] = val;
     if (rerender) pmRenderTextPng(tx);
     pmDraw(); pmRenderTextList();
+    if (prop === 'tStart' || prop === 'tEnd') pmRenderTextBars();
+    pmScheduleSave();
   }
   function pmSetTextScaleRot(scale, rot) {
     const tx = pmActiveText(); if (!tx) return;
@@ -4076,6 +4130,7 @@
     if (k) { k.x = tr.x; k.y = tr.y; k.scale = tr.scale; k.rot = tr.rot; }
     else { k = { id: ++_pmKfSeq, t: _pmPlayhead, x: tr.x, y: tr.y, scale: tr.scale, rot: tr.rot, ease: 'ease' }; tx.kfs.push(k); }
     _pmSelKf = k.id;
+    pmScheduleSave();
   }
 
   // Drag the active text on the canvas → auto-keyframe at the playhead.
@@ -4106,25 +4161,223 @@
     });
   })();
 
-  // ── Music ──
+  // ── Music: file handling, waveform, choreography controls ──
+  function pmSetMusicFile(f, opts) {
+    // Shared by user-add and project-restore. opts (restore) carries saved offset/volume/fades.
+    if (_pmMusicEl) { try { _pmMusicEl.pause(); } catch (e) {} }
+    if (_pmMusic.url) { try { URL.revokeObjectURL(_pmMusic.url); } catch (e) {} }   // no blob leaks
+    const url = URL.createObjectURL(f);
+    _pmMusic = {
+      file: f, name: f.name || 'music', url, audioDur: 0, peaks: null,
+      offset: opts ? (opts.offset || 0) : 0,
+      volume: opts ? (opts.volume != null ? opts.volume : 1) : 1,
+      fadeIn: opts ? (opts.fadeIn || 0) : 0,
+      fadeOutTail: opts ? (opts.fadeOut != null ? opts.fadeOut : 1.0) : 1.0,
+    };
+    _pmMusicEl = new Audio(url);
+    _pmMusicEl.loop = false;
+    _pmMusicEl.volume = _pmMusic.volume;
+    const lbl = document.getElementById('pm-music-name'); if (lbl) lbl.textContent = _pmMusic.name;
+    const rm = document.getElementById('pm-music-remove'); if (rm) rm.style.display = 'inline-flex';
+    pmSyncMusicControls();
+    pmDecodeMusicPeaks(f);   // async → waveform appears when ready
+  }
   function pmAddMusic(input) {
     const f = input.files && input.files[0]; input.value = '';
     if (!f) return;
-    _pmMusicFile = f;
-    if (_pmMusicEl) { try { _pmMusicEl.pause(); } catch (e) {} }
-    _pmMusicEl = new Audio(URL.createObjectURL(f));
-    _pmMusicEl.loop = false;
-    const lbl = document.getElementById('pm-music-name'); if (lbl) lbl.textContent = f.name;
-    const rm = document.getElementById('pm-music-remove'); if (rm) rm.style.display = 'inline-flex';
+    pmSetMusicFile(f, null);
+    pmMusicUploadToProject(f);
+    pmScheduleSave();
   }
   function pmClearMusic() {
-    _pmMusicFile = null;
+    _pmMusic.file = null; _pmMusic.name = ''; _pmMusic.peaks = null; _pmMusic.audioDur = 0;
+    _pmMusic.offset = 0; _pmMusic.volume = 1; _pmMusic.fadeIn = 0; _pmMusic.fadeOutTail = 1.0;
+    if (_pmMusic.url) { try { URL.revokeObjectURL(_pmMusic.url); } catch (e) {} _pmMusic.url = null; }
     if (_pmMusicEl) { try { _pmMusicEl.pause(); } catch (e) {} _pmMusicEl = null; }
     const lbl = document.getElementById('pm-music-name'); if (lbl) lbl.textContent = 'No music';
     const rm = document.getElementById('pm-music-remove'); if (rm) rm.style.display = 'none';
+    pmSyncMusicControls();
+    pmDrawWaveform();
   }
-  function pmMusicPlayFrom(t) { if (_pmMusicEl) { try { _pmMusicEl.currentTime = t; _pmMusicEl.play(); } catch (e) {} } }
+  // Preview honors the track offset, volume, and fade-in (tail fade is export-only).
+  function pmMusicPlayFrom(t) {
+    if (!_pmMusicEl) return;
+    try {
+      _pmMusicEl.currentTime = _pmMusic.offset + t;
+      _pmMusicEl.volume = pmMusicVolumeAt(t);
+      _pmMusicEl.play();
+    } catch (e) {}
+  }
   function pmMusicPause() { if (_pmMusicEl) { try { _pmMusicEl.pause(); } catch (e) {} } }
+  function pmMusicVolumeAt(t) {
+    let v = _pmMusic.volume;
+    if (_pmMusic.fadeIn > 0 && t < _pmMusic.fadeIn) v *= Math.max(0, t / _pmMusic.fadeIn);
+    return Math.max(0, Math.min(1, v));
+  }
+  function pmSyncMusicControls() {
+    const set = (id, v) => { const el = document.getElementById(id); if (el) el.value = v; };
+    set('pm-music-offset', _pmMusic.offset.toFixed(1));
+    set('pm-music-volume', _pmMusic.volume);
+    set('pm-music-fadein', _pmMusic.fadeIn.toFixed(1));
+    set('pm-music-fadeout', _pmMusic.fadeOutTail.toFixed(1));
+    const opts = document.getElementById('pm-music-opts');
+    if (opts) opts.style.display = _pmMusic.file ? 'block' : 'none';
+  }
+  function pmMusicOptChanged() {
+    _pmMusic.offset = Math.max(0, parseFloat(document.getElementById('pm-music-offset').value) || 0);
+    _pmMusic.volume = Math.max(0, Math.min(1, parseFloat(document.getElementById('pm-music-volume').value)));
+    if (isNaN(_pmMusic.volume)) _pmMusic.volume = 1;
+    _pmMusic.fadeIn = Math.max(0, Math.min(30, parseFloat(document.getElementById('pm-music-fadein').value) || 0));
+    _pmMusic.fadeOutTail = Math.max(0, Math.min(30, parseFloat(document.getElementById('pm-music-fadeout').value) || 0));
+    if (_pmMusicEl) _pmMusicEl.volume = _pmMusic.volume;
+    pmDrawWaveform();
+    pmScheduleSave();
+  }
+  // Decode the track once → 1000 max-abs peak buckets for the waveform strip.
+  async function pmDecodeMusicPeaks(f) {
+    try {
+      const buf = await f.arrayBuffer();
+      const AC = window.AudioContext || window.webkitAudioContext;
+      const ac = new AC();
+      const audio = await ac.decodeAudioData(buf);
+      const N = 1000, peaks = new Float32Array(N);
+      const ch0 = audio.getChannelData(0);
+      const ch1 = audio.numberOfChannels > 1 ? audio.getChannelData(1) : null;
+      const per = Math.max(1, Math.floor(ch0.length / N));
+      for (let i = 0; i < N; i++) {
+        let m = 0;
+        const end = Math.min(ch0.length, (i + 1) * per);
+        for (let j = i * per; j < end; j += 8) {   // stride 8: plenty for a 36px strip
+          const s = ch1 ? (ch0[j] + ch1[j]) / 2 : ch0[j];
+          const a = s < 0 ? -s : s;
+          if (a > m) m = a;
+        }
+        peaks[i] = m;
+      }
+      if (f === _pmMusic.file) {   // still the current track?
+        _pmMusic.peaks = peaks;
+        _pmMusic.audioDur = audio.duration;
+        pmDrawWaveform();
+      }
+      try { ac.close(); } catch (e) {}
+    } catch (e) {
+      // Undecodable audio → no waveform; everything else still works.
+      console.warn('Photo Motion: could not decode music for waveform', e);
+    }
+  }
+  function pmDrawWaveform() {
+    const cv = document.getElementById('pm-waveform'); if (!cv) return;
+    const track = document.getElementById('pm-track');
+    const cssW = (track && track.clientWidth) || cv.clientWidth || 300;
+    const dpr = window.devicePixelRatio || 1;
+    const W = Math.max(1, Math.round(cssW * dpr)), H = Math.round(36 * dpr);
+    if (cv.width !== W) cv.width = W;
+    if (cv.height !== H) cv.height = H;
+    const ctx = cv.getContext('2d');
+    ctx.clearRect(0, 0, W, H);
+    if (!_pmMusic.file) { cv.style.display = 'none'; return; }
+    cv.style.display = 'block';
+    ctx.fillStyle = '#F7F7F5'; ctx.fillRect(0, 0, W, H);
+    if (_pmMusic.peaks && _pmMusic.audioDur > 0) {
+      // Window shown = [offset, offset + duration] of the track, 1:1 with the timeline.
+      const mid = H / 2, N = _pmMusic.peaks.length;
+      ctx.fillStyle = 'rgba(232,84,26,0.45)';
+      for (let x = 0; x < W; x += Math.max(1, Math.round(dpr))) {
+        const tSec = _pmMusic.offset + (x / W) * _pmDuration;
+        if (tSec > _pmMusic.audioDur) { ctx.fillStyle = 'rgba(0,0,0,0.10)'; ctx.fillRect(x, mid - dpr, Math.max(1, dpr), 2 * dpr); continue; }
+        const p = _pmMusic.peaks[Math.min(N - 1, Math.floor(tSec / _pmMusic.audioDur * N))];
+        const h = Math.max(dpr, p * (H - 4 * dpr));
+        ctx.fillRect(x, mid - h / 2, Math.max(1, dpr), h);
+      }
+      // Beat markers on the waveform too
+      ctx.fillStyle = '#E8541A';
+      _pmMarkers.forEach(m => {
+        const x = Math.round(m.t / (_pmDuration || 1) * W);
+        ctx.fillRect(x, 0, Math.max(1, 1.5 * dpr), H);
+      });
+    } else {
+      ctx.fillStyle = 'rgba(0,0,0,0.35)';
+      ctx.font = (11 * dpr) + 'px Inter, sans-serif';
+      ctx.fillText('Analyzing track…', 8 * dpr, H / 2 + 4 * dpr);
+    }
+  }
+
+  // ── Beat markers + snapping ──
+  function pmRenderMarkers() {
+    const track = document.getElementById('pm-track'); if (!track) return;
+    track.querySelectorAll('.pm-marker').forEach(el => el.remove());
+    _pmMarkers.forEach((m, i) => {
+      const d = document.createElement('div');
+      d.className = 'pm-marker';
+      d.style.left = pmTimeToX(m.t) + 'px';
+      d.dataset.mi = i;
+      d.title = 'Beat marker @ ' + m.t.toFixed(2) + 's — Alt-click to delete';
+      track.appendChild(d);
+    });
+    pmDrawWaveform();
+  }
+  function pmTapBeat() {
+    if (!_pmImgEl) return;
+    _pmMarkers.push({ t: +_pmPlayhead.toFixed(3) });
+    _pmMarkers.sort((a, b) => a.t - b.t);
+    pmRenderMarkers();
+    const btn = document.getElementById('pm-tap-btn');
+    if (btn) { btn.classList.add('pm-tap-hot'); setTimeout(() => btn.classList.remove('pm-tap-hot'), 140); }
+    pmScheduleSave();
+  }
+  function pmClearMarkers() {
+    if (!_pmMarkers.length) return;
+    _pmMarkers = [];
+    pmRenderMarkers();
+    pmToast('Markers cleared');
+    pmScheduleSave();
+  }
+  // Waveform: click = add marker there · Alt-click near a marker = delete it.
+  (function () {
+    document.addEventListener('click', function (e) {
+      const cv = document.getElementById('pm-waveform');
+      if (!cv || e.target !== cv || !_pmImgEl) return;
+      const rect = cv.getBoundingClientRect();
+      const t = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width)) * _pmDuration;
+      if (e.altKey) {
+        const thr = 6 / (rect.width || 1) * _pmDuration;
+        let best = -1, bd = Infinity;
+        _pmMarkers.forEach((m, i) => { const d = Math.abs(m.t - t); if (d < bd) { bd = d; best = i; } });
+        if (best >= 0 && bd <= thr) { _pmMarkers.splice(best, 1); pmRenderMarkers(); pmScheduleSave(); }
+        return;
+      }
+      _pmMarkers.push({ t: +t.toFixed(3) });
+      _pmMarkers.sort((a, b) => a.t - b.t);
+      pmRenderMarkers();
+      pmScheduleSave();
+    });
+    // Alt-click a marker line on the track to delete it.
+    document.addEventListener('click', function (e) {
+      const mk = e.target.closest && e.target.closest('.pm-marker');
+      if (!mk || !e.altKey) return;
+      const i = parseInt(mk.dataset.mi, 10);
+      if (!isNaN(i)) { _pmMarkers.splice(i, 1); pmRenderMarkers(); pmScheduleSave(); }
+      e.stopPropagation();
+    }, true);
+  })();
+
+  // Snap a time to the nearest beat marker within PM_SNAP_PX of track distance.
+  // Returns the (possibly) snapped time; flashes the marker it snapped to.
+  function pmSnapTime(t, altBypass) {
+    if (altBypass || !_pmMarkers.length) return t;
+    const thr = PM_SNAP_PX / (pmTrackW() || 1) * (_pmDuration || 1);
+    let best = null, bd = Infinity;
+    _pmMarkers.forEach((m, i) => { const d = Math.abs(m.t - t); if (d < bd) { bd = d; best = i; } });
+    if (best != null && bd <= thr) {
+      const track = document.getElementById('pm-track');
+      if (track) {
+        const el = track.querySelector('.pm-marker[data-mi="' + best + '"]');
+        if (el) { el.classList.add('pm-marker-hot'); setTimeout(() => el.classList.remove('pm-marker-hot'), 200); }
+      }
+      return _pmMarkers[best].t;
+    }
+    return t;
+  }
 
   // ── Mini-map: the full image with each camera keyframe's frame drawn on it ──
   function pmCropBoxImg(natW, natH, zoom, ox, oy) {
@@ -4378,6 +4631,7 @@
     _pmSelKf = k.id;
     pmRenderTimeline();
     pmToast('Shot ' + (pmShotIndexOf(k.id) + 1) + (isNew ? ' added' : ' updated') + ' @ ' + _pmPlayhead.toFixed(1) + 's');
+    pmScheduleSave();
   }
 
   function pmAddShot() {
@@ -4398,6 +4652,7 @@
     const strip = document.getElementById('pm-shot-strip'); if (strip) strip.scrollLeft = strip.scrollWidth;
     pmToast('Shot ' + (pmShotIndexOf(k.id) + 1) + ' added @ ' + newT.toFixed(1) + 's — reframe it, or add the next');
     pmGuideCheck();
+    pmScheduleSave();
   }
 
   function pmDeleteShot(id) {
@@ -4483,13 +4738,210 @@
       setTimeout(() => { g.style.display = 'none'; }, 1200);
     }
   }
+
+  // ── Persistence: photo projects (create on upload → debounced autosave → restore) ──
+  let _pmProjectId = null;   // backend project id for the current photo (null = unsaved)
+  let _pmSaveTimer = null;
+
+  function pmSetSaveStatus(txt, cls) {
+    const el = document.getElementById('pm-save-status'); if (!el) return;
+    el.textContent = txt || '';
+    el.style.color = cls === 'warn' ? 'var(--error, #CC2200)'
+      : cls === 'ok' ? 'var(--success, #2D6A4F)' : 'var(--muted)';
+  }
+
+  // Everything needed to rebuild the editor, EXCEPT the image and music files
+  // (those live as files in the backend assets dir). Text PNGs are re-rendered
+  // client-side on restore, so they are never serialized.
+  function pmSerializeState() {
+    return {
+      duration: _pmDuration,
+      fps: PM_FPS,
+      keyframes: pmSortedCams().map(k => ({ t: k.t, zoom: k.zoom, ox: k.ox, oy: k.oy, ease: k.ease })),
+      texts: _pmTexts.map(tx => ({
+        text: tx.text, font: tx.font, size: tx.size, color: tx.color,
+        bold: !!tx.bold, stroke: !!tx.stroke,
+        tStart: tx.tStart, tEnd: tx.tEnd, fadeIn: tx.fadeIn, fadeOut: tx.fadeOut,
+        kfs: tx.kfs.map(k => ({ t: k.t, x: k.x, y: k.y, scale: k.scale, rot: k.rot, ease: k.ease })),
+      })),
+      music_meta: (_pmMusic.file || _pmMusic.name) ? {
+        filename: _pmMusic.name, offset: _pmMusic.offset, volume: _pmMusic.volume,
+        fadeIn: _pmMusic.fadeIn, fadeOut: _pmMusic.fadeOutTail,
+      } : null,
+      markers: _pmMarkers.map(m => ({ t: m.t })),
+    };
+  }
+
+  function pmScheduleSave() {
+    if (!_pmProjectId) return;
+    pmSetSaveStatus('Saving…', '');
+    if (_pmSaveTimer) clearTimeout(_pmSaveTimer);
+    _pmSaveTimer = setTimeout(pmSaveNow, 1500);
+  }
+  async function pmSaveNow() {
+    if (!_pmProjectId || !backendOnline) { if (_pmProjectId) pmSetSaveStatus('Offline — will save when the server is back', 'warn'); return; }
+    try {
+      const res = await fetch(BACKEND + '/projects/update', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ project_id: _pmProjectId, event_type: 'photo_motion_state', payload: pmSerializeState() }),
+      });
+      const data = await res.json();
+      if (res.ok && data.project) {
+        pmSetSaveStatus('Saved ✓', 'ok');
+        // Keep the sidebar fresh, but never clobber a different active project.
+        if (activeProject && activeProject.id === _pmProjectId) {
+          setActiveProject({ ...(data.summary || {}), ...data.project }, { refreshRecent: false });
+        }
+        loadRecentProjects();
+      } else {
+        pmSetSaveStatus('Save failed: ' + (data.error || res.status), 'warn');
+      }
+    } catch (e) {
+      pmSetSaveStatus('Save failed — is your local server running?', 'warn');
+    }
+  }
+
+  async function pmCreateProject(name) {
+    _pmProjectId = null;
+    if (!backendOnline) { pmSetSaveStatus('Offline — work is not saved', 'warn'); return; }
+    try {
+      const fd = new FormData();
+      fd.append('image', pmDataUrlToBlob(_pmImgSrc), 'source.jpg');
+      fd.append('name', name || 'Photo Motion');
+      const res = await fetch(BACKEND + '/projects/open_photo', { method: 'POST', body: fd });
+      const data = await res.json();
+      if (res.ok && data.project) {
+        _pmProjectId = data.project.id;
+        setActiveProject({ ...(data.summary || {}), ...data.project }, { refreshRecent: false });
+        loadRecentProjects();
+        pmSetSaveStatus('Saved ✓', 'ok');
+        pmSaveNow();   // capture the initial state right away
+      } else {
+        pmSetSaveStatus('Not saved: ' + (data.error || res.status), 'warn');
+      }
+    } catch (e) {
+      pmSetSaveStatus('Offline — work is not saved', 'warn');
+    }
+  }
+
+  async function pmMusicUploadToProject(f) {
+    if (!_pmProjectId || !backendOnline || !f) return;
+    try {
+      const fd = new FormData();
+      fd.append('project_id', _pmProjectId);
+      fd.append('music', f, f.name || 'music');
+      await fetch(BACKEND + '/projects/photo_music', { method: 'POST', body: fd });
+    } catch (e) {}
+  }
+  function pmRemoveMusic() {   // the Remove button: clear + persist the removal
+    pmClearMusic();
+    pmScheduleSave();
+  }
+
+  // Restore a photo project from Recent Projects.
+  async function pmOpenProject(summary) {
+    switchTab('photomotion');
+    setActiveProject(summary, { refreshRecent: false });
+    const st = document.getElementById('pm-status');
+    try {
+      const res = await fetch(BACKEND + '/projects/open_saved', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ project_id: summary.id }),
+      });
+      const data = await res.json();
+      if (!res.ok || !data.project) throw new Error(data.error || ('HTTP ' + res.status));
+      const project = data.project;
+      // The image comes back as blob → dataURL, exactly like an upload, so the
+      // canvas stays untainted and pmExport keeps working unchanged.
+      const imgRes = await fetch(BACKEND + '/projects/photo_source/' + project.id);
+      if (!imgRes.ok) throw new Error('the source image is missing from this computer');
+      const blob = await imgRes.blob();
+      const dataUrl = await new Promise((ok, bad) => {
+        const r = new FileReader(); r.onload = () => ok(r.result); r.onerror = () => bad(new Error('read failed')); r.readAsDataURL(blob);
+      });
+      const img = await new Promise((ok, bad) => {
+        const im = new Image(); im.onload = () => ok(im); im.onerror = () => bad(new Error('decode failed')); im.src = dataUrl;
+      });
+      pmSetImage(img, dataUrl, img.naturalWidth, img.naturalHeight);
+      await pmApplyState(project.photo_motion || {}, project.id);
+      pmToast('Project restored — pick up where you left off');
+    } catch (e) {
+      pmUpdateUI();
+      if (st) { st.className = 'pm-status pm-err'; st.textContent = 'Could not restore this project: ' + e.message; }
+    }
+  }
+
+  async function pmApplyState(state, projectId) {
+    _pmDuration = Math.max(1, Math.min(120, parseFloat(state.duration) || 6));
+    const dur = document.getElementById('pm-duration'); if (dur) dur.value = _pmDuration;
+    if (Array.isArray(state.keyframes) && state.keyframes.length) {
+      _pmKeyframes = state.keyframes.map(k => ({
+        id: ++_pmKfSeq, t: +k.t || 0,
+        zoom: Math.max(1, Math.min(PM_MAX_ZOOM, +k.zoom || 1)),
+        ox: Math.max(-1, Math.min(1, +k.ox || 0)),
+        oy: Math.max(-1, Math.min(1, +k.oy || 0)),
+        ease: k.ease || 'ease',
+      }));
+      _pmSelKf = _pmKeyframes[0].id;
+      _pmCam = { zoom: _pmKeyframes[0].zoom, ox: _pmKeyframes[0].ox, oy: _pmKeyframes[0].oy };
+      pmSyncZoomSlider();
+    }
+    // Fonts MUST be ready before re-rendering text PNGs or measurements are wrong.
+    try { if (document.fonts && document.fonts.ready) await document.fonts.ready; } catch (e) {}
+    _pmTexts = (Array.isArray(state.texts) ? state.texts : []).map(t => {
+      const tx = {
+        id: 'txt' + (++_pmTextSeq), text: t.text || '', font: t.font || 'Inter',
+        size: parseInt(t.size, 10) || 72, color: t.color || '#ffffff',
+        bold: !!t.bold, stroke: !!t.stroke,
+        tStart: +t.tStart || 0, tEnd: (+t.tEnd || _pmDuration),
+        fadeIn: +t.fadeIn || 0, fadeOut: +t.fadeOut || 0,
+        kfs: (Array.isArray(t.kfs) ? t.kfs : []).map(k => ({
+          id: ++_pmKfSeq, t: +k.t || 0,
+          x: k.x != null ? +k.x : 0.5, y: k.y != null ? +k.y : 0.5,
+          scale: k.scale != null ? +k.scale : 1, rot: +k.rot || 0, ease: k.ease || 'ease',
+        })),
+        png: null, pngW: 0, pngH: 0,
+      };
+      if (!tx.kfs.length) tx.kfs = [{ id: ++_pmKfSeq, t: 0, x: 0.5, y: 0.72, scale: 1, rot: 0, ease: 'ease' }];
+      pmRenderTextPng(tx);
+      return tx;
+    });
+    _pmActiveText = null;
+    _pmMarkers = (Array.isArray(state.markers) ? state.markers : [])
+      .map(m => ({ t: +m.t || 0 })).filter(m => m.t >= 0);
+    const mm = state.music_meta;
+    if (mm && projectId) {
+      try {
+        const mres = await fetch(BACKEND + '/projects/photo_music/' + projectId);
+        if (mres.ok) {
+          const mblob = await mres.blob();
+          const mf = new File([mblob], mm.filename || 'music', { type: mblob.type || 'audio/mpeg' });
+          pmSetMusicFile(mf, { offset: mm.offset, volume: mm.volume, fadeIn: mm.fadeIn, fadeOut: mm.fadeOut });
+        }
+      } catch (e) {}
+    }
+    _pmProjectId = projectId || null;
+    pmSetSaveStatus('Saved ✓', 'ok');
+    // Returning user — skip the onboarding strip.
+    _pmGuideFramed = true; _pmGuidePlayed = true;
+    const g = document.getElementById('pm-guide'); if (g) g.style.display = 'none';
+    pmRenderTextList();
+    pmUpdateUI();
+    pmExploreLayout();
+    pmSetPlayhead(0);
+    pmDraw();
+    pmRenderTimeline();
+  }
   function pmUpdateKfBadge() {
     const b = document.getElementById('pm-kf-badge'); if (!b) return;
     const on = pmActiveKfs().some(k => Math.abs(k.t - _pmPlayhead) <= 0.05);
     b.style.display = on ? 'block' : 'none';
     b.textContent = _pmActiveText ? '◆ On text keyframe' : '◆ On camera keyframe';
   }
-  // Text timing bars under the timeline (align text to the camera motion).
+  // Text timing bars under the timeline — draggable: body = move the window,
+  // edge grips = retime start/end. Edges snap to beat markers (Alt bypasses).
   function pmRenderTextBars() {
     const box = document.getElementById('pm-text-bars'); if (!box) return;
     const W = pmTrackW();
@@ -4498,10 +4950,67 @@
       const x0 = Math.max(0, Math.min(1, (tx.tStart || 0) / (_pmDuration || 1))) * W;
       const x1 = Math.max(0, Math.min(1, ((tx.tEnd && tx.tEnd > 0 ? tx.tEnd : _pmDuration)) / (_pmDuration || 1))) * W;
       const label = (tx.text.split('\n')[0] || 'text').slice(0, 14).replace(/</g, '&lt;');
-      html += '<div class="pm-tbar' + (tx.id === _pmActiveText ? ' pm-tbar-on' : '') + '" style="left:' + x0 + 'px;width:' + Math.max(8, x1 - x0) + 'px;" onclick="pmSelectText(\'' + tx.id + '\')">' + label + '</div>';
+      html += '<div class="pm-tbar' + (tx.id === _pmActiveText ? ' pm-tbar-on' : '') + '" data-txid="' + tx.id + '" style="left:' + x0 + 'px;width:' + Math.max(8, x1 - x0) + 'px;" title="Drag to move · drag an edge to retime · edges snap to beat markers">'
+        + '<span class="pm-tbar-handle" data-edge="start" style="left:0;"></span>'
+        + label
+        + '<span class="pm-tbar-handle" data-edge="end" style="right:0;"></span>'
+        + '</div>';
     });
     box.innerHTML = html;
   }
+  // Text-bar dragging (move / edge-resize with marker snapping).
+  (function () {
+    let drag = null;   // {tx, edge:'start'|'end'|null, t0Start, t0End, pxStart, moved}
+    const barsEl = () => document.getElementById('pm-text-bars');
+    document.addEventListener('mousedown', function (e) {
+      const bar = e.target.closest && e.target.closest('.pm-tbar');
+      if (!bar || !barsEl() || !barsEl().contains(bar) || !_pmImgEl) return;
+      const tx = _pmTexts.find(x => x.id === bar.dataset.txid); if (!tx) return;
+      pmPlayStop();
+      const edgeEl = e.target.closest('.pm-tbar-handle');
+      drag = {
+        tx, edge: edgeEl ? edgeEl.dataset.edge : null,
+        t0Start: tx.tStart || 0,
+        t0End: (tx.tEnd && tx.tEnd > 0) ? tx.tEnd : _pmDuration,
+        pxStart: e.clientX, moved: false,
+      };
+      e.preventDefault();
+    });
+    document.addEventListener('mousemove', function (e) {
+      if (!drag) return;
+      const dt = (e.clientX - drag.pxStart) / (pmTrackW() || 1) * _pmDuration;
+      if (Math.abs(e.clientX - drag.pxStart) > 2) drag.moved = true;
+      const minLen = 0.2;
+      if (drag.edge === 'start') {
+        let s = pmSnapTime(drag.t0Start + dt, e.altKey);
+        s = Math.max(0, Math.min(drag.t0End - minLen, s));
+        drag.tx.tStart = +s.toFixed(3);
+      } else if (drag.edge === 'end') {
+        let en = pmSnapTime(drag.t0End + dt, e.altKey);
+        en = Math.max(drag.t0Start + minLen, Math.min(_pmDuration, en));
+        drag.tx.tEnd = +en.toFixed(3);
+      } else {
+        const len = drag.t0End - drag.t0Start;
+        let s = pmSnapTime(drag.t0Start + dt, e.altKey);
+        s = Math.max(0, Math.min(_pmDuration - len, s));
+        drag.tx.tStart = +s.toFixed(3);
+        drag.tx.tEnd = +(s + len).toFixed(3);
+      }
+      pmRenderTextBars();
+      pmDrawThrottled();
+    });
+    document.addEventListener('mouseup', function () {
+      if (!drag) return;
+      const wasClick = !drag.moved, id = drag.tx.id;
+      if (drag.moved) {
+        // Sync the Appears inputs if this text is the active layer
+        if (_pmActiveText === id) pmRenderTextControls();
+        pmScheduleSave();
+      }
+      drag = null;
+      if (wasClick) pmSelectText(id);   // plain click still selects the layer
+    });
+  })();
 
   // ============ end PHOTO MOTION (1A) ============
 
@@ -4570,7 +5079,7 @@
   // Must match BACKEND_BUILD in server.py — bumped together whenever the
   // frontend/backend contract changes. A mismatch means the user is running
   // an old backend (launcher not restarted after a deploy).
-  const EXPECTED_BACKEND_BUILD = '2026-07-10-photomotion-text';
+  const EXPECTED_BACKEND_BUILD = '2026-07-11-photomotion-studio';
 
   if (document.fonts && document.fonts.load) { document.fonts.load("700 64px 'Handmade Sans'").catch(function(){}); document.fonts.load("700 64px 'Montserrat'").catch(function(){}); }
   let _staleBackendWarned = false;
@@ -5305,23 +5814,26 @@
         '<summary><span>' + escHtml(label) + '</span><span>' + escHtml(String(items.length)) + '</span></summary>' +
         '<div class="sidebar-project-group-body">' +
           items.map(project => {
-            const summary = getProjectCountSummary(project) || 'Saved project';
+            const isPhoto = (project?.source_kind || 'video') === 'photo_motion';
+            const summary = isPhoto ? 'Photo Motion project' : (getProjectCountSummary(project) || 'Saved project');
             const isActive = activeProject?.id && activeProject.id === project.id;
             const hasSavedPath = !!(project?.source_path || project?.source_video?.path);
-            // Clicking a project ALWAYS opens the clip/video editor (the main
+            // Clicking a VIDEO project ALWAYS opens the clip/video editor (the main
             // workflow), never the thumbnail tab — even if the user was last in
             // Thumbnails for this project. Use the left-nav Thumbnails tab (or the
             // clip's "Create Thumbnail") to reach thumbnails. (Emily's report:
             // Dr. Lewis opened Thumbnails because meta.last_view was 'thumbnails'.)
+            // PHOTO MOTION projects route to the Photo Motion tab instead
+            // (selectRecentProject branches on source_kind).
             return (
               '<button class="sidebar-project-item' + (isActive ? ' active' : '') + '" type="button" oncontextmenu="showProjectContextMenu(\'' + escHtml(project.id) + '\', event); return false;" onclick="selectRecentProject(\'' + escHtml(project.id) + '\', \'clips\')">' +
                 '<div class="sidebar-project-item-head">' +
-                  '<div class="recent-project-name" title="' + escHtml(getProjectLabel(project)) + '">' + escHtml(getProjectLabel(project)) + '</div>' +
+                  '<div class="recent-project-name" title="' + escHtml(getProjectLabel(project)) + '">' + (isPhoto ? '<span class="sidebar-photo-chip">Photo</span> ' : '') + escHtml(getProjectLabel(project)) + '</div>' +
                   '<div class="recent-project-date">' + escHtml(formatProjectDate(project.last_modified || project.updated_at)) + '</div>' +
                   '<span class="recent-project-delete" title="Delete this project" onclick="confirmDeleteRecentProject(\'' + escHtml(project.id) + '\', event)">&times;</span>' +
                 '</div>' +
                 '<div class="sidebar-project-summary">' + escHtml(summary) + '</div>' +
-                (hasSavedPath ? '' : '<div class="sidebar-project-row"><span class="sidebar-project-dot"></span><span class="sidebar-project-status">Choose the original video once</span></div>') +
+                (hasSavedPath || isPhoto ? '' : '<div class="sidebar-project-row"><span class="sidebar-project-dot"></span><span class="sidebar-project-status">Choose the original video once</span></div>') +
               '</button>'
             );
           }).join('') +
@@ -5504,6 +6016,8 @@
   async function selectRecentProject(projectId, targetTab) {
     const project = recentProjects.find(item => item.id === projectId);
     if (!project) return;
+    // Photo Motion projects live in their own tab with their own restore path.
+    if ((project.source_kind || 'video') === 'photo_motion') { return pmOpenProject(project); }
     const view = targetTab || project?.meta?.last_view || 'clips';
     setActiveProject(project, { refreshRecent: false });
     switchTab(view);

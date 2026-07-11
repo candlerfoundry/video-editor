@@ -2743,9 +2743,9 @@ Each text overlay = `{png (base64), tStart, tEnd, fadeIn, fadeOut, keyframes:[{t
 launcher + hard-refresh). Handshake reads `2026-07-10-photomotion-text`.
 
 ### NEXT (Photo Motion): 1D thumbnail creation (reuse the composer to pick/compose a cover from the
-image or a frame) + polish; image-project persistence (source_kind + /projects event → Recent
-Projects); optional: text scale-up crispness (render PNG at 2x), music trim/loop options, on-canvas
-text scale/rotate handles.
+image or a frame) + polish; ~~image-project persistence~~ and ~~music trim options~~ SHIPPED in the
+Studio build (see the two Studio sections below); still open: music loop, text scale-up crispness
+(render PNG at 2x), on-canvas text scale/rotate handles.
 Regression risk: Low — additive; overlays/music optional; camera-only clips render exactly as before.
 
 ## Photo Motion Studio — UI model rework (frontend-only; no contract change)
@@ -2792,3 +2792,65 @@ a timeline panel (`#pm-timeline-panel`) holding the transport.
 - `pmToast()` (bottom-center pill) confirms every shot add/update. `#pm-guide` is a 3-step
   onboarding strip (frame → add shot → play) that checks off live and hides permanently via
   localStorage `pm_guide_done`.
+
+## Photo Motion Studio — music choreography + persistence (build `2026-07-11-photomotion-studio`)
+Second Studio wave: choreograph to music, and photo projects persist + restore via Recent
+Projects. Handshake bumped (backend gained music fields + photo-project routes/event).
+
+### Music export contract (/export_photo_motion — new OPTIONAL form fields)
+`music_start` (sec into the track, input-side `-ss` seek), `music_volume` (0..2, `volume=` filter),
+`music_fade_in` (sec, `afade=t=in`), `music_fade_out` (sec tail, default 1.0 — replaces the old
+HARDCODED 1s tail afade). All parsed forgiving + clamped (`_pm_form_float`), threaded to
+`render_photo_motion_video(..., music_opts={start,volume,fade_in,fade_out})`. **Defaults reproduce
+the pre-Studio output exactly** (volume 1 → no filter; fade_out 1.0 → same tail). The `-af` chain
+is composed from the non-default pieces. No loop support: audio shorter than the video just ends
+(documented limit). Frontend preview honors offset/volume/fade-in (`pmMusicPlayFrom` +
+per-frame ramp in the play rAF); the tail fade is export-only.
+
+### Beat markers + snapping (frontend-only choreography aids)
+`_pmMarkers = [{t}]` in VIDEO time. Placed by "● Tap beat" (marker at the playhead, works during
+playback) or clicking the waveform; Alt-click deletes. Waveform: `pmDecodeMusicPeaks` (WebAudio
+decodeAudioData → 1000 max-abs buckets, try/catch — undecodable audio degrades to no waveform),
+drawn by `pmDrawWaveform` under the track showing the window `[offset, offset+duration]` 1:1 with
+the timeline. `pmSnapTime(t, altBypass)` snaps within `PM_SNAP_PX (8px)` of track distance to the
+nearest marker (flash `.pm-marker-hot`; hold Alt to bypass) and is applied to: keyframe diamond
+retime drags, playhead scrub, and the NEW draggable text timing bars (`.pm-tbar` body = move
+window, `.pm-tbar-handle` edges = retime tStart/tEnd, min length 0.2s). **Markers are persisted in
+the project state but NEVER sent to /export_photo_motion.** Fixed here: the diamond retime drag
+now targets `pmActiveKfs()` (it used to hard-reference `_pmKeyframes`, so dragging a TEXT diamond
+silently retimed the camera track); the music preview objectURL is revoked on replace/clear.
+
+### Persistence contract (photo projects)
+- Records: `create_project_record(..., source_kind='video'|'photo_motion')`; `summarize_project`
+  exposes `source_kind` (missing → `'video'`, so ALL pre-Studio records read as video — backward
+  compatible everywhere).
+- Assets live as FILES in `<local_app_root>/assets/<project_id>/` (`get_project_asset_dir`) —
+  `source.jpg` + `music.<ext>`. **NEVER base64 the image/music into project JSON** —
+  /projects/recent re-reads every JSON to build the sidebar. `/projects/delete` also rmtree's the
+  asset dir.
+- Routes: `POST /projects/open_photo` (multipart image+name → creates the record, id =
+  `make_source_key(None, 'photo|<name>|<iso_now>')` so same-named artworks never collide;
+  `source_video.path` points at the saved asset so /projects/open_saved's source_available check
+  just works). `GET /projects/photo_source/<id>` and `GET /projects/photo_music/<id>` stream the
+  assets back. `POST /projects/photo_music` (project_id + file) attaches/replaces the track.
+- Event: `/projects/update` gained `photo_motion_state` — bounded lean state
+  `{duration 1..120, fps 12..60, keyframes[:200], texts[:20] (NO png data — client re-renders),
+  music_meta{filename, asset(server-managed), offset, volume, fadeIn, fadeOut} | null(=removed),
+  markers[:400], saved_at}`.
+- Frontend flow: upload → `pmCreateProject` POSTs the working ≤4096px jpeg to open_photo, sets
+  `_pmProjectId`, then AUTOSAVE: `pmScheduleSave` (1.5s debounce) → `pmSaveNow` POSTs
+  `photo_motion_state` with `pmSerializeState()`; `#pm-save-status` shows Saving…/Saved ✓/Offline.
+  There is deliberately NO Save button. Saves are keyed by `_pmProjectId`, NOT `activeProject`
+  (switching to a video project mid-session can't cross-write).
+- Restore: `selectRecentProject` first line branches `source_kind==='photo_motion'` →
+  `pmOpenProject` (video flow untouched): open_saved → fetch photo_source as blob→dataURL (canvas
+  stays untainted; `_pmImgSrc` stays export-ready) → `pmSetImage` → `pmApplyState` rebuilds
+  keyframes/texts (fresh ids; **awaits document.fonts.ready before `pmRenderTextPng`**), markers,
+  fetches photo_music and re-decodes the waveform, applies saved music opts. Sidebar shows a
+  "Photo" chip; photo items skip the "Choose the original video once" row.
+
+### Deploy: full deploy (handshake bumped) — git push (Netlify) + copy server.py next to the exe +
+rebuild flat zip + restart launcher + hard-refresh. Handshake reads `2026-07-11-photomotion-studio`.
+Regression risk: Low-moderate — export defaults byte-identical without the new fields; video
+project flows untouched (source_kind defaults); new routes/event are additive. Watch: autosave
+chattiness (debounced 1.5s), WebAudio decode on huge files (async, non-blocking).

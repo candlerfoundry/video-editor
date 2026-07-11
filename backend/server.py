@@ -62,7 +62,7 @@ CORS(app)
 
 # Bump this whenever the frontend/backend contract changes (the frontend
 # carries a matching EXPECTED_BACKEND_BUILD and warns when they differ).
-BACKEND_BUILD = "2026-07-10-photomotion-text"
+BACKEND_BUILD = "2026-07-11-photomotion-studio"
 
 CREATE_NO_WINDOW = 0x08000000 if platform.system() == 'Windows' else 0
 
@@ -149,6 +149,17 @@ def _stable_app_data_root():
 local_app_root = _stable_app_data_root()
 project_store_dir = os.path.join(local_app_root, 'projects')
 os.makedirs(project_store_dir, exist_ok=True)
+
+# Per-project asset store (Photo Motion source images + music). Big binaries live
+# here as FILES and are referenced by path — never base64 inside the project JSON
+# (/projects/recent re-reads every JSON to build the sidebar list).
+assets_store_dir = os.path.join(local_app_root, 'assets')
+os.makedirs(assets_store_dir, exist_ok=True)
+
+def get_project_asset_dir(project_id):
+    d = os.path.join(assets_store_dir, project_id)
+    os.makedirs(d, exist_ok=True)
+    return d
 
 # One-time best-effort migration: if a previous build saved projects in the old
 # temp location, copy them into the stable store so users don't lose them.
@@ -937,6 +948,7 @@ def summarize_project(project):
     return {
         'id': project.get('id'),
         'project_name': project.get('project_name'),
+        'source_kind': project.get('source_kind') or 'video',   # old records → 'video'
         'source_filename': source_video.get('filename'),
         'source_path': source_video.get('path'),
         'last_modified': project.get('updated_at'),
@@ -997,13 +1009,14 @@ def save_project(project):
         json.dump(project, handle, ensure_ascii=False, indent=2)
 
 
-def create_project_record(project_id, filename, source_path):
+def create_project_record(project_id, filename, source_path, source_kind='video'):
     timestamp = iso_now()
     clean_filename = os.path.basename(source_path or filename or '')
     return {
         'id': project_id,
         'slug': slugify_project_name(derive_project_name(clean_filename)),
         'project_name': derive_project_name(clean_filename),
+        'source_kind': source_kind,   # 'video' (default) | 'photo_motion'
         'created_at': timestamp,
         'updated_at': timestamp,
         'last_opened_at': timestamp,
@@ -1531,6 +1544,8 @@ def delete_project():
         with project_store_lock:
             if os.path.isfile(path):
                 os.remove(path)
+            # Remove any Photo Motion assets (image/music) stored for this project.
+            shutil.rmtree(os.path.join(assets_store_dir, pid), ignore_errors=True)
         logger.info('[projects] Deleted project %s', pid)
         return jsonify({'success': True})
     except Exception as exc:
@@ -1729,6 +1744,48 @@ def update_project():
                     export_entry,
                     ['filename'],
                 )
+            elif event_type == 'photo_motion_state':
+                # Full Photo Motion editor state, autosaved (debounced) by the frontend.
+                # Bounded and lean: keyframes/texts/markers only — the source image and
+                # music live as FILES in the per-project assets dir, never in this JSON
+                # (text PNGs are re-rendered client-side on restore).
+                pm = project.setdefault('photo_motion', {})
+                try:
+                    pm['duration'] = max(1.0, min(120.0, float(payload.get('duration') or 6)))
+                except Exception:
+                    pm['duration'] = 6.0
+                try:
+                    pm['fps'] = max(12, min(60, int(payload.get('fps') or 30)))
+                except Exception:
+                    pm['fps'] = 30
+                kfs = payload.get('keyframes')
+                if isinstance(kfs, list):
+                    pm['keyframes'] = kfs[:200]
+                texts = payload.get('texts')
+                if isinstance(texts, list):
+                    pm['texts'] = texts[:20]
+                mm = payload.get('music_meta')
+                if mm is None:
+                    pm.pop('music_meta', None)   # music removed
+                elif isinstance(mm, dict):
+                    prev = pm.get('music_meta') or {}
+                    def _f(v, d):
+                        try:
+                            return float(v)
+                        except Exception:
+                            return d
+                    pm['music_meta'] = {
+                        'filename': mm.get('filename') or prev.get('filename'),
+                        'asset': prev.get('asset'),   # set by /projects/photo_music
+                        'offset': _f(mm.get('offset'), 0.0),
+                        'volume': _f(mm.get('volume'), 1.0),
+                        'fadeIn': _f(mm.get('fadeIn'), 0.0),
+                        'fadeOut': _f(mm.get('fadeOut'), 1.0),
+                    }
+                markers = payload.get('markers')
+                if isinstance(markers, list):
+                    pm['markers'] = markers[:400]
+                pm['saved_at'] = iso_now()
             else:
                 return jsonify({'error': f'Unsupported event_type: {event_type}'}), 400
 
@@ -1738,6 +1795,102 @@ def update_project():
     except Exception as exc:
         logger.exception('[projects] Failed to update project')
         return jsonify({'error': str(exc)}), 500
+
+
+# ── Photo Motion projects: create from an uploaded image, stream assets back ──
+@app.route('/projects/open_photo', methods=['POST'])
+def open_photo_project():
+    """Create a Photo Motion project from an uploaded image (multipart: image,
+    name?). The image is saved into the per-project assets dir and referenced by
+    path (mirrors how video projects reference their source by path). Each upload
+    creates a NEW project — two artworks with the same filename never collide."""
+    try:
+        image_file = request.files.get('image')
+        if not image_file or not image_file.filename:
+            return jsonify({'error': 'image file is required'}), 400
+        display_name = (request.form.get('name') or image_file.filename or 'Photo Motion').strip()
+        project_id = make_source_key(None, 'photo|%s|%s' % (display_name.lower(), iso_now()))
+        asset_dir = get_project_asset_dir(project_id)
+        image_path = os.path.join(asset_dir, 'source.jpg')
+        image_file.save(image_path)
+        with project_store_lock:
+            project = create_project_record(project_id, display_name, image_path,
+                                            source_kind='photo_motion')
+            project['meta']['last_view'] = 'photomotion'
+            project['photo_motion'] = {}
+            save_project(project)
+        logger.info('[projects] Created photo project %s for %s', project_id, display_name)
+        return jsonify({'project': project, 'summary': summarize_project(project)})
+    except Exception as exc:
+        logger.exception('[projects] Failed to create photo project')
+        return jsonify({'error': str(exc)}), 500
+
+
+@app.route('/projects/photo_source/<project_id>', methods=['GET'])
+def stream_photo_source(project_id):
+    """Serve a photo project's source image (for project restore)."""
+    with project_store_lock:
+        project = load_project(project_id)
+    if not project or (project.get('source_kind') or 'video') != 'photo_motion':
+        abort(404)
+    source_path = get_project_source_path(project)
+    if not source_path:
+        abort(404)
+    return send_file(source_path, mimetype='image/jpeg', conditional=True,
+                     etag=False, last_modified=None)
+
+
+@app.route('/projects/photo_music', methods=['POST'])
+def upload_photo_music():
+    """Attach/replace the music track for a photo project (multipart:
+    project_id, music). Stored in the assets dir; metadata (offset/volume/fades)
+    travels separately via the photo_motion_state event."""
+    try:
+        pid = (request.form.get('project_id') or '').strip()
+        music_file = request.files.get('music')
+        if not pid or not re.match(r'^[A-Za-z0-9_\-]+$', pid):
+            return jsonify({'error': 'invalid project_id'}), 400
+        if not music_file or not music_file.filename:
+            return jsonify({'error': 'music file is required'}), 400
+        with project_store_lock:
+            project = load_project(pid)
+            if not project or (project.get('source_kind') or 'video') != 'photo_motion':
+                return jsonify({'error': 'photo project not found'}), 404
+            asset_dir = get_project_asset_dir(pid)
+            for name in os.listdir(asset_dir):
+                if name.startswith('music'):
+                    try:
+                        os.remove(os.path.join(asset_dir, name))
+                    except Exception:
+                        pass
+            ext = os.path.splitext(music_file.filename)[1][:8] or '.audio'
+            music_path = os.path.join(asset_dir, 'music' + ext)
+            music_file.save(music_path)
+            pm = project.setdefault('photo_motion', {})
+            mm = pm.setdefault('music_meta', {})
+            mm['filename'] = music_file.filename
+            mm['asset'] = music_path
+            save_project(project)
+        return jsonify({'project': project, 'summary': summarize_project(project)})
+    except Exception as exc:
+        logger.exception('[projects] Failed to save photo music')
+        return jsonify({'error': str(exc)}), 500
+
+
+@app.route('/projects/photo_music/<project_id>', methods=['GET'])
+def stream_photo_music(project_id):
+    """Serve a photo project's stored music track (for project restore)."""
+    with project_store_lock:
+        project = load_project(project_id)
+    if not project or (project.get('source_kind') or 'video') != 'photo_motion':
+        abort(404)
+    mm = (project.get('photo_motion') or {}).get('music_meta') or {}
+    music_path = (mm.get('asset') or '').strip()
+    if not music_path or not os.path.isfile(music_path):
+        abort(404)
+    mime_type, _ = mimetypes.guess_type(mm.get('filename') or music_path)
+    return send_file(music_path, mimetype=mime_type or 'audio/mpeg',
+                     conditional=True, etag=False, last_modified=None)
 
 
 @app.route('/project_export_folder/check', methods=['POST'])
@@ -3672,10 +3825,13 @@ def _pm_overlay_opacity(ov, t):
 
 
 def render_photo_motion_video(image_path, keyframes, duration, fps, output_path,
-                              music_path=None, overlays=None):
+                              music_path=None, overlays=None, music_opts=None):
     """Render a keyframed pan/zoom video from a single still image, with optional
     keyframed text overlays (each a pre-rendered transparent PNG that is pasted
-    per-frame at an interpolated transform + opacity). Returns (ok, err)."""
+    per-frame at an interpolated transform + opacity). music_opts (all optional):
+    {'start': sec into the track, 'volume': 0..2, 'fade_in': sec, 'fade_out': sec}.
+    Defaults reproduce the pre-studio behavior (full volume, 1s tail fade).
+    Returns (ok, err)."""
     import base64 as _b64
     from PIL import Image as PILImage
 
@@ -3714,16 +3870,31 @@ def render_photo_motion_video(image_path, keyframes, duration, fps, output_path,
 
     total_frames = max(1, int(round(duration * fps)))
 
+    mo = music_opts or {}
+    music_start = max(0.0, float(mo.get('start') or 0.0))
+    music_volume = max(0.0, min(2.0, float(mo.get('volume', 1.0))))
+    music_fade_in = max(0.0, min(30.0, float(mo.get('fade_in') or 0.0)))
+    music_fade_out = max(0.0, min(30.0, float(mo.get('fade_out', 1.0))))
+
     cmd = [FFMPEG_EXE, "-y",
            "-f", "rawvideo", "-pix_fmt", "rgb24",
            "-s", "%dx%d" % (PM_OUT_W, PM_OUT_H), "-r", str(fps), "-i", "-"]
     if music_path:
+        if music_start > 0:
+            cmd += ["-ss", "%.3f" % music_start]   # input-side seek: start N sec into the track
         cmd += ["-i", music_path]
     cmd += ["-c:v", "libx264", "-crf", "18", "-preset", "veryfast", "-pix_fmt", "yuv420p"]
     if music_path:
-        fade_st = max(0.0, duration - 1.0)
-        cmd += ["-c:a", "aac", "-b:a", "192k", "-map", "0:v:0", "-map", "1:a:0",
-                "-af", "afade=t=out:st=%.2f:d=1.0" % fade_st]
+        af = []
+        if abs(music_volume - 1.0) > 0.001:
+            af.append("volume=%.3f" % music_volume)
+        if music_fade_in > 0:
+            af.append("afade=t=in:st=0:d=%.2f" % music_fade_in)
+        if music_fade_out > 0:
+            af.append("afade=t=out:st=%.2f:d=%.2f" % (max(0.0, duration - music_fade_out), music_fade_out))
+        cmd += ["-c:a", "aac", "-b:a", "192k", "-map", "0:v:0", "-map", "1:a:0"]
+        if af:
+            cmd += ["-af", ",".join(af)]
     else:
         cmd += ["-an"]
     cmd += ["-t", "%.3f" % duration, "-movflags", "+faststart", output_path]
@@ -3833,6 +4004,19 @@ def export_photo_motion():
     thumbnail_file = request.files.get("thumbnail")
     music_file     = request.files.get("music")
 
+    def _pm_form_float(name, default, lo, hi):
+        try:
+            v = float(request.form.get(name, default) or default)
+        except Exception:
+            v = default
+        return max(lo, min(hi, v))
+    music_opts = {
+        'start':    _pm_form_float("music_start", 0.0, 0.0, 36000.0),
+        'volume':   _pm_form_float("music_volume", 1.0, 0.0, 2.0),
+        'fade_in':  _pm_form_float("music_fade_in", 0.0, 0.0, 30.0),
+        'fade_out': _pm_form_float("music_fade_out", 1.0, 0.0, 30.0),
+    }
+
     output_name = suggested_name if suggested_name.lower().endswith(".mp4") else suggested_name + ".mp4"
     base_name   = os.path.splitext(output_name)[0]
     folder_name = target_folder or sanitize_social_media_relative_path(base_name)
@@ -3853,7 +4037,8 @@ def export_photo_motion():
             music_file.save(music_path)
 
         ok, err = render_photo_motion_video(img_in, keyframes, duration, fps, output_path,
-                                            music_path=music_path, overlays=overlays)
+                                            music_path=music_path, overlays=overlays,
+                                            music_opts=music_opts)
         if not ok:
             return jsonify({"error": "render failed: " + (err or "")}), 500
 
