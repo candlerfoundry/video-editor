@@ -1,7 +1,7 @@
 # CANONICAL.md - Foundry Video Editor Backend
 # Source of truth for critical backend and thumbnail behavior.
 # Every editing session must compare server.py to this file before changing fragile paths.
-# Last updated: June 15, 2026 (bleep accuracy + audible preview — §36)
+# Last updated: July 28, 2026 (Photo Motion fully removed — see "Photo Motion — REMOVED" at end of file)
 #
 # HOW TO USE THIS FILE:
 # 1. Read it before editing server.py or launcher/launcher.py.
@@ -2885,3 +2885,30 @@ adopted. NO backend change, NO handshake bump — persistence schema unchanged (
 - Presentation: shot cards read `@2.5s ▸2.5s` (arrival ▸ time to next / hold to end); the ease
   select is labeled "Move to next shot" on the Camera layer ("Ease" on text layers) — same
   values, wording only; the Duration input is labeled "Total length" and auto-grows.
+
+## Photo Motion — REMOVED (July 28, 2026)
+The entire Photo Motion feature (all six "Photo Motion" / "Photo Motion Studio" sections
+above, builds `2026-07-10-photomotion` → `2026-07-11-photomotion-studio`) was **fully reverted
+at Emily's request — it didn't work in practice.** Those six sections are retained ABOVE as
+historical record only; **none of the behavior they describe is implemented anymore.**
+
+What the revert did (a clean snapshot restore of `index.html` + `backend/server.py` to commit
+`964ae6e`, the last pre–Photo-Motion state):
+- Removed the frontend `#tab-photomotion` screen and the entire `_pm*` / `pm*` module from
+  `index.html`.
+- Removed from `server.py`: the `POST /export_photo_motion` render route, the photo-project
+  routes (`/projects/open_photo`, `/projects/photo_source/<id>`, `/projects/photo_music`
+  POST+GET), all `_pm_*` render/crop/easing/overlay helpers, the `photo_motion_state` handling
+  in `/projects/update`, and the `source_kind` parameter/threading through
+  `create_project_record` / `summarize_project`.
+- Reverted the build handshake **`2026-07-11-photomotion-studio` → `2026-07-01-editor3`** on
+  both sides (`BACKEND_BUILD` + `EXPECTED_BACKEND_BUILD`). This is a full deploy (routes
+  removed): push (Netlify redeploys `index.html`) + copy `server.py` next to the exe + rebuild
+  the flat zip + restart launcher + hard-refresh; handshake reads `2026-07-01-editor3`.
+
+Note: because the strip is a byte-exact restore of the pre–Photo-Motion snapshot (nothing
+non–Photo-Motion had landed after `964ae6e`), every other route and behavior documented in
+§1–§50 is exactly as it was at build `2026-07-01-editor3`. Any locally-saved photo-motion
+projects (`source_kind: photo_motion`) now render as generic entries in Recent Projects and can
+be deleted from the sidebar — the code no longer recognizes them.
+Regression risk: Low — pure revert to a known-good state; no partial edits.
