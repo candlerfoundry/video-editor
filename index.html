@@ -1676,6 +1676,9 @@
 
     /* ─── DIALOG / MODAL SYSTEM ─── */
     dialog {
+      /* margin:auto restores the browser's centring of modal dialogs — the global
+         `* { margin: 0 }` reset pinned every pop-up to the top-left corner. */
+      margin: auto;
       border: none; border-radius: var(--r-lg); padding: 0;
       background: var(--bg); max-width: min(860px, 95vw);
       max-height: 92vh; width: 100%;
@@ -2804,7 +2807,7 @@
         <div class="section-hero-bg" style="background-image: url('Graphic_2.png')"></div>
         <div class="section-hero-text fade-up">
           <h1>Thumbnails</h1>
-          <p>AI picks the best speaker frame, generates 8 title options, and lets you drag and resize text before downloading.</p>
+          <p>Pick a frame from any video (or upload an image), add text and graphics &mdash; or none at all &mdash; then save and download.</p>
         </div>
       </div>
 
@@ -2823,7 +2826,7 @@
                onclick="document.getElementById('thumb-file').click()">
             <div class="dz-icon">🖼</div>
             <div class="dz-label" id="thumb-dz-label">Drop an MP4 or MOV here to get started</div>
-            <div class="dz-sub">Pick your frame from the video &bull; 8 AI title options &bull; moveable text overlay</div>
+            <div class="dz-sub">Pick your frame from the video &bull; optional text, logos &amp; graphics &bull; drag to arrange</div>
             <input type="file" id="thumb-file"
                    accept=".mp4,.MP4,.mov,.MOV,video/mp4,video/quicktime" />
           </div>
@@ -2835,9 +2838,9 @@
               <circle cx="8.5" cy="8.5" r="1.5"/>
               <path d="M21 15l-5-5L5 21"/>
             </svg>
-            Open Shared Composer
+            Create Thumbnail
           </button>
-          <p style="margin-top:10px;font-size:12px;color:var(--muted);line-height:1.6;">The standalone tab now opens the same shared thumbnail composer used by the clip workflow.</p>
+          <p style="margin-top:10px;font-size:12px;color:var(--muted);line-height:1.6;">Choose a video above, then click Create Thumbnail. No clip needed.</p>
         </div>
 
         <!-- STATE 2: Processing -->
@@ -3016,7 +3019,7 @@
               <div id="thumb-tab-preview-meta" style="font-size:13px;color:var(--text-2);line-height:1.6;"></div>
               <div style="display:flex; gap:8px; flex-wrap:wrap;">
                 <button class="btn-ghost btn-sm" type="button" onclick="downloadStandaloneThumbnail()">Download PNG</button>
-                <button class="btn-ghost btn-sm" type="button" onclick="reopenSharedThumbnailComposerFromTab()">Re-open Composer</button>
+                <button class="btn-ghost btn-sm" type="button" onclick="reopenSharedThumbnailComposerFromTab()">Re-open Editor</button>
                 <button class="btn-ghost btn-sm" type="button" onclick="saveCurrentThumbnailDraft(true)">Save Draft</button>
               </div>
             </div>
@@ -3670,11 +3673,18 @@
       videoInfo: latestDraft.video_info || null,
       draftId: latestDraft.draft_id,
       logo: latestDraft.logo,
+      // Carry EVERYTHING else too — this draft keeps its draft_id, so anything dropped
+      // here was wiped from the saved draft on the next save (graphics, crop, brightness).
+      graphicElements: latestDraft.graphic_elements || [],
+      brightness: latestDraft.brightness,
+      frameZoom: latestDraft.frame_zoom,
+      frameOffsetX: latestDraft.frame_offset_x,
+      frameOffsetY: latestDraft.frame_offset_y,
+      igCaption: latestDraft.ig_caption || '',
     });
     renderStandaloneThumbnailPreview(
       '<strong>' + escHtml(_sharedThumbnailDraft.source_filename || _thumbFile.name) + '</strong><br>' +
-      'Restored draft with ' + escHtml(String((_sharedThumbnailDraft.text_boxes || []).length)) + ' text box slot(s)<br>' +
-      'Format: ' + escHtml(_sharedThumbnailDraft.target_format || 'instagram')
+      'Your latest saved thumbnail draft is ready. Click Re-open Editor to keep working on it.'
     );
     return true;
   }
@@ -3693,7 +3703,7 @@
         return {
           tone: 'warn',
           title: 'Saved project found',
-          body: 'We found your saved thumbnail draft. Open the shared composer to continue from it.',
+          body: 'We found your saved thumbnail draft. Click Create Thumbnail to keep editing it.',
         };
       }
       return {
@@ -4042,6 +4052,7 @@
   function hydrateThumbnailProjectSource(projectResponse) {
     const filename = projectResponse?.source_filename || projectResponse?.project?.source_filename || projectResponse?.project?.source_video?.filename || 'Video';
     const sourcePath = projectResponse?.source_path || projectResponse?.project?.source_path || projectResponse?.project?.source_video?.path || '';
+    if (_thumbFile && (_thumbFile.name !== filename || (_thumbFile.source_path || '') !== sourcePath)) resetStandaloneThumbnailState();
     _thumbFile = {
       name: filename,
       source_path: sourcePath,
@@ -4935,6 +4946,9 @@
     // doesn't bleed into this clip's editor. Saved thumbnails stay reusable via the
     // Save-Clip "Saved thumbnails" cards (Edit a copy / Use as-is).
     _sharedThumbnailDraft = null;
+    // Forget the PREVIOUSLY saved clip too — otherwise a thumbnail made for this clip
+    // was attached to the last clip saved (its Dropbox PNG, reel cover and Airtable row).
+    _savedClipExport = null;
     try { if (thumbnailBlobUrl) URL.revokeObjectURL(thumbnailBlobUrl); } catch (_) {}
     thumbnailBlob = null; thumbnailBlobUrl = null;
     { const _tpp = document.getElementById('thumb-preview-panel'); if (_tpp) _tpp.classList.remove('active'); }
@@ -6235,20 +6249,31 @@
     _dlgCanvasTY = box?.y ?? pos.y;
   }
 
+  // Returns true only when the backend actually stored the draft (it used to report
+  // "saved" even when the server was offline or no project was open yet).
   async function saveCurrentThumbnailDraft(showFeedback = false) {
-    if (!_sharedThumbnailDraft || !activeProject) return;
+    if (!_sharedThumbnailDraft) return false;
+    if (!activeProject) {
+      if (showFeedback) alert('Not saved: this video’s project isn’t open yet. Make sure the local server is running, wait a moment, then try again.');
+      return false;
+    }
     syncDraftFromDialogState();
     const payload = {
       ..._sharedThumbnailDraft,
       context: _sharedThumbnailEntryPoint === 'clip' ? 'clip_export_dialog' : 'standalone_tab',
     };
-    await updateProject('thumbnail_draft_saved', payload);
+    const _saved = await updateProject('thumbnail_draft_saved', payload);
+    if (!_saved) {
+      if (showFeedback) alert('Not saved: could not reach the local server. Your thumbnail is still open — try again once the server is running.');
+      return false;
+    }
     if (_sharedThumbnailEntryPoint === 'standalone') {
       renderStandaloneThumbnailPreview();
       // The Saved Thumbnails gallery caches its rendered previews; reload it so the edit shows.
       if (document.getElementById('thumb-gallery-grid')) { try { loadThumbnailGallery(); } catch (_) {} }
     }
     if (showFeedback) alert('Thumbnail draft saved to the local project.');
+    return true;
   }
 
   function updateSharedComposerDoneLabel() {
@@ -6281,7 +6306,7 @@
 
   function downloadStandaloneThumbnail() {
     if (!_standaloneThumbnailBlob) {
-      alert('Open the shared composer and click Done to rebuild this thumbnail PNG first.');
+      alert('Click Re-open Editor, then Done, to rebuild this thumbnail PNG first.');
       return;
     }
     const url = URL.createObjectURL(_standaloneThumbnailBlob);
@@ -6440,6 +6465,17 @@
     loadThumbnailGallery();
   }
 
+  // /thumbnails/list slims each draft to ONE frame (for fast previews). Editing and
+  // re-saving that slim copy overwrote the stored draft's other frames. Prefer the
+  // full draft from the open project; always hand back a deep copy so edits never
+  // mutate the gallery's cached items.
+  function _fullSavedThumbnailDraft(item) {
+    const full = (activeProject && activeProject.id === item.project_id)
+      ? (activeProject.thumbnail_drafts || []).find(d => d && d.draft_id === item.draft_id)
+      : null;
+    return JSON.parse(JSON.stringify((full && (full.available_frames || []).length) ? full : item.draft));
+  }
+
   async function openThumbnailFromGallery(i) {
     const item = _thumbGalleryItems[i];
     if (!item || !item.draft) return;
@@ -6448,9 +6484,19 @@
     // clip happens to be loaded). Without this, editing a saved thumbnail used the active
     // clip's video and re-grouped the draft under the wrong source.
     if (item.project_id && item.project_id !== (activeProject && activeProject.id)) {
-      try { await tryResumeProjectFromSavedPath({ id: item.project_id }, 'thumbnails'); } catch (_) {}
+      let _r = null;
+      try { _r = await tryResumeProjectFromSavedPath({ id: item.project_id }, 'thumbnails'); } catch (_) {}
+      // Original video missing/moved: still switch to the thumbnail's OWN project so a
+      // re-save lands there (it used to silently save into whatever project was open).
+      if (_r && _r.project && _r.source_available === false) {
+        setActiveProject({ ...(_r.summary || {}), ..._r.project }, { refreshRecent: false });
+      }
+      if (!activeProject || activeProject.id !== item.project_id) {
+        alert('Could not open the project this thumbnail belongs to (is the local server running?). You can still use Download on its card.');
+        return;
+      }
     }
-    _sharedThumbnailDraft = item.draft;
+    _sharedThumbnailDraft = _fullSavedThumbnailDraft(item);
     _sharedThumbnailEntryPoint = 'standalone';
     updateSharedComposerDoneLabel();
     applyDraftToDialogState();
@@ -6481,9 +6527,31 @@
     }, 'image/png');
   }
 
+  // A different video was loaded into the Thumbnails tab: drop everything tied to the
+  // PREVIOUS one — its cached playback URL (the frame picker kept playing the old
+  // footage until a page refresh), its finished PNG/preview, its draft and the
+  // picker's remembered scrub time.
+  function resetStandaloneThumbnailState() {
+    releaseStoredObjectUrl('thumbnails');
+    if (_standaloneThumbnailBlobUrl) { try { URL.revokeObjectURL(_standaloneThumbnailBlobUrl); } catch (_) {} }
+    _standaloneThumbnailBlob = null;
+    _standaloneThumbnailBlobUrl = null;
+    const panel = document.getElementById('thumb-tab-preview-panel');
+    if (panel) panel.style.display = 'none';
+    if (_sharedThumbnailEntryPoint === 'standalone') _sharedThumbnailDraft = null;
+    _dlgPickLastTime = null;
+    const pv = document.getElementById('dlg-pick-video');
+    if (pv) { pv.removeAttribute('src'); try { pv.load(); } catch (_) {} }
+  }
+
   function reopenSharedThumbnailComposerFromTab() {
     if (!_thumbFile) {
       alert('Load a video first.');
+      return;
+    }
+    // Never reopen a draft that belongs to a different video than the one loaded.
+    if (!_sharedThumbnailDraft || _sharedThumbnailDraft.source_filename !== _thumbFile.name) {
+      openThumbnailComposerFromTab();
       return;
     }
     _sharedThumbnailEntryPoint = 'standalone';
@@ -6521,6 +6589,7 @@
       frameZoom: reusableDraft?.frame_zoom,
       frameOffsetX: reusableDraft?.frame_offset_x,
       frameOffsetY: reusableDraft?.frame_offset_y,
+      igCaption: reusableDraft?.ig_caption || '',
     });
     applyDraftToDialogState();
     updateSharedComposerDoneLabel();
@@ -6538,7 +6607,9 @@
   document.getElementById('thumb-file').addEventListener('change', function () {
     const file = this.files[0];
     if (!file) return;
+    resetStandaloneThumbnailState();
     _thumbFile = file;
+    this.value = '';   // so choosing the same file again still fires 'change'
     const drop = document.getElementById('thumb-drop');
     drop.classList.add('loaded');
     document.getElementById('thumb-dz-label').textContent = file.name;
@@ -6894,8 +6965,11 @@
     wrap.style.setProperty('--thumb-editor-height', `${cfg.displayHeight}px`);
     wrap.style.width = `${cfg.displayWidth}px`;
     wrap.style.height = `${cfg.displayHeight}px`;
-    canvas.width = cfg.width;
-    canvas.height = cfg.height;
+    // Assigning canvas.width/height CLEARS the canvas even when the value is unchanged,
+    // and many callers (window resize, titles arriving, add frame) never redraw — that
+    // was the "source frame goes blank" bug. Only resize when the size really changes.
+    if (canvas.width !== cfg.width) canvas.width = cfg.width;
+    if (canvas.height !== cfg.height) canvas.height = cfg.height;
   }
 
   // Size the editor canvas responsively to fill the available space (fixes the
@@ -7439,6 +7513,9 @@
       } else if (_it.kind === 'text') {
         if (options.omitText) continue;
         const box = _it.ref;
+        // An empty text box draws NOTHING — not even its background bar — so a
+        // photo-only thumbnail exports clean (used to leave an empty dark bar).
+        if (!String(box?.text || '').trim()) continue;
         const index = (draft.text_boxes || []).indexOf(box);
         const resolved = makeThumbnailTextBox(box?.text || '', {
           ...box,
@@ -8820,24 +8897,7 @@
         grid.appendChild(card);
       });
     }
-    const boxList = document.getElementById('dlg-textbox-list');
-    if (boxList) {
-      const boxes = _sharedThumbnailDraft?.text_boxes || [];
-      const canDelete = boxes.length > 1;
-      boxList.innerHTML = boxes.map((box, index) => (
-        '<button type="button" class="thumb-chip' + (_sharedThumbnailDraft?.selected_text_box_id === box.id ? ' selected' : '') + '" onclick="dlgSelectTextBox(\'' + escHtml(box.id) + '\')">' +
-        escHtml(box.text || ('Text Box ' + (index + 1))) +
-        (canDelete
-          ? '<span class="thumb-chip-x" title="Delete this text box" onclick="dlgRemoveTextBoxById(\'' + escHtml(box.id) + '\', event)">&times;</span>'
-          : '<span class="thumb-chip-x" title="Can\'t remove the last text box" style="opacity:0.3;cursor:not-allowed;pointer-events:none;">&times;</span>') +
-        '</button>'
-      )).join('');
-      const removeBtn = document.getElementById('dlg-textbox-remove-btn');
-      if (removeBtn) {
-        removeBtn.disabled = !canDelete;
-        removeBtn.title = canDelete ? 'Remove the selected text box' : 'Can\'t remove the last text box';
-      }
-    }
+    _refreshTextBoxChips();
     const activeBox = getActiveThumbnailTextBox();
     const titleInput = document.getElementById('dlg-title-input');
     if (titleInput) titleInput.value = activeBox?.text || '';
@@ -9051,6 +9111,10 @@
 
   async function dlgDrawCanvas() {
     const canvas = document.getElementById('dlg-canvas');
+    // Empty-state card over the canvas until there is a frame to show (the editor
+    // used to open as a blank box with no hint of what to do first).
+    const _empty = document.getElementById('dlg-canvas-empty');
+    if (_empty) _empty.style.display = _sharedThumbnailDraft?.available_frames?.length ? 'none' : 'flex';
     if (!canvas || !_sharedThumbnailDraft?.available_frames?.length) return;
     syncDraftFromDialogState();
     await renderThumbnailDraftToCanvas(canvas, _sharedThumbnailDraft, { omitText: true, omitLogo: true, omitElements: true });
@@ -9396,8 +9460,17 @@
   let _dlgUndoStack = [];
   let _dlgLastUndoPush = 0;
   let _dlgLastUndoLabel = '';
+  let _dlgUndoOwner = '';
+  // Which thumbnail the undo history belongs to. Switching to another clip's /
+  // video's / saved draft starts a fresh history — Ctrl+Z used to restore the
+  // PREVIOUS clip's whole draft (frame, text and draft_id) into the new one.
+  function _dlgUndoKey(d) {
+    return d ? [d.draft_id || '', d.source_filename || '', d.clip_start ?? '', d.clip_end ?? ''].join('|') : '';
+  }
   function pushDlgUndo(label) {
     if (!_sharedThumbnailDraft) return;
+    const _key = _dlgUndoKey(_sharedThumbnailDraft);
+    if (_key !== _dlgUndoOwner) { _dlgUndoStack = []; _dlgUndoOwner = _key; _dlgLastUndoLabel = ''; }
     const now = Date.now();
     // Coalesce rapid repeats of the same action (slider drags, typing)
     if (label === _dlgLastUndoLabel && now - _dlgLastUndoPush < 600) return;
@@ -9414,6 +9487,7 @@
     if (!dlg || !dlg.open) return;
     // Let native undo work inside text fields
     if (e.target.matches('input, textarea, [contenteditable], [contenteditable="plaintext-only"]')) return;
+    if (_dlgUndoKey(_sharedThumbnailDraft) !== _dlgUndoOwner) { _dlgUndoStack = []; _dlgUndoOwner = _dlgUndoKey(_sharedThumbnailDraft); }
     if (!_dlgUndoStack.length) return;
     e.preventDefault();
     try {
@@ -9438,7 +9512,11 @@
     if (!dlg || !dlg.open) return;
     if (_dlgEditingTextId) return;
     if (e.target.matches('input, textarea, select, [contenteditable], [contenteditable="plaintext-only"]')) return;
-    const box = getActiveThumbnailTextBox();
+    // Only act on an EXPLICITLY selected text box. getActiveThumbnailTextBox() falls
+    // back to box 1, so with a graphic/logo (or nothing) selected the arrows used to
+    // move text box 1 instead.
+    const _selId = _sharedThumbnailDraft && _sharedThumbnailDraft.selected_text_box_id;
+    const box = _selId ? (_sharedThumbnailDraft.text_boxes || []).find(b => b.id === _selId) : null;
     if (!box) return;
     const step = e.shiftKey ? 10 : 1;
     if (e.key === 'ArrowLeft' || e.key === 'ArrowRight' || e.key === 'ArrowUp' || e.key === 'ArrowDown') {
@@ -9453,8 +9531,7 @@
       dlgDrawCanvas();
     } else if (e.key === 'Delete' || e.key === 'Backspace') {
       if ((_sharedThumbnailDraft?.text_boxes || []).length > 1) {
-        pushDlgUndo('delete');
-        dlgRemoveActiveTextBox();
+        dlgRemoveActiveTextBox();   // records its own undo step
         e.preventDefault();
       }
     }
@@ -9581,6 +9658,11 @@
     t = Math.max(start, Math.min(end || t, t));
     if (scrub) { scrub.min = start; scrub.max = end; scrub.value = t; }
     try { vidEl.currentTime = t; } catch (_) {}
+    // With only metadata loaded the picker stayed black until the slider was dragged.
+    // Re-seek once real frame data arrives so a picture shows immediately.
+    if (vidEl.readyState < 2) {
+      vidEl.addEventListener('loadeddata', function () { try { vidEl.currentTime = t; } catch (_) {} }, { once: true });
+    }
     dlgUpdatePickTimecode();
   }
 
@@ -9970,7 +10052,10 @@
   }
   function dlgUseSavedThumb(i) {
     const it = _savedThumbItems[i]; if (!it || !it.draft) return;
-    _sharedThumbnailDraft = it.draft;
+    _sharedThumbnailDraft = _fullSavedThumbnailDraft(it);
+    // From a clip's save flow, work on a COPY for this clip (new draft_id + this clip's
+    // in/out) so the other clip's saved thumbnail is never overwritten.
+    if (_sharedThumbnailEntryPoint === 'clip') _sharedThumbnailDraft = cloneDraftForCurrentClip(_sharedThumbnailDraft, true);
     // Preserve the entry point: if the composer was opened from a clip's save
     // flow, keep 'clip' so Done returns to the Save Clip (with thumbnail) window
     // instead of just saving a standalone PNG.
@@ -10320,20 +10405,21 @@
     const boxList = document.getElementById('dlg-textbox-list');
     if (!boxList || !_sharedThumbnailDraft) return;
     const boxes = _sharedThumbnailDraft.text_boxes || [];
-    const canDelete = boxes.length > 1;
+    const isLast = boxes.length <= 1;
+    const lastIsEmpty = isLast && !String(boxes[0]?.text || '').trim();
     boxList.innerHTML = boxes.map((box, index) => (
       '<button type="button" class="thumb-chip' + (_sharedThumbnailDraft.selected_text_box_id === box.id ? ' selected' : '') + '" onclick="dlgSelectTextBox(\'' + escHtml(box.id) + '\')">' +
-      escHtml(box.text || ('Text Box ' + (index + 1))) +
-      (canDelete
-        ? '<span class="thumb-chip-x" title="Delete this text box" onclick="dlgRemoveTextBoxById(\'' + escHtml(box.id) + '\', event)">&times;</span>'
-        : '<span class="thumb-chip-x" title="Can\'t remove the last text box" style="opacity:0.3;cursor:not-allowed;pointer-events:none;">&times;</span>') +
+      escHtml(box.text || ('Text Box ' + (index + 1) + ' (empty)')) +
+      (lastIsEmpty ? '' : '<span class="thumb-chip-x" title="' + (isLast ? 'Remove the text (no text on the thumbnail)' : 'Delete this text box') + '" onclick="dlgRemoveTextBoxById(\'' + escHtml(box.id) + '\', event)">&times;</span>') +
       '</button>'
     )).join('');
     const removeBtn = document.getElementById('dlg-textbox-remove-btn');
     if (removeBtn) {
-      removeBtn.disabled = !canDelete;
-      removeBtn.title = canDelete ? 'Remove the selected text box' : 'Can\'t remove the last text box';
+      removeBtn.disabled = lastIsEmpty;
+      removeBtn.title = isLast ? 'Remove the text — the thumbnail will have no text' : 'Remove the selected text box';
     }
+    const noTextHint = document.getElementById('dlg-no-text-hint');
+    if (noTextHint) noTextHint.style.display = boxes.some(b => String(b.text || '').trim()) ? 'none' : '';
   }
   // Lightweight selection: no full editor rebuild (which caused the jank / wrong-box bugs).
   function selectTextBoxData(bid) {
@@ -10384,8 +10470,25 @@
     dlgOpenEditor();
   }
 
+  // The draft always keeps at least one text-box slot (the backend and several code
+  // paths rely on it), so "removing" the LAST box empties it instead. Empty boxes are
+  // never drawn in the export, so this gives a clean no-text thumbnail.
+  function _dlgClearLastTextBox(box) {
+    if (!box) return;
+    pushDlgUndo('remove-text');
+    box.text = '';
+    delete box.runs;
+    _dlgTitle = '';
+    _sharedThumbnailDraft.selected_text_box_id = box.id;
+    applyDraftToDialogState();
+    dlgOpenEditor();
+  }
+
   function dlgRemoveActiveTextBox() {
-    if (!_sharedThumbnailDraft || (_sharedThumbnailDraft.text_boxes || []).length <= 1) return;
+    if (!_sharedThumbnailDraft) return;
+    const _boxes = _sharedThumbnailDraft.text_boxes || [];
+    if (_boxes.length <= 1) { _dlgClearLastTextBox(_boxes[0]); return; }
+    pushDlgUndo('remove-text');
     _sharedThumbnailDraft.text_boxes = _sharedThumbnailDraft.text_boxes.filter(box => box.id !== _sharedThumbnailDraft.selected_text_box_id);
     _sharedThumbnailDraft.selected_text_box_id = _sharedThumbnailDraft.text_boxes[0]?.id || 'text-1';
     applyDraftToDialogState();
@@ -10396,7 +10499,8 @@
     if (ev) { ev.stopPropagation(); ev.preventDefault(); }
     if (!_sharedThumbnailDraft) return;
     const boxes = _sharedThumbnailDraft.text_boxes || [];
-    if (boxes.length <= 1) return;
+    if (boxes.length <= 1) { _dlgClearLastTextBox(boxes.find(function(b){ return b.id === id; }) || boxes[0]); return; }
+    pushDlgUndo('remove-text');
     _sharedThumbnailDraft.text_boxes = boxes.filter(function(b){ return b.id !== id; });
     if (_sharedThumbnailDraft.selected_text_box_id === id) _sharedThumbnailDraft.selected_text_box_id = _sharedThumbnailDraft.text_boxes[0] ? _sharedThumbnailDraft.text_boxes[0].id : null;
     applyDraftToDialogState();
@@ -10736,10 +10840,17 @@
         div.style.color      = box.color || '#ffffff';
         div.style.textAlign  = box.align || 'center';
         div.style.textShadow = (box.shadow ?? true) ? '2px 2px 8px rgba(0,0,0,0.8)' : 'none';
-        const alpha = (box.background_opacity ?? 0) / 100;
+        // Empty box = not exported: show only a faint dashed placeholder, no background.
+        const _isEmptyBox = !String(box.text || '').trim();
+        const alpha = _isEmptyBox ? 0 : (box.background_opacity ?? 0) / 100;
         const bg = hexToRgb(box.background_color || '#111111');
         div.style.background = alpha > 0 ? ('rgba(' + bg.r + ',' + bg.g + ',' + bg.b + ',' + alpha + ')') : 'transparent';
         div.style.borderRadius = (alpha > 0 && box.bg_pill) ? '999px' : (alpha > 0 ? '10px' : '0');
+        if (_isEmptyBox) {
+          div.title = 'Empty text box — it won’t appear in the thumbnail. Double-click to type.';
+          div.style.opacity = '0.45';
+          if (!isSelected) div.style.outline = '1px dashed rgba(255,255,255,0.6)';
+        }
         if (isSelected) _addResizeHandles(div, ALL_HANDLES);
         layer.appendChild(div);
 
@@ -10817,6 +10928,7 @@
     const box = (_sharedThumbnailDraft?.text_boxes || []).find(function(b) { return b.id === bid; });
     if (!textEl || !box) return;
     _dlgEditingTextId = bid;
+    textEl.style.opacity = ''; textEl.style.outline = '';   // un-dim an empty placeholder while typing
     textEl.contentEditable = 'true';
     textEl.classList.add('editing');
     textEl.style.userSelect = 'text';
@@ -10832,7 +10944,9 @@
     sel.addRange(range);
     function onInput() {
       box.text = (textEl.innerText || '').replace(/\r/g, '').replace(/\n+$/, '');
-      _dlgTitle = box.text;
+      // Only mirror into the editor vars if this box is still the selected one —
+      // otherwise syncDraftFromDialogState() would copy it onto another box.
+      if (_sharedThumbnailDraft && _sharedThumbnailDraft.selected_text_box_id === box.id) _dlgTitle = box.text;
       dlgDrawCanvas();
     }
     function onBlur() {
@@ -10848,6 +10962,7 @@
       if (_sharedThumbnailDraft && _sharedThumbnailDraft.selected_text_box_id === box.id) _dlgTitle = box.text;
       dlgDrawCanvas();
       renderDialogOverlayLayer();
+      _refreshTextBoxChips();   // chip label / "(empty)" / remove-x reflect the new text
     }
     textEl.addEventListener('input', onInput);
     textEl.addEventListener('blur', onBlur);
@@ -10900,6 +11015,15 @@
     document.addEventListener('mousedown', function (e) {
       // Don't interfere with inline text editing
       if (_dlgEditingTextId && e.target.closest('.dlg-overlay-text[data-box-id="' + _dlgEditingTextId + '"]')) return;
+      // Clicking anything else on the canvas while typing: finish that edit FIRST.
+      // (preventDefault below keeps focus in the old box, so keystrokes kept going into
+      // it and then got copied onto the newly clicked box — the "duplication" bug.)
+      if (_dlgEditingTextId && e.target.closest('#dlg-canvas-wrap')) {
+        const _editingEl = document.querySelector('.dlg-overlay-text.editing');
+        // Fire the edit's blur handler directly (a real blur() is a no-op if the
+        // element somehow lost focus already), then drop focus for real.
+        if (_editingEl) { _editingEl.dispatchEvent(new FocusEvent('blur')); _editingEl.blur(); }
+      }
 
       const handleEl = e.target.closest('.dlg-resize-handle');
       const textEl   = e.target.closest('.dlg-overlay-text');
@@ -11147,7 +11271,17 @@
     try { await document.fonts.ready; } catch (_) {}
     await renderThumbnailDraftToCanvas(canvas, _sharedThumbnailDraft);
     canvas.toBlob(blob => {
-      saveCurrentThumbnailDraft(false);
+      const _savePromise = saveCurrentThumbnailDraft(false);
+      if (_sharedThumbnailEntryPoint === 'standalone') {
+        // Say so plainly if the draft didn't reach the project (the PNG is still downloadable).
+        _savePromise.then(ok => {
+          if (ok) return;
+          renderStandaloneThumbnailPreview(
+            '<strong>' + escHtml(_sharedThumbnailDraft?.source_filename || _thumbFile?.name || 'Thumbnail') + '</strong><br>' +
+            '<span style="color:#B45309;">⚠ Not saved to the project (is the local server running?). Use Download PNG to keep this version.</span>'
+          );
+        });
+      }
       if (_sharedThumbnailEntryPoint === 'clip') {
         if (thumbnailBlobUrl) URL.revokeObjectURL(thumbnailBlobUrl);
         thumbnailBlob = blob;
@@ -11177,6 +11311,9 @@
       alert('Load a video first.');
       return;
     }
+    // A new Save Clip is starting: nothing is saved yet for THIS clip, so a thumbnail
+    // finished from here must come back to this window, not attach to an older clip.
+    _savedClipExport = null;
     // Reset the save-feedback banner + buttons from any prior save attempt (#8).
     const _efS = document.getElementById('export-flow-saving');
     if (_efS) { _efS.style.display = 'none'; _efS.className = 'ef-saving'; _efS.innerHTML = ''; }
@@ -12531,6 +12668,14 @@
             <canvas id="dlg-canvas" width="1280" height="720"></canvas>
             <div id="dlg-overlay-layer"></div>
             <div id="dlg-grid-safe" class="dlg-grid-safe"><span class="dlg-grid-safe-label">Instagram grid (3:4)</span></div>
+            <div id="dlg-canvas-empty" style="display:none;position:absolute;inset:0;z-index:1000;flex-direction:column;align-items:center;justify-content:center;gap:12px;padding:20px;text-align:center;background:#1e2530;color:#fafaf2;border-radius:inherit;">
+              <strong style="font-size:15px;">Start with a picture</strong>
+              <span style="font-size:12.5px;opacity:0.8;max-width:240px;line-height:1.5;">Pick a frame from the video, or upload your own image.</span>
+              <div style="display:flex;gap:8px;flex-wrap:wrap;justify-content:center;">
+                <button class="btn btn-sm" type="button" onclick="dlgOpenFramePicker()">Pick a frame</button>
+                <button class="btn-ghost btn-sm" type="button" style="color:#fafaf2;border-color:rgba(250,250,242,0.4);" onclick="document.getElementById('dlg-upload-image').click()">Upload image&hellip;</button>
+              </div>
+            </div>
           </div>
           <p style="font-size:12px;color:var(--muted);margin-top:8px;text-align:center;">Drag text or the logo directly on the thumbnail to reposition them.</p>
         </div>
@@ -12651,6 +12796,7 @@
               </div>
             </div>
             <div id="dlg-textbox-list" class="thumb-chip-row" style="margin-top:10px;"></div>
+            <div id="dlg-no-text-hint" style="display:none;font-size:12px;color:var(--text-2);margin-top:8px;">No text &mdash; this thumbnail will be just the picture (plus any logo or graphics). Add Text Box or double-click the empty box to add some.</div>
             <div class="thumb-editor-label" style="margin-top:14px;color:var(--muted);font-weight:400;">Pick a box with the chips below, then &ldquo;Edit text&rdquo; (or double-click it on the thumbnail). The chips and &ldquo;Edit text&rdquo; always target the selected box, even when boxes overlap. Arrow keys nudge, Delete removes.</div>
             <div class="thumb-editor-grid" style="margin-top:14px;">
               <div>
@@ -12789,10 +12935,10 @@
       <div style="display:flex;justify-content:space-between;gap:12px;align-items:flex-start;flex-wrap:wrap;">
         <div>
           <div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:0.07em;color:var(--orange);margin-bottom:4px;">Create or Edit Thumbnail</div>
-          <div id="export-thumb-create-meta" style="font-size:13px;color:var(--text-2);line-height:1.6;">Open the shared composer with this clip preloaded.</div>
+          <div id="export-thumb-create-meta" style="font-size:13px;color:var(--text-2);line-height:1.6;">Design a thumbnail for this clip.</div>
         </div>
         <div style="display:flex;gap:8px;flex-wrap:wrap;">
-          <button type="button" class="btn btn-sm" onclick="openThumbnailComposerForExport()">Open Shared Composer</button>
+          <button type="button" class="btn btn-sm" onclick="openThumbnailComposerForExport()">Create Thumbnail</button>
           <button type="button" class="btn-ghost btn-sm" onclick="saveCurrentThumbnailDraft(true)">Save Draft</button>
         </div>
       </div>
@@ -12914,7 +13060,7 @@
       <span style="font-size:11.5px;color:var(--muted);">Scrub or step frame-by-frame. &ldquo;+ Add frame&rdquo; to stockpile several; &ldquo;Use&rdquo; to finish. Reopens where you left off.</span>
     </div>
     <div style="padding:16px 18px;overflow:auto;">
-      <video id="dlg-pick-video" style="width:100%;border-radius:8px;background:#000;max-height:72vh;display:block;margin:0 auto;" muted playsinline preload="metadata"></video>
+      <video id="dlg-pick-video" style="width:100%;border-radius:8px;background:#000;max-height:min(72vh, calc(95vh - 260px));display:block;margin:0 auto;" muted playsinline preload="auto"></video>
       <div style="margin-top:12px;">
         <input type="range" id="dlg-pick-scrub" min="0" max="100" value="0" step="0.05" style="width:100%;accent-color:var(--orange);" oninput="dlgPickVideoScrub(this.value)">
       </div>

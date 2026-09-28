@@ -2912,3 +2912,79 @@ non–Photo-Motion had landed after `964ae6e`), every other route and behavior d
 projects (`source_kind: photo_motion`) now render as generic entries in Recent Projects and can
 be deleted from the sidebar — the code no longer recognizes them.
 Regression risk: Low — pure revert to a known-good state; no partial edits.
+
+## 2026-09-28 — Thumbnail review, Round 1: standalone-thumbnail bugs + data-safety fixes (frontend-only)
+No backend contract change → no build bump (`EXPECTED_BACKEND_BUILD` stays `2026-07-01-editor3`).
+All changes are in `index.html`; `server.py` is untouched.
+
+### Standalone Thumbnails tab (no clip required)
+- **Wording.** "Open Shared Composer" → **Create Thumbnail** (tab + Save Clip window);
+  "Re-open Composer" → **Re-open Editor**. Hero/drop-zone copy no longer promises
+  "AI picks the best speaker frame / 8 AI titles" (manual frame picking since June 10;
+  AI titles need a clip range + transcript, which the standalone tab doesn't have).
+- **New video needed a page refresh.** `releaseStoredObjectUrl('thumbnails')` was never called,
+  so `getPlayableVideoUrl('thumbnails')` kept returning the FIRST video's blob URL and the frame
+  picker played the old footage. New `resetStandaloneThumbnailState()` runs on every
+  `#thumb-file` change and in `hydrateThumbnailProjectSource()` when the source differs: it
+  releases the URL, clears `_standaloneThumbnailBlob(Url)` + hides the preview panel, drops a
+  standalone `_sharedThumbnailDraft`, resets `_dlgPickLastTime`, and unloads `#dlg-pick-video`.
+  The file input's value is cleared after reading so re-choosing the same file still fires.
+  `reopenSharedThumbnailComposerFromTab()` falls through to `openThumbnailComposerFromTab()` when
+  the draft's `source_filename` doesn't match `_thumbFile.name` (never reopen another video's draft).
+- **Editor opened blank.** `#dlg-canvas-empty` ("Start with a picture" + Pick a frame / Upload
+  image) overlays the canvas whenever the draft has no frames; `dlgDrawCanvas()` toggles it.
+- **Source frame vanished** after window resize / titles arriving / Redo Titles / Add frame:
+  `applyEditorCanvasLayout()` assigned `canvas.width/height` unconditionally, which clears the
+  canvas, and those callers never redraw. It now assigns only when the size actually changes.
+- **Frame picker black until scrubbed / needed scrolling.** `#dlg-pick-video` is
+  `preload="auto"`; `_dlgApplyPickBounds()` re-seeks once on `loadeddata` if data wasn't ready.
+  Its max-height is `min(72vh, calc(95vh - 260px))` so the scrubber, buttons and captured-frame
+  strip stay on screen on a laptop.
+
+### No-text thumbnails
+- **An empty text box draws nothing** in `renderThumbnailDraftToCanvas()` (export, gallery
+  previews, Save Clip PNG) — previously its 70% background bar was still drawn.
+- In the editor overlay an empty box is a faint dashed placeholder (no background), labelled
+  "Text Box N (empty)" in the chips; `#dlg-no-text-hint` explains the thumbnail will be picture-only.
+- The draft still always keeps ≥1 text-box slot (backend `normalize_thumbnail_draft` and several
+  frontend paths rely on it), so **Remove / chip × on the LAST box empties it**
+  (`_dlgClearLastTextBox`) instead of being disabled. `_refreshTextBoxChips()` is now the single
+  chip renderer (`dlgBuildHeroState()` calls it; inline-edit blur refreshes it).
+
+### Data-safety fixes
+- **Thumbnail attached to the wrong clip.** `_savedClipExport` was set on save and never cleared,
+  so "Done — Use This Thumbnail" on the NEXT clip went to `attachThumbnailBlobToSavedClip()` with
+  the previous clip's filename/folder/Airtable id. Now cleared in `restoreSavedClipEdits()` (clip
+  switch) and `openExportFormDialog()` (a new save starts).
+- **Undo crossed drafts.** `_dlgUndoStack` is owned by `_dlgUndoKey(draft)` (draft_id + source +
+  clip in/out); pushing or undoing under a different key starts a fresh history.
+- **Restored draft lost graphics/crop/brightness.** `restoreProjectThumbnailDraft()` now passes
+  `graphic_elements`, `brightness`, `frame_zoom`, `frame_offset_x/y`, `ig_caption` (it keeps the
+  same `draft_id`, so anything dropped was wiped on the next save). `openThumbnailComposerFromTab()`
+  also carries `ig_caption`.
+- **Gallery / "Saved thumbnails" edits dropped frames.** `/thumbnails/list` slims drafts to one
+  frame; `_fullSavedThumbnailDraft(item)` uses the full draft from `activeProject.thumbnail_drafts`
+  when available and always deep-copies. `dlgUseSavedThumb()` from a clip's save flow edits a
+  COPY (`cloneDraftForCurrentClip(…, true)`) instead of overwriting the other clip's draft.
+- **Gallery opened into the wrong project.** `openThumbnailFromGallery()` switches to the
+  thumbnail's project even when its video is missing (`source_available:false`), and refuses to
+  open (with a message) if the switch failed, instead of saving into whatever project was open.
+- **Typing went into the wrong text box.** The overlay mousedown handler now ends an in-progress
+  inline edit before handling a click elsewhere on the canvas, and the edit's `input` handler
+  only mirrors into `_dlgTitle` while its box is still selected.
+- **Arrow keys moved text box 1** when a graphic/logo/nothing was selected: they now act only on
+  an explicitly selected text box.
+- **"Saved" when it wasn't.** `saveCurrentThumbnailDraft()` returns true/false from the real
+  `updateProject()` result and says why when it fails; the standalone Done path shows a
+  "Not saved to the project" warning in the preview panel.
+
+### App-wide
+- **Pop-ups were pinned top-left.** The global `* { margin: 0 }` reset overrode the browser's
+  `margin: auto` centring of modal `<dialog>`s. `dialog { margin: auto; }` restores it; the
+  thumbnail window's drag-resize still anchors its top-left (it sets inline margin/left/top).
+
+Known, not yet fixed (Round 2+): shape opacity ignored in export; gallery re-render race /
+slow sequential previews; failed brand-image loads cached forever; Save-Clip "Edit original" of a
+draft from ANOTHER project (slim, cross-filed); dead pre-June old in-tab editor code.
+Regression risk: Low–medium — surgical, frontend-only; verified in a browser against the live
+local backend (saves stubbed out).
