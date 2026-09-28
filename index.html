@@ -706,6 +706,30 @@
     .dz-label { font-size: 15px; font-weight: 600; color: var(--text); margin-bottom: 4px; }
     .dz-sub   { font-size: 12.5px; color: var(--muted); line-height: 1.5; }
 
+    /* Thumbnails tab start screen: three ways in (video / image / saved). */
+    .thumb-start-grid { display: grid; grid-template-columns: 1.4fr 1fr 1fr; gap: 16px; margin-bottom: 20px; align-items: stretch; }
+    @media (max-width: 1000px) { .thumb-start-grid { grid-template-columns: 1fr; } }
+    .thumb-start-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--r-lg); padding: 18px 20px; display: flex; flex-direction: column; gap: 10px; box-shadow: var(--shadow-sm); min-width: 0; }
+    .thumb-start-card h3 { font-size: 15px; font-weight: 700; color: var(--text); }
+    .thumb-start-card p  { font-size: 12.5px; color: var(--text-2); line-height: 1.55; }
+    .thumb-start-step { font-size: 10.5px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--orange); }
+    .thumb-start-card .drop-zone { padding: 22px 16px; }
+    .thumb-start-card > .btn, .thumb-start-card > .btn-ghost { align-self: flex-start; }
+    .thumb-recent-label { font-size: 11px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); margin-bottom: 6px; }
+    .thumb-recent-list { display: flex; flex-direction: column; gap: 6px; max-height: 200px; overflow-y: auto; }
+    .thumb-recent-item { flex-shrink: 0; text-align: left; background: var(--bg); border: 1px solid var(--border); border-radius: 8px; padding: 8px 10px; font: inherit; font-size: 12.5px; color: var(--text); cursor: pointer; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .thumb-recent-item:hover { border-color: var(--orange); }
+
+    /* Toast notices (replace blocking alert() pop-ups). The host is a manual popover so
+       it renders in the top layer, above open modal dialogs. */
+    #app-toast-host { inset: auto 20px 20px auto; margin: 0; padding: 0; border: none; background: transparent; overflow: visible; max-width: min(420px, calc(100vw - 40px)); }
+    #app-toast-host:popover-open { display: flex; flex-direction: column; gap: 8px; align-items: flex-end; }
+    .app-toast { background: #1e2530; color: #fafaf2; font-size: 13px; line-height: 1.5; padding: 11px 16px; border-radius: 10px; box-shadow: 0 8px 28px rgba(0,0,0,0.22); transition: opacity 220ms, transform 220ms; }
+    .app-toast.success { background: #2D6A4F; }
+    .app-toast.warn    { background: #8a4b08; }
+    .app-toast.error   { background: #a1261b; }
+    .app-toast.leaving { opacity: 0; transform: translateY(6px); }
+
     /* ─── CLIPS TAB — 3-STAGE FLOW ─── */
 
     /* Stage 1 load row */
@@ -2822,25 +2846,52 @@
 
         <!-- STATE 1: Upload -->
         <div id="thumb-state-upload">
-          <div class="drop-zone fade-up" id="thumb-drop" style="margin-bottom:20px;"
-               onclick="document.getElementById('thumb-file').click()">
-            <div class="dz-icon">🖼</div>
-            <div class="dz-label" id="thumb-dz-label">Drop an MP4 or MOV here to get started</div>
-            <div class="dz-sub">Pick your frame from the video &bull; optional text, logos &amp; graphics &bull; drag to arrange</div>
-            <input type="file" id="thumb-file"
-                   accept=".mp4,.MP4,.mov,.MOV,video/mp4,video/quicktime" />
+          <div class="thumb-start-grid fade-up">
+
+            <div class="thumb-start-card">
+              <div class="thumb-start-step">Option 1</div>
+              <h3>From a video</h3>
+              <p>Choose a video, then pick the exact frame you want. No clip needed.</p>
+              <div class="drop-zone" id="thumb-drop"
+                   onclick="document.getElementById('thumb-file').click()">
+                <div class="dz-label" id="thumb-dz-label">Drop an MP4 or MOV here</div>
+                <div class="dz-sub">or click to choose a file</div>
+                <input type="file" id="thumb-file"
+                       accept=".mp4,.MP4,.mov,.MOV,video/mp4,video/quicktime" />
+              </div>
+              <div id="thumb-recent-wrap" style="display:none;">
+                <div class="thumb-recent-label">Or pick a recent video</div>
+                <div id="thumb-recent-list" class="thumb-recent-list"></div>
+              </div>
+              <button class="btn btn-sm" id="btn-generate-thumb"
+                      onclick="openThumbnailComposerFromTab()" disabled>
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                     stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                  <rect x="3" y="3" width="18" height="18" rx="2"/>
+                  <circle cx="8.5" cy="8.5" r="1.5"/>
+                  <path d="M21 15l-5-5L5 21"/>
+                </svg>
+                Open editor for this video
+              </button>
+            </div>
+
+            <div class="thumb-start-card">
+              <div class="thumb-start-step">Option 2</div>
+              <h3>From an image</h3>
+              <p>Start from a photo or graphic you already have. No video needed. These are saved together under &ldquo;Made from images.&rdquo;</p>
+              <button class="btn btn-sm" type="button" onclick="document.getElementById('thumb-image-file').click()">Upload an image&hellip;</button>
+              <input type="file" id="thumb-image-file" accept="image/png,image/jpeg,image/webp" style="display:none;" onchange="openThumbnailFromImageInput(this)">
+            </div>
+
+            <div class="thumb-start-card">
+              <div class="thumb-start-step">Option 3</div>
+              <h3>Edit a saved thumbnail</h3>
+              <p>Reopen any thumbnail you&rsquo;ve saved, from any video, to keep editing or download it again.</p>
+              <p id="thumb-saved-count" style="color:var(--muted);"></p>
+              <button class="btn-ghost btn-sm" type="button" onclick="scrollToThumbGallery()">See saved thumbnails &darr;</button>
+            </div>
+
           </div>
-          <button class="btn fade-up-1" id="btn-generate-thumb"
-                  onclick="openThumbnailComposerFromTab()" disabled>
-            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                 stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
-              <rect x="3" y="3" width="18" height="18" rx="2"/>
-              <circle cx="8.5" cy="8.5" r="1.5"/>
-              <path d="M21 15l-5-5L5 21"/>
-            </svg>
-            Create Thumbnail
-          </button>
-          <p style="margin-top:10px;font-size:12px;color:var(--muted);line-height:1.6;">Choose a video above, then click Create Thumbnail. No clip needed.</p>
         </div>
 
         <!-- STATE 2: Processing -->
@@ -3030,7 +3081,7 @@
           <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-bottom:14px;">
             <div>
               <h3 style="margin-bottom:4px;">Saved Thumbnails</h3>
-              <p style="font-size:12.5px;color:var(--text-2);margin:0;max-width:560px;">Every thumbnail you&rsquo;ve saved, newest first &mdash; from any video. Click one to re-open it in the composer, or download the PNG.</p>
+              <p style="font-size:12.5px;color:var(--text-2);margin:0;max-width:560px;">Every thumbnail you&rsquo;ve saved, newest first &mdash; from any video or image. Click one to reopen it in the editor, or download the PNG.</p>
             </div>
             <button class="btn-ghost btn-sm" type="button" onclick="loadThumbnailGallery()">Refresh</button>
           </div>
@@ -3109,7 +3160,7 @@
     document.querySelectorAll('.tab-panel').forEach(panel => {
       panel.classList.toggle('active', panel.id === 'tab-' + target);
     });
-    if (target === 'thumbnails') loadThumbnailGallery();
+    if (target === 'thumbnails') { loadThumbnailGallery(); renderThumbRecentVideos(); }
   }
 
   document.querySelectorAll('.tab-btn').forEach(btn => {
@@ -3703,7 +3754,7 @@
         return {
           tone: 'warn',
           title: 'Saved project found',
-          body: 'We found your saved thumbnail draft. Click Create Thumbnail to keep editing it.',
+          body: 'We found your saved thumbnail draft. Open it from Saved Thumbnails below to keep editing.',
         };
       }
       return {
@@ -3885,6 +3936,7 @@
 
   function renderRecentProjects() {
     const list = document.getElementById('sidebar-recent-projects');
+    renderThumbRecentVideos();   // Thumbnails-tab "Or pick a recent video" list
     if (!list) return;
 
     if (!recentProjects.length) {
@@ -3893,7 +3945,9 @@
     }
 
     const groups = { today: [], week: [], earlier: [] };
-    recentProjects.forEach(project => {
+    // The hidden "Made from images" project holds image-based thumbnails; it has no video,
+    // so it doesn't belong in the video project list.
+    recentProjects.filter(project => !isImageThumbProject(project)).forEach(project => {
       const stamp = new Date(project?.last_modified || project?.updated_at || project?.last_opened_at || 0);
       if (!Number.isNaN(stamp.getTime())) {
         const now = new Date();
@@ -4058,6 +4112,10 @@
       source_path: sourcePath,
       playback_url: projectResponse?.source_stream_url || '',
     };
+    // Transcript for AI title ideas: the saved project already has it; otherwise look it up.
+    const _tw = projectResponse?.transcript_words;
+    if (Array.isArray(_tw) && _tw.length) _thumbWordsData = _tw;
+    else if (!_thumbWordsData) loadThumbTranscriptWords(filename);
     const drop = document.getElementById('thumb-drop');
     drop.classList.add('loaded');
     document.getElementById('thumb-dz-label').textContent = filename;
@@ -6254,7 +6312,7 @@
   async function saveCurrentThumbnailDraft(showFeedback = false) {
     if (!_sharedThumbnailDraft) return false;
     if (!activeProject) {
-      if (showFeedback) alert('Not saved: this video’s project isn’t open yet. Make sure the local server is running, wait a moment, then try again.');
+      if (showFeedback) showToast('Not saved: this video’s project isn’t open yet. Make sure the local server is running, wait a moment, then try again.', 'warn');
       return false;
     }
     syncDraftFromDialogState();
@@ -6264,7 +6322,7 @@
     };
     const _saved = await updateProject('thumbnail_draft_saved', payload);
     if (!_saved) {
-      if (showFeedback) alert('Not saved: could not reach the local server. Your thumbnail is still open — try again once the server is running.');
+      if (showFeedback) showToast('Not saved: could not reach the local server. Your thumbnail is still open — try again once the server is running.', 'error');
       return false;
     }
     if (_sharedThumbnailEntryPoint === 'standalone') {
@@ -6272,7 +6330,7 @@
       // The Saved Thumbnails gallery caches its rendered previews; reload it so the edit shows.
       if (document.getElementById('thumb-gallery-grid')) { try { loadThumbnailGallery(); } catch (_) {} }
     }
-    if (showFeedback) alert('Thumbnail draft saved to the local project.');
+    if (showFeedback) showToast('Draft saved. It’s in Saved Thumbnails.', 'success');
     return true;
   }
 
@@ -6281,7 +6339,7 @@
     if (!btn) return;
     btn.innerHTML = _sharedThumbnailEntryPoint === 'clip'
       ? '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>Done &mdash; Use This Thumbnail'
-      : '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>Done &mdash; Save Thumbnail';
+      : '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>Done &mdash; Save &amp; Download';
   }
 
   function renderStandaloneThumbnailPreview(metaText) {
@@ -6306,12 +6364,12 @@
 
   function downloadStandaloneThumbnail() {
     if (!_standaloneThumbnailBlob) {
-      alert('Click Re-open Editor, then Done, to rebuild this thumbnail PNG first.');
+      showToast('Click Re-open Editor, then Done, to rebuild this thumbnail PNG first.', 'info');
       return;
     }
     const url = URL.createObjectURL(_standaloneThumbnailBlob);
     const a = document.createElement('a');
-    const stem = _thumbFile ? _thumbFile.name.replace(/\.(mp4|mov)$/i, '') : 'thumbnail';
+    const stem = _thumbFile ? _thumbFile.name.replace(/\.(mp4|mov|m4v|webm|png|jpe?g|webp)$/i, '') : 'thumbnail';
     a.href = url;
     a.download = stem + ' - Thumbnail.png';
     a.click();
@@ -6361,28 +6419,40 @@
   }
 
   function _galleryGroupKey(item) {
+    if (_isImageThumbItem(item)) return IMAGE_THUMBS_SOURCE;
     return _galleryStripExt(item.source_filename || item.project_name || 'Other');
   }
+  let _thumbGalleryGen = 0;
   async function loadThumbnailGallery() {
     const grid = document.getElementById('thumb-gallery-grid');
     const status = document.getElementById('thumb-gallery-status');
     if (!grid) return;
+    // Generation token: a second call (tab switch + save + Refresh) while one is still
+    // rendering used to append duplicate cards with mixed-up indices. Stale runs bail.
+    const gen = ++_thumbGalleryGen;
     if (status) { status.style.display = 'block'; status.textContent = 'Loading saved thumbnails\u2026'; }
     grid.innerHTML = '';
+    let items;
     try {
       const res = await fetch(BACKEND + '/thumbnails/list');
       const data = await res.json();
-      _thumbGalleryItems = (data.thumbnails || []).filter(function(it) { return it.has_frame; });
+      items = (data.thumbnails || []).filter(function(it) { return it.has_frame; });
     } catch (err) {
-      if (status) { status.style.display = 'block'; status.textContent = 'Could not load saved thumbnails. Is the backend running?'; }
+      if (gen !== _thumbGalleryGen) return;
+      if (status) { status.style.display = 'block'; status.textContent = 'Could not load saved thumbnails. Is the local server running?'; }
       return;
     }
+    if (gen !== _thumbGalleryGen) return;
+    _thumbGalleryItems = items;
+    const countEl = document.getElementById('thumb-saved-count');
+    if (countEl) countEl.textContent = items.length ? (items.length + ' saved thumbnail' + (items.length === 1 ? '' : 's') + '.') : 'None saved yet.';
     if (!_thumbGalleryItems.length) {
-      if (status) { status.style.display = 'block'; status.textContent = 'No saved thumbnails yet. Build one in the composer and click \u201cSave Draft\u201d \u2014 it will show up here.'; }
+      if (status) { status.style.display = 'block'; status.textContent = 'No saved thumbnails yet. Make one above and click \u201cDone \u2014 Save & Download\u201d (or Save Draft) \u2014 it will show up here.'; }
       return;
     }
     if (status) status.style.display = 'none';
     try { await document.fonts.ready; } catch (_) {}
+    if (gen !== _thumbGalleryGen) return;
 
     // Group by project, preserving the newest-first order the backend returned.
     const groups = [];
@@ -6416,6 +6486,7 @@
         img.alt = item.source_filename || 'Saved thumbnail';
         img.style.cssText = 'width:100%;height:100%;object-fit:contain;display:block;';
         img.src = await _renderGalleryPreview(item.draft);
+        if (gen !== _thumbGalleryGen) return;   // a newer gallery load took over
         imgWrap.appendChild(img);
         const body = document.createElement('div');
         body.style.cssText = 'padding:10px 12px;display:flex;flex-direction:column;gap:8px;';
@@ -6457,11 +6528,12 @@
         body: JSON.stringify({ project_id: item.project_id, draft_id: item.draft_id })
       });
       const data = await res.json().catch(function(){ return {}; });
-      if (!res.ok || !data.success) { alert('Could not delete that thumbnail' + (data.error ? ': ' + data.error : '.')); return; }
+      if (!res.ok || !data.success) { showToast('Could not delete that thumbnail' + (data.error ? ': ' + data.error : '.'), 'error'); return; }
     } catch (err) {
-      alert('Could not reach the backend to delete that thumbnail.');
+      showToast('Could not reach the local server to delete that thumbnail.', 'error');
       return;
     }
+    showToast('Thumbnail deleted.', 'success', 2500);
     loadThumbnailGallery();
   }
 
@@ -6492,9 +6564,14 @@
         setActiveProject({ ...(_r.summary || {}), ..._r.project }, { refreshRecent: false });
       }
       if (!activeProject || activeProject.id !== item.project_id) {
-        alert('Could not open the project this thumbnail belongs to (is the local server running?). You can still use Download on its card.');
+        showToast('Could not open the project this thumbnail belongs to (is the local server running?). You can still use Download on its card.', 'error');
         return;
       }
+    }
+    if (_isImageThumbItem(item)) {
+      // Image-based thumbnail: there is no video behind it.
+      resetStandaloneThumbnailState();
+      _thumbFile = { name: item.draft.source_filename || item.source_filename || 'image', source_path: '', playback_url: '', image_only: true };
     }
     _sharedThumbnailDraft = _fullSavedThumbnailDraft(item);
     _sharedThumbnailEntryPoint = 'standalone';
@@ -6540,17 +6617,221 @@
     if (panel) panel.style.display = 'none';
     if (_sharedThumbnailEntryPoint === 'standalone') _sharedThumbnailDraft = null;
     _dlgPickLastTime = null;
+    _thumbWordsData = null;
     const pv = document.getElementById('dlg-pick-video');
     if (pv) { pv.removeAttribute('src'); try { pv.load(); } catch (_) {} }
   }
 
+  // ── Toast notices: short, non-blocking messages instead of alert() pop-ups. ──
+  function showToast(message, tone = 'info', ms) {
+    const host = document.getElementById('app-toast-host');
+    if (!host) { try { console.log('[toast]', message); } catch (_) {} return; }
+    const t = document.createElement('div');
+    t.className = 'app-toast ' + tone;
+    t.setAttribute('role', tone === 'error' ? 'alert' : 'status');
+    t.textContent = message;
+    host.appendChild(t);
+    // Re-show so the host is the TOPMOST top-layer item (above any open modal).
+    try { if (host.matches(':popover-open')) host.hidePopover(); host.showPopover(); } catch (_) {}
+    const life = ms || (tone === 'error' || tone === 'warn' ? 7000 : 4000);
+    setTimeout(() => {
+      t.classList.add('leaving');
+      setTimeout(() => {
+        t.remove();
+        if (!host.children.length) { try { host.hidePopover(); } catch (_) {} }
+      }, 250);
+    }, life);
+  }
+  // A modal opened AFTER a notice would cover it (newest top-layer item wins), so lift
+  // any visible notices back above every newly opened modal.
+  (function () {
+    const _origShowModal = HTMLDialogElement.prototype.showModal;
+    HTMLDialogElement.prototype.showModal = function () {
+      const r = _origShowModal.apply(this, arguments);
+      const host = document.getElementById('app-toast-host');
+      if (host && host.children.length) { try { host.hidePopover(); host.showPopover(); } catch (_) {} }
+      return r;
+    };
+  })();
+
+  // ── Standalone transcript (for AI title ideas without a clip) ──
+  let _thumbWordsData = null;
+  async function loadThumbTranscriptWords(filename) {
+    if (!backendOnline || !filename) return;
+    try {
+      const res = await fetch(BACKEND + '/find_json', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ filename }),
+      });
+      const data = await res.json();
+      if (!data.json_found || _thumbFile?.name !== filename) return;
+      const words = extractWords(data.json_content);
+      if (!words || !words.length) return;
+      _thumbWordsData = words;
+      _dlgMaybeFetchStandaloneTitles();
+    } catch (_) {}
+  }
+  // If the editor is already open on this video with no title ideas yet, fetch them now.
+  function _dlgMaybeFetchStandaloneTitles() {
+    const dlg = document.getElementById('dialog-thumb');
+    if (!dlg || !dlg.open || _sharedThumbnailEntryPoint !== 'standalone') return;
+    if (_thumbTitles && _thumbTitles.length) return;
+    dlgRedoTitles();
+  }
+  // Titles for the Thumbnails tab: the draft's clip range if it has one, otherwise an
+  // even sample of the WHOLE video's transcript. (No Instagram caption here — that
+  // belongs to a clip.)
+  async function fetchStandaloneTitles(startT, endT) {
+    const words = _thumbWordsData;
+    if (!backendOnline || !words || !words.length) return { titles: [], caption: '' };
+    const sample = (txt, max) => {
+      if (txt.length <= max) return txt;
+      const n = 6, part = Math.floor(max / n) - 5, out = [];
+      for (let i = 0; i < n; i++) {
+        const at = Math.floor((txt.length - part) * i / (n - 1));
+        out.push(txt.slice(at, at + part));
+      }
+      return out.join(' … ');
+    };
+    const all = words.map(w => w.word).join(' ').replace(/\s+/g, ' ').trim();
+    const inRange = (startT != null && endT != null && startT < endT)
+      ? words.filter(w => (w.start ?? 0) < endT && (w.end ?? w.start ?? 0) >= startT)
+      : [];
+    const clip_transcript = inRange.length
+      ? inRange.map(w => w.word).join(' ').trim().slice(0, 3000)
+      : sample(all, 3000);
+    if (!clip_transcript) return { titles: [], caption: '' };
+    try {
+      const res = await fetch(BACKEND + '/thumbnail_titles', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ clip_transcript, broader_transcript: sample(all, 9000) }),
+      });
+      const data = await res.json();
+      return { titles: data.titles || [], caption: '' };
+    } catch (_) { return { titles: [], caption: '' }; }
+  }
+
+  // ── Thumbnails from an image (no video) ──
+  // All image-based thumbnails live in ONE project so they save to the gallery without
+  // pretending to belong to a video. It is hidden from the Recent Projects sidebar.
+  const IMAGE_THUMBS_SOURCE = 'Made from images';
+  function _imageThumbProjectId() { try { return localStorage.getItem('fve_image_thumbs_project') || ''; } catch (_) { return ''; } }
+  function isImageThumbProject(p) {
+    if (!p) return false;
+    const pid = _imageThumbProjectId();
+    const name = p.source_filename || p.source_video?.filename || p.project_name || '';
+    return (!!pid && p.id === pid) || /^made from images$/i.test(String(name).trim());
+  }
+  function _isImageThumbItem(item) {
+    const pid = _imageThumbProjectId();
+    return !!item && ((!!pid && item.project_id === pid) || /^made from images$/i.test(String(item.project_name || '').trim()));
+  }
+  async function ensureImageThumbProject() {
+    if (!backendOnline) return null;
+    const post = (url, body) => fetch(BACKEND + url, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
+    }).then(r => r.json().then(d => (r.ok ? d : null)));
+    try {
+      const pid = _imageThumbProjectId();
+      let d = pid ? await post('/projects/open_saved', { project_id: pid }) : null;
+      if (!d || !d.project) d = await post('/projects/open_source', { filename: IMAGE_THUMBS_SOURCE });
+      if (!d || !d.project) return null;
+      try { localStorage.setItem('fve_image_thumbs_project', d.project.id); } catch (_) {}
+      setActiveProject({ ...(d.summary || {}), ...d.project }, { refreshRecent: false });
+      return d.project;
+    } catch (_) { return null; }
+  }
+  // Read an image file into a ≤1600px JPEG base64 frame (same treatment as "Upload image…").
+  function _imageFileToFrameB64(file) {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onerror = () => reject(new Error('read failed'));
+      reader.onload = () => {
+        const img = new Image();
+        img.onload = () => {
+          const scale = Math.min(1, 1600 / Math.max(img.naturalWidth, img.naturalHeight));
+          const cv = document.createElement('canvas');
+          cv.width = Math.round(img.naturalWidth * scale);
+          cv.height = Math.round(img.naturalHeight * scale);
+          cv.getContext('2d').drawImage(img, 0, 0, cv.width, cv.height);
+          resolve(cv.toDataURL('image/jpeg', 0.92).split(',')[1]);
+        };
+        img.onerror = () => reject(new Error('decode failed'));
+        img.src = reader.result;
+      };
+      reader.readAsDataURL(file);
+    });
+  }
+  function openThumbnailFromImageInput(input) {
+    const file = input.files && input.files[0];
+    input.value = '';
+    if (file) openThumbnailFromImage(file);
+  }
+  async function openThumbnailFromImage(file) {
+    if (!file) return;
+    if (!/^image\/(png|jpe?g|webp)$/i.test(file.type || '')) { showToast('That file isn’t a PNG, JPG or WEBP image.', 'warn'); return; }
+    let b64;
+    try { b64 = await _imageFileToFrameB64(file); }
+    catch (_) { showToast('Could not read that image file.', 'error'); return; }
+    resetStandaloneThumbnailState();
+    _thumbFile = { name: file.name, source_path: '', playback_url: '', image_only: true };
+    // The video card no longer applies — clear its "loaded" state.
+    const drop = document.getElementById('thumb-drop');
+    if (drop) drop.classList.remove('loaded');
+    const dz = document.getElementById('thumb-dz-label'); if (dz) dz.textContent = 'Drop an MP4 or MOV here';
+    const gb = document.getElementById('btn-generate-thumb'); if (gb) gb.disabled = true;
+    const proj = await ensureImageThumbProject();
+    if (!proj) showToast('The local server isn’t connected, so this thumbnail can be downloaded but not saved.', 'warn');
+    _sharedThumbnailEntryPoint = 'standalone';
+    _sharedThumbnailDraft = buildDefaultThumbnailDraft({
+      entryPoint: 'standalone', file: _thumbFile, sourcePath: '', frames: [b64], selectedFrameIndex: 0,
+    });
+    applyDraftToDialogState();
+    updateSharedComposerDoneLabel();
+    const dlg = document.getElementById('dialog-thumb');
+    if (!dlg.open) dlg.showModal();
+    dlgBuildHeroState();
+    dlgOpenEditor();
+  }
+
+  // ── Start screen: recent videos + saved count ──
+  function renderThumbRecentVideos() {
+    const wrap = document.getElementById('thumb-recent-wrap');
+    const list = document.getElementById('thumb-recent-list');
+    if (!wrap || !list) return;
+    const vids = (recentProjects || []).filter(p => !isImageThumbProject(p) && (p?.source_path || p?.source_video?.path)).slice(0, 8);
+    wrap.style.display = vids.length ? '' : 'none';
+    list.innerHTML = vids.map(p =>
+      '<button type="button" class="thumb-recent-item" title="' + escHtml(getProjectLabel(p)) + '" onclick="openRecentVideoForThumbnail(\'' + escHtml(p.id) + '\')">' +
+      escHtml(getProjectLabel(p)) + '</button>'
+    ).join('');
+  }
+  async function openRecentVideoForThumbnail(projectId) {
+    const project = (recentProjects || []).find(p => p.id === projectId);
+    if (!project) return;
+    showToast('Opening ' + getProjectLabel(project) + '…', 'info', 2500);
+    const r = await tryResumeProjectFromSavedPath(project, 'thumbnails');
+    if (!r || r.source_available === false) {
+      showToast('Couldn’t find the original video for ' + getProjectLabel(project) + '. Drop the video file into the box instead.', 'warn');
+      return;
+    }
+    const dlg = document.getElementById('dialog-thumb');
+    if (!dlg.open) openThumbnailComposerFromTab();
+  }
+  function scrollToThumbGallery() {
+    const g = document.getElementById('thumb-gallery-panel');
+    if (g) g.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
+
   function reopenSharedThumbnailComposerFromTab() {
     if (!_thumbFile) {
-      alert('Load a video first.');
+      showToast('Choose a video or an image first.', 'info');
       return;
     }
     // Never reopen a draft that belongs to a different video than the one loaded.
-    if (!_sharedThumbnailDraft || _sharedThumbnailDraft.source_filename !== _thumbFile.name) {
+    if (!_sharedThumbnailDraft || _sharedThumbnailDraft.source_filename !== _thumbFile.name || _sharedThumbnailEntryPoint === 'clip') {
       openThumbnailComposerFromTab();
       return;
     }
@@ -6567,10 +6848,12 @@
 
   function openThumbnailComposerFromTab() {
     if (!_thumbFile) {
-      alert('Load a video first.');
+      showToast('Choose a video or an image first.', 'info');
       return;
     }
-    const reusableDraft = _sharedThumbnailDraft?.source_filename === _thumbFile.name ? _sharedThumbnailDraft : null;
+    // Only continue a STANDALONE draft of this same video — never adopt a clip's draft
+    // (its draft_id would be overwritten by a save from here).
+    const reusableDraft = (_sharedThumbnailDraft?.source_filename === _thumbFile.name && _sharedThumbnailEntryPoint !== 'clip') ? _sharedThumbnailDraft : null;
     _sharedThumbnailEntryPoint = 'standalone';
     _sharedThumbnailDraft = buildDefaultThumbnailDraft({
       entryPoint: 'standalone',
@@ -6604,7 +6887,7 @@
   }
 
   // Wire thumb-file input
-  document.getElementById('thumb-file').addEventListener('change', function () {
+  document.getElementById('thumb-file').addEventListener('change', async function () {
     const file = this.files[0];
     if (!file) return;
     resetStandaloneThumbnailState();
@@ -6614,10 +6897,18 @@
     drop.classList.add('loaded');
     document.getElementById('thumb-dz-label').textContent = file.name;
     document.getElementById('btn-generate-thumb').disabled = false;
-    openProjectForFile(file, 'thumbnails').then(projectResponse => {
-      reconcilePendingProjectSelection(projectResponse, 'thumbnails');
-      maybeOfferProjectResume(projectResponse, 'thumbnails');
-    });
+    // Open the project FIRST (so saves land in it), then go straight into the editor —
+    // no separate button click needed.
+    const projectResponse = await openProjectForFile(file, 'thumbnails');
+    if (_thumbFile !== file) return;   // another video was chosen meanwhile
+    reconcilePendingProjectSelection(projectResponse, 'thumbnails');
+    // Picking a video starts a NEW thumbnail (Option 3 / Saved Thumbnails is for editing
+    // old ones), so don't auto-reopen the latest saved draft — just point to them.
+    const _nSaved = (projectResponse?.project?.thumbnail_drafts || []).length;
+    if (_nSaved) showToast('This video already has ' + _nSaved + ' saved thumbnail' + (_nSaved === 1 ? '' : 's') + ' — find ' + (_nSaved === 1 ? 'it' : 'them') + ' under Saved Thumbnails.', 'info', 6000);
+    if (!projectResponse) showToast('The local server isn’t connected, so this thumbnail can be downloaded but not saved.', 'warn');
+    loadThumbTranscriptWords(file.name);   // AI title ideas fill in once the transcript is found
+    if (_thumbFile === file && !document.getElementById('dialog-thumb').open) openThumbnailComposerFromTab();
   });
 
   // Drag-drop for thumb zone
@@ -6632,6 +6923,10 @@
         const dt = new DataTransfer(); dt.items.add(file);
         document.getElementById('thumb-file').files = dt.files;
         document.getElementById('thumb-file').dispatchEvent(new Event('change'));
+      } else if (file && /\.(png|jpe?g|webp)$/i.test(file.name)) {
+        openThumbnailFromImage(file);   // an image dropped here starts an image thumbnail
+      } else if (file) {
+        showToast('Drop an MP4 or MOV video (or a PNG/JPG image).', 'warn');
       }
     });
   })();
@@ -7484,7 +7779,10 @@
         const _xf = (_rot || _fx < 0 || _fy < 0);
         if (_xf) { ctx.save(); ctx.translate(_gcx, _gcy); if (_rot) ctx.rotate(_rot); if (_fx < 0 || _fy < 0) ctx.scale(_fx, _fy); ctx.translate(-_gcx, -_gcy); }
         if (_ge.type === 'shape') {
+          // Honour the shape's opacity like the editor overlay does (exports were opaque).
+          const _pa1 = ctx.globalAlpha; ctx.globalAlpha = (_ge.opacity ?? 100) / 100;
           drawShapeToCanvas(ctx, _ge);
+          ctx.globalAlpha = _pa1;
         } else if (_ge.type === 'image' && _ge.asset) {
           try {
             const _bi = _ge.packEl ? await getPackCanvas(_ge) : await loadBrandImage(_ge.asset);
@@ -8421,7 +8719,7 @@
 
   async function attachThumbnailBlobToSavedClip(blob, mode, draftId = '') {
     if (!_savedClipExport?.filename || !_savedClipExport?.folder_name) {
-      alert('Save the clip first before attaching a thumbnail.');
+      showToast('Save the clip first before attaching a thumbnail.', 'warn');
       return;
     }
     const statusEl = document.getElementById('post-save-thumbnail-status');
@@ -8464,20 +8762,23 @@
         statusEl.style.display = 'block';
         statusEl.innerHTML = '<div class="export-error"><strong>Thumbnail save failed:</strong> ' + escHtml(err.message) + '</div>';
       }
+      // #post-save-thumbnail-status no longer exists in the page, so this failure used to
+      // be invisible while the panel said the clip saved. Always surface it.
+      showToast('The clip saved, but its thumbnail did not: ' + err.message, 'error', 10000);
     }
   }
 
   async function attachExistingThumbnailDraft(draftId) {
     const draft = getCurrentProjectThumbnailDrafts().find(item => item.draft_id === draftId);
     if (!draft) {
-      alert('That thumbnail is no longer available.');
+      showToast('That thumbnail is no longer available.', 'warn');
       return;
     }
     try {
       const blob = await renderThumbnailDraftToBlob(draft);
       await attachThumbnailBlobToSavedClip(blob, 'reuse_existing', draftId);
     } catch (err) {
-      alert(err.message);
+      showToast('The clip saved, but its thumbnail did not: ' + err.message, 'error', 10000);
     }
   }
 
@@ -8743,19 +9044,22 @@
     dlgShowState('editor');
     dlgBuildHeroState();
     _clipCaptionBusy = true;          // claim caption gen so dlgOpenEditor won't double-fetch
+    _thumbTitlesLoading = true;
     dlgOpenEditor();
     dlgOpenFramePicker();
     try {
       const r = await fetchTitlesAndCaption(_sharedThumbnailDraft?.clip_start, _sharedThumbnailDraft?.clip_end);
+      _thumbTitlesLoading = false;
       if (r.titles && r.titles.length) {
         _thumbTitles = r.titles;
         if (_sharedThumbnailDraft) _sharedThumbnailDraft.suggested_titles = r.titles;
-        dlgBuildHeroState();
       }
+      dlgBuildHeroState();
       // Auto-fill the caption unless the user has already written/edited one.
       if (r.caption && !_clipIgCaption) { applyIgCaption(r.caption); _igSetStatus('Caption ready. Edit freely \u2014 saved with the clip; written to Airtable on export.'); try { autosaveClipEdits(); } catch (_) {} }
-    } finally { _clipCaptionBusy = false; }
+    } finally { _clipCaptionBusy = false; _thumbTitlesLoading = false; }
   }
+  let _thumbTitlesLoading = false;
 
   // AI titles + Instagram caption for the manual thumbnail flow.
   // The caption is built from the EDITED clip transcript (cuts removed) plus a
@@ -8771,6 +9075,8 @@
     return txt.slice(0, maxChars);
   }
   async function fetchTitlesAndCaption(startT, endT) {
+    // Thumbnails tab: use THIS video's transcript (not whatever clip is loaded).
+    if (_sharedThumbnailEntryPoint === 'standalone') return fetchStandaloneTitles(startT, endT);
     if (!backendOnline || !_wordsData) return { titles: [], caption: '' };
     if (startT == null || endT == null || startT >= endT) return { titles: [], caption: '' };
     const clip_transcript = _wordsData
@@ -8838,6 +9144,9 @@
     else _igSetStatus('Could not generate a caption (need a clip transcript and a running backend).');
   }
   async function ensureIgCaption() {      // auto-generate once, only when empty
+    // The Instagram caption belongs to a CLIP; from the Thumbnails tab this used to write a
+    // caption for whatever clip was loaded in the Clips tab and autosave it there.
+    if (_sharedThumbnailEntryPoint === 'standalone') return;
     if (_clipIgCaption || _clipCaptionBusy || !backendOnline) return;
     const { startT, endT } = _igClipBounds();
     if (startT == null || endT == null || startT >= endT) return;
@@ -8896,6 +9205,15 @@
         card.addEventListener('click', () => dlgApplySuggestedTitle(t));
         grid.appendChild(card);
       });
+      // Say why the list is empty instead of showing nothing.
+      if (!_thumbTitles.length) {
+        const _standalone = _sharedThumbnailEntryPoint === 'standalone';
+        const msg = _thumbTitlesLoading ? 'Writing title ideas…'
+          : (_standalone && _thumbFile?.image_only) ? 'AI title ideas need a video transcript, so there are none for an image. Type your own text, or leave it blank.'
+          : (_standalone && !(_thumbWordsData && _thumbWordsData.length)) ? 'No transcript found for this video, so there are no AI title ideas. Type your own text, or leave it blank.'
+          : 'No title ideas yet. Click Redo Titles to try again.';
+        grid.innerHTML = '<span style="font-size:12px;color:var(--muted);line-height:1.5;">' + escHtml(msg) + '</span>';
+      }
     }
     _refreshTextBoxChips();
     const activeBox = getActiveThumbnailTextBox();
@@ -9009,7 +9327,7 @@
         dlgBuildHeroState();
         dlgDrawCanvas();
       };
-      img.onerror = () => alert('Could not read that image file.');
+      img.onerror = () => showToast('Could not read that image file.', 'error');
       img.src = reader.result;
     };
     reader.readAsDataURL(file);
@@ -9038,16 +9356,27 @@
     if (!_thumbFile || !backendOnline) return;
     const btn = document.getElementById('dlg-btn-redo-titles');
     btn.disabled = true; const orig = btn.innerHTML; btn.textContent = 'Generating\u2026';
+    _thumbTitlesLoading = true; dlgBuildHeroState();
     const titles = await fetchThumbTitles(_sharedThumbnailDraft?.clip_start, _sharedThumbnailDraft?.clip_end);
+    _thumbTitlesLoading = false;
     if (titles.length) {
       _thumbTitles = titles;
       if (_sharedThumbnailDraft) _sharedThumbnailDraft.suggested_titles = titles;
-      dlgBuildHeroState();
     }
+    dlgBuildHeroState();
     btn.disabled = false; btn.innerHTML = orig;
   }
 
   function dlgOpenEditor() {
+    // Clip-only controls: the Instagram caption belongs to a clip, and an image-based
+    // thumbnail has no video to pick frames from.
+    const _standalone = _sharedThumbnailEntryPoint === 'standalone';
+    const _capBlock = document.getElementById('dlg-ig-caption-block');
+    if (_capBlock) _capBlock.style.display = _standalone ? 'none' : '';
+    const _tLabel = document.getElementById('dlg-titles-card-label');
+    if (_tLabel) _tLabel.textContent = _standalone ? 'AI Title Ideas' : 'AI Titles & Caption';
+    const _pickBtn = document.getElementById('dlg-btn-pick-frame');
+    if (_pickBtn) _pickBtn.style.display = (_standalone && _thumbFile?.image_only) ? 'none' : '';
     syncIgCaptionFields();
     ensureIgCaption();
     const box = getActiveThumbnailTextBox();
@@ -9669,6 +9998,10 @@
   function dlgOpenFramePicker() {
     const panel = document.getElementById('dlg-frame-picker');
     if (!panel) return;
+    if (_sharedThumbnailEntryPoint === 'standalone' && _thumbFile?.image_only) {
+      showToast('This thumbnail started from an image, so there’s no video to pick from. Use Upload image… to swap the picture.', 'info', 6000);
+      return;
+    }
     const vidEl = document.getElementById('dlg-pick-video');
     if (!vidEl) return;
     _dlgPickVideoEl = vidEl;
@@ -9815,7 +10148,7 @@
   // "+ Add frame" — capture the current frame and KEEP the picker open for more.
   function dlgPickAddFrame() {
     const b64 = _dlgPickGrabCurrent();
-    if (!b64) { alert('Frame not ready yet — let the video load, then try again.'); return; }
+    if (!b64) { showToast('Frame not ready yet — let the video load, then try again.', 'info'); return; }
     _dlgRenderPickStrip();
     dlgBuildHeroState();
     const btn = document.getElementById('dlg-pick-add-btn');
@@ -9828,13 +10161,13 @@
     try {
       if (_dlgPickSessionCount === 0) {
         const b64 = _dlgPickGrabCurrent();
-        if (!b64) { alert('Frame not ready yet — let the video load, then try again.'); return; }
+        if (!b64) { showToast('Frame not ready yet — let the video load, then try again.', 'info'); return; }
       }
       dlgBuildHeroState();
       dlgDrawCanvas();
       dlgCloseFramePicker();
     } catch (err) {
-      alert('Could not capture frame: ' + err.message);
+      showToast('Could not capture frame: ' + err.message, 'error');
     }
   }
 
@@ -9952,7 +10285,9 @@
       const img = new Image();
       img.crossOrigin = 'anonymous';
       img.onload = () => resolve(img);
-      img.onerror = reject;
+      // Don't cache a failure: one transient error used to drop that logo/element from
+      // every export for the rest of the session.
+      img.onerror = (e) => { delete _brandImgCache[asset]; reject(e); };
       img.src = asset;
     });
     return _brandImgCache[asset];
@@ -10513,7 +10848,7 @@
     if (!_sharedThumbnailDraft) return;
     const bid = _sharedThumbnailDraft.selected_text_box_id
       || (_sharedThumbnailDraft.text_boxes && _sharedThumbnailDraft.text_boxes[0] && _sharedThumbnailDraft.text_boxes[0].id);
-    if (!bid) { alert('Add or select a text box first.'); return; }
+    if (!bid) { showToast('Add or select a text box first.', 'info'); return; }
     if (_sharedThumbnailDraft.selected_text_box_id !== bid) dlgSelectTextBox(bid);
     else renderDialogOverlayLayer();
     _dlgBeginTextEdit(bid);
@@ -11273,9 +11608,11 @@
     canvas.toBlob(blob => {
       const _savePromise = saveCurrentThumbnailDraft(false);
       if (_sharedThumbnailEntryPoint === 'standalone') {
-        // Say so plainly if the draft didn't reach the project (the PNG is still downloadable).
+        // One step: saving from the Thumbnails tab also downloads the PNG (below, once the
+        // blob is stored). Say so plainly if the draft didn't reach the project.
         _savePromise.then(ok => {
-          if (ok) return;
+          if (ok) { showToast('Saved to Saved Thumbnails and downloaded.', 'success'); return; }
+          showToast('Downloaded, but NOT saved to the project (is the local server running?).', 'warn');
           renderStandaloneThumbnailPreview(
             '<strong>' + escHtml(_sharedThumbnailDraft?.source_filename || _thumbFile?.name || 'Thumbnail') + '</strong><br>' +
             '<span style="color:#B45309;">⚠ Not saved to the project (is the local server running?). Use Download PNG to keep this version.</span>'
@@ -11293,6 +11630,7 @@
         _standaloneThumbnailBlob = blob;
         _standaloneThumbnailBlobUrl = URL.createObjectURL(blob);
         renderStandaloneThumbnailPreview();
+        downloadStandaloneThumbnail();
       }
       closeThumbDialog();
       if (_sharedThumbnailEntryPoint === 'clip') {
@@ -12719,7 +13057,7 @@
           </div>
 
           <div class="card">
-            <div class="thumb-editor-label">AI Titles &amp; Caption</div>
+            <div class="thumb-editor-label" id="dlg-titles-card-label">AI Titles &amp; Caption</div>
             <div id="dlg-titles-grid" class="thumb-chip-row"></div>
             <div class="thumb-inline-row" style="margin-top:12px;">
               <button class="btn-ghost btn-sm" id="dlg-btn-redo-titles" onclick="dlgRedoTitles()">
@@ -12727,6 +13065,7 @@
                 Redo Titles
               </button>
             </div>
+            <div id="dlg-ig-caption-block">
             <div class="thumb-editor-label" style="margin-top:18px;display:flex;align-items:center;justify-content:space-between;gap:8px;">
               <span>Instagram Caption</span>
               <button class="btn-ghost btn-sm" id="dlg-btn-redo-caption" type="button" onclick="dlgRegenerateCaption()">
@@ -12736,6 +13075,7 @@
             </div>
             <textarea id="dlg-ig-caption" rows="5" oninput="dlgOnCaptionInput(this.value)" placeholder="Your AI caption appears here once a transcript is loaded. Edit freely \u2014 this is what saves to Airtable (IG Social Media Caption)." style="width:100%;box-sizing:border-box;margin-top:6px;padding:10px 12px;border:1px solid var(--border);border-radius:10px;background:var(--surface);color:var(--text);font-family:inherit;font-size:13px;line-height:1.5;resize:vertical;"></textarea>
             <div id="dlg-ig-caption-status" style="font-size:11px;color:var(--muted);margin-top:4px;"></div>
+            </div>
           </div>
         </div>
 
@@ -13051,6 +13391,8 @@
 
 
 
+
+<div id="app-toast-host" popover="manual" aria-live="polite"></div>
 
 <!-- Frame picker lives at document root so showModal() works outside dialog-thumb -->
 <dialog id="dlg-frame-picker" style="width:min(1150px,95vw);max-width:none;max-height:95vh;border:none;border-radius:14px;padding:0;background:var(--surface);color:var(--text);box-shadow:var(--shadow-md);overflow:hidden;">

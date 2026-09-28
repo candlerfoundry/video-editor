@@ -2988,3 +2988,67 @@ slow sequential previews; failed brand-image loads cached forever; Save-Clip "Ed
 draft from ANOTHER project (slim, cross-filed); dead pre-June old in-tab editor code.
 Regression risk: Low–medium — surgical, frontend-only; verified in a browser against the live
 local backend (saves stubbed out).
+
+## 2026-09-28 — Thumbnail review, Round 2: Thumbnails-tab start screen (frontend-only)
+No backend change → no build bump. Uses only existing routes (`/projects/open_source`,
+`/projects/open_saved`, `/find_json`, `/thumbnail_titles`, `/projects/update`).
+
+### Start screen (`#thumb-state-upload`)
+Three cards (`.thumb-start-grid` / `.thumb-start-card`):
+1. **From a video** — the existing `#thumb-drop` / `#thumb-file` drop zone plus "Or pick a
+   recent video" (`#thumb-recent-list`, `renderThumbRecentVideos()`, up to 8 Recent Projects
+   that have a saved source path; called from `renderRecentProjects()` and on tab switch).
+   A recent video opens via `openRecentVideoForThumbnail()` → `tryResumeProjectFromSavedPath(…,
+   'thumbnails')`. **Choosing a video now opens the editor automatically** (after
+   `openProjectForFile()` resolves, so saves land in the right project); `#btn-generate-thumb`
+   ("Open editor for this video") reopens it. Picking a video starts a NEW thumbnail: the latest
+   saved draft is no longer auto-restored (a notice points to Saved Thumbnails instead).
+   Dropping an image on the video drop zone starts an image thumbnail.
+2. **From an image** — `#thumb-image-file` → `openThumbnailFromImage(file)`: image → ≤1600px
+   JPEG frame (`_imageFileToFrameB64`), `_thumbFile = { name, image_only: true }`, fresh draft,
+   editor opens. **All image thumbnails save into ONE project** whose source filename is
+   `IMAGE_THUMBS_SOURCE = 'Made from images'` (`ensureImageThumbProject()`; id cached in
+   localStorage `fve_image_thumbs_project`; reopened with `/projects/open_saved`, created once via
+   `/projects/open_source`). `isImageThumbProject()` hides it from the Recent Projects sidebar
+   and the recent-video list; `_isImageThumbItem()` groups its gallery items under
+   "Made from images" and reopens them in image mode. In image mode the Pick Frame button is
+   hidden and `dlgOpenFramePicker()` explains why instead of opening.
+3. **Edit a saved thumbnail** — shows the saved count (`#thumb-saved-count`, set by
+   `loadThumbnailGallery()`) and scrolls to the gallery (`scrollToThumbGallery()`).
+
+### Editor behaviour from the Thumbnails tab (`_sharedThumbnailEntryPoint === 'standalone'`)
+- **Done — Save & Download**: `dlgDoneWithThumbnail()` saves the draft AND downloads the PNG
+  (`downloadStandaloneThumbnail()`), then a notice says whether the save reached the project.
+  Download names strip image extensions too.
+- **AI title ideas without a clip**: `fetchTitlesAndCaption()` routes standalone to
+  `fetchStandaloneTitles()`, which uses `_thumbWordsData` — this video's transcript (from
+  `transcript_words` on `/projects/open_saved`, else `loadThumbTranscriptWords()` via
+  `/find_json`). With no clip range it sends an even 6-slice sample of the WHOLE transcript
+  (≤3000 chars clip / ≤9000 broader). Titles fill in when the transcript arrives
+  (`_dlgMaybeFetchStandaloneTitles()`). The titles area explains an empty list
+  (loading / image / no transcript) via `_thumbTitlesLoading`.
+- **Instagram caption is clip-only**: `#dlg-ig-caption-block` is hidden in standalone and
+  `ensureIgCaption()` returns early — it used to write a caption for whatever clip was loaded in
+  the Clips tab and autosave it there. Card label reads "AI Title Ideas" in standalone.
+- `openThumbnailComposerFromTab()` / `reopenSharedThumbnailComposerFromTab()` only continue a
+  draft when the last editor session was NOT the clip flow (never adopt a clip's draft_id).
+
+### Notices instead of alert()
+- `showToast(message, tone, ms)` — tones info / success / warn / error. Host is
+  `#app-toast-host` with `popover="manual"` so it renders in the TOP LAYER above modal dialogs;
+  `HTMLDialogElement.prototype.showModal` is wrapped to re-raise visible notices above any modal
+  opened after them. Thumbnail-flow `alert()`s now use it; confirm() prompts are unchanged.
+- `attachThumbnailBlobToSavedClip()` failures now always show a notice ("The clip saved, but its
+  thumbnail did not…") — its status element no longer exists in the page.
+
+### Round-1 leftovers fixed
+- Shape opacity honoured in exports (`globalAlpha` around `drawShapeToCanvas`).
+- `loadBrandImage()` no longer caches a failed load.
+- `loadThumbnailGallery()` uses a generation token (`_thumbGalleryGen`): a newer load makes the
+  older one stop — no more duplicate cards.
+
+Still open (Round 3+): dead pre-June old in-tab editor code; gallery previews render
+sequentially at full size (slow with many thumbnails); image thumbnails are cover-cropped to 9:16
+(no "fit whole image" option yet); Save-Clip "Edit original" of another project's slim draft.
+Regression risk: Low–medium — frontend-only; verified in the browser against the live local
+backend with project writes, downloads and the titles API stubbed.
