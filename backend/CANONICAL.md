@@ -3109,3 +3109,96 @@ allow/deny, JSON 404, id + path validation, atomic save), plus sandboxed real ff
 found the renamed clip.
 Regression risk: Medium — network/CORS changes affect every request; the page must be served
 from the Netlify site or localhost.
+
+## 2026-09-29 — Whole-app review, Round B: wrong-project writes + state leaking between clips (build `2026-09-29-clipstate`)
+Handshake bumped on both sides → full deploy (push + server.py next to the launcher + restart).
+
+### Project ownership (index.html) — the core change
+- `activeProject` is ONE global shared by all tabs; work could be saved into whichever project
+  happened to be active. Now each workflow remembers its own project:
+  `_clipProjectId` (Clips tab video) and `_thumbProjectId` (Thumbnails tab video/image), plus
+  `_projectCache[id]` (latest copy of every project touched; `setActiveProject()` stores the
+  SAME object there). `clipProject()` = the Clips project (fallback `activeProject`).
+- `updateProject(eventType, payload, {projectId})`:
+  - clip events (`transcript_loaded`, `clip_candidates_updated`, `clip_selected`,
+    `export_created`) ALWAYS target `_clipProjectId`; with none open they are not sent at all.
+  - `source_selected` sets `_clipProjectId` / `_thumbProjectId` from `payload.view`.
+  - a reply only replaces `activeProject` when it IS the active project (late replies used to
+    switch the app back); otherwise it just refreshes the cache.
+  - `clip_selected` (autosave) no longer re-fetches/rebuilds Recent Projects each time.
+  - a 404 (deleted project) shows a notice instead of failing silently.
+- `saveCurrentThumbnailDraft()` passes `projectId` = clip flow → `_clipProjectId`, Thumbnails
+  tab → `_thumbProjectId` (set by the video/image/gallery open paths; cleared when a new
+  video/image is chosen so nothing falls back to another project).
+- `switchTab()` makes the tab's project the sidebar's active project.
+  `selectRecentProject()` switches tab first, then shows the chosen project as active — but
+  saves keep going to the loaded video's project until the chosen one's video opens (so
+  "Not now" on the relink dialog can no longer redirect the open clip's saves).
+  It also refuses (notice) when the local server is offline.
+- Clip-editor READS of project data (`restoreSavedClipEdits`, autosave's local copy,
+  `seedEditedKeys`, `clipEditorBack`, `getCurrentProjectThumbnailDrafts`,
+  `cloneDraftForCurrentClip`, export-folder lookup/name, auto-frame, `doExport`) use
+  `clipProject()` instead of `activeProject`.
+- Deleting a project clears it from the cache / `_clipProjectId` / `_thumbProjectId` / active.
+- "Continue" in the sidebar always opens the clip editor and, when that project is already
+  loaded, just switches tab (it used to re-run the restore and pull you out of the editor).
+- Recent Projects keeps each Today / This Week / Earlier group open or closed across
+  re-renders; its empty message ignores the hidden "Made from images" project.
+- The 10 dead FIRST copies of duplicated project functions (getProjectCountSummary,
+  projectStatChips, renderProjectShells, renderRecentProjects, projectMatchesLoadedFile,
+  setPendingProjectResume, handleProjectResumePrimaryAction, openProjectResumeDialog,
+  openProjectForFile, selectRecentProject) and `resumePendingProjectWithCurrentFile` were
+  deleted — only the later definitions ever ran.
+
+### New video in the Clips tab
+- `resetClipWorkspace()` (called by the `#clips-file` change handler, `hydrateClipProjectSource()`
+  and `resetToStage1()`): bumps `_clipWorkGen`, clears `_clipProjectId`, transcript, candidates,
+  split parts, cards, previews, restore banner, `_savedClipExport`; back to Stage 1; Find button
+  recomputed. Previously the old transcript stayed loaded, so Find Clips could run video A's
+  transcript on video B.
+- `_clipWorkGen` guards the slow calls (`/find_json` in the picker, `generateTranscript`,
+  `findClips`, `splitVideo`): a reply for a video that's no longer loaded is ignored.
+- The picker's file input is cleared (re-choosing the same file works); `setJsonStatus()` resets
+  the amber colour; Generate Transcript says it can take several minutes and uses notices.
+- Offline project open shows a notice.
+- "Back to results" re-renders the list you came from (split parts vs viral cards).
+
+### Per-clip state (restoreSavedClipEdits runs for every clip opened)
+- Resets before restoring: `editorCaptionStyle.speed = 1` (Emily: carry-over was NOT intended),
+  `reframe_x = 0`, `_splitRegions` defaults, `_editorUndoStack`, `_aiEmphasisWords/_aiEmphasisRanFor`,
+  `_clipCaptionBusy`; bumps `_clipOpenGen`. A previously edited clip's saved caption_style
+  restores its own speed/reframe.
+- `_clipOpenGen` guards late AI replies: IG caption (`ensureIgCaption`, `regenerateIgCaption`,
+  the clip-flow composer's caption), AI emphasis (`runAiEmphasis`), speaker detection
+  (`_autoDetectSplit`) and auto-frame (`autoReframeSpeaker`). `_splitUserChose` stops speaker
+  detection from overriding a split toggle the user made on this clip.
+- The automatic AI emphasis pass is skipped when the clip already has emphasis (it wiped
+  hand-picked emphasis).
+- Caption text edit shows the caption WITH its line breaks; closing it unchanged (or Esc) keeps
+  text, breaks and emphasis (it used to flatten and wipe them).
+- "Reset to suggested" asks first when cuts/bleeps exist and is undoable.
+
+### Save Clip
+- One save at a time: `_exportInFlight` / `_setExportInFlight()`; Cancel is disabled, Esc is
+  blocked (document-level capture `cancel` listener — the dialog markup is after the script),
+  `closeExportFlowDialogs()` and `openExportFormDialog()` refuse while a save runs.
+- `openDoneEditingModal()` uses `_buildClipEditPayload()` (the hand-built payload omitted the IG
+  caption and split fields). Success/failure notices added.
+- `attachThumbnailBlobToSavedClip(blob, mode, draftId, exportInfo)` works from a SNAPSHOT of
+  `_savedClipExport` (`attachExistingThumbnailDraft` captures it before the slow render) and shows
+  a "Adding the thumbnail cover…" notice.
+- `lookupExportFolder()` stores `_lastFolderLookup` (it was never set, so "Create '…'" created a
+  differently-named folder) and offers "Try again" on failure.
+
+### Backend (server.py, `/projects/update` `clip_selected`)
+- Stores `split_screen` (bool) and `split_regions` ({top,bottom}: cx, cy, z floats) — they were
+  sent but dropped, so manual split framing was lost on reopen (`_splitFromSave` never true).
+- `ig_caption` is only written when the payload contains it (a payload without it blanked the
+  saved caption via the upsert merge).
+
+Verified in the browser against the live local backend with `/projects/update` intercepted:
+routing (clip saves → Clips project while Thumbnails project active; standalone vs clip-flow
+thumbnail drafts; no send without a Clips project), tab-follows-project, per-clip resets and
+saved-clip restore, save lock (Cancel, Esc, reopen), workspace reset. A load-order bug found in
+testing (listener on a not-yet-parsed dialog aborted the rest of the script) was fixed before
+commit. Regression risk: Medium — touches how every project save is routed.

@@ -2615,7 +2615,7 @@
 
               <div class="split-screen-row" id="split-screen-row">
                 <label class="ss-toggle" title="For a wide shot with two people side by side: stack them vertically in the 9:16 reel. Frame each person below, then export.">
-                  <input type="checkbox" id="split-screen-toggle" onchange="setSplitScreen(this.checked)">
+                  <input type="checkbox" id="split-screen-toggle" onchange="_splitUserChose = _clipOpenGen; setSplitScreen(this.checked)">
                   Split screen (2 people)
                 </label>
                 <div class="split-controls" id="split-controls" style="display:none;">
@@ -3151,6 +3151,12 @@
 
   // ── Tab switching ──
   function switchTab(target) {
+    // The sidebar's current project follows the tab: Clips shows the Clips video's project,
+    // Thumbnails shows the thumbnail's project.
+    const _tabPid = target === 'clips' ? _clipProjectId : target === 'thumbnails' ? _thumbProjectId : null;
+    if (_tabPid && _projectCache[_tabPid] && activeProject?.id !== _tabPid) {
+      setActiveProject(_projectCache[_tabPid], { refreshRecent: false });
+    }
     document.querySelectorAll('.tab-btn').forEach(btn => {
       btn.classList.toggle('active', btn.dataset.tab === target);
     });
@@ -3229,7 +3235,7 @@
   // Must match BACKEND_BUILD in server.py — bumped together whenever the
   // frontend/backend contract changes. A mismatch means the user is running
   // an old backend (launcher not restarted after a deploy).
-  const EXPECTED_BACKEND_BUILD = '2026-09-29-safety';
+  const EXPECTED_BACKEND_BUILD = '2026-09-29-clipstate';
 
   if (document.fonts && document.fonts.load) { document.fonts.load("700 64px 'Handmade Sans'").catch(function(){}); document.fonts.load("700 64px 'Montserrat'").catch(function(){}); }
   let _staleBackendWarned = false;
@@ -3305,6 +3311,14 @@
   setInterval(pollHealth, 3000);
 
   let activeProject = null;
+  // Each workflow remembers ITS OWN project. `activeProject` (the sidebar's "current
+  // project") follows the tab you're on, but saves always go to the project the work
+  // belongs to (see updateProject) — so switching video/project mid-edit, or a slow reply
+  // arriving later, can no longer write clip edits into the wrong project. (Round B)
+  let _clipProjectId = null;    // project of the video loaded in the Clips tab
+  let _thumbProjectId = null;   // project of the video/image in the Thumbnails tab
+  const _projectCache = {};     // latest copy of every project we've touched, by id
+  function clipProject() { return (_clipProjectId && _projectCache[_clipProjectId]) || activeProject; }
   let recentProjects = [];
   let recentProjectsLoaded = false;
   let pendingProjectResume = null;
@@ -3336,15 +3350,6 @@
     return (project?.project_name || project?.source_video?.bare_stem || project?.source_filename || 'Project').trim();
   }
 
-  function getProjectCountSummary(project) {
-    const counts = getProjectCounts(project);
-    const parts = [];
-    if (counts.clip_candidates) parts.push(pluralizeProjectCount(counts.clip_candidates, 'clip', 'clips'));
-    if (counts.thumbnail_drafts) parts.push(pluralizeProjectCount(counts.thumbnail_drafts, 'thumbnail', 'thumbnails'));
-    if (counts.exports) parts.push(pluralizeProjectCount(counts.exports, 'export', 'exports'));
-    return parts.join(' • ');
-  }
-
   function describeRestoreCounts(project) {
     const counts = getProjectCounts(project);
     const pieces = [];
@@ -3352,72 +3357,6 @@
     if (counts.thumbnail_drafts) pieces.push(pluralizeProjectCount(counts.thumbnail_drafts, 'thumbnail draft', 'thumbnail drafts'));
     if (counts.exports) pieces.push(pluralizeProjectCount(counts.exports, 'export', 'exports'));
     return pieces.join(', ');
-  }
-
-  function projectStatChips(counts) {
-    const entries = [
-      ['Candidates', counts?.clip_candidates || 0],
-      ['Edited', counts?.edited_clips || 0],
-      ['Thumbnails', counts?.thumbnail_drafts || 0],
-      ['Exports', counts?.exports || 0],
-    ];
-    return entries
-      .filter(([, count]) => count > 0)
-      .map(([label, count]) => `<span class="project-shell-stat">${count} ${label}</span>`)
-      .join('');
-  }
-
-  function renderProjectShells() {
-    const current = document.getElementById('sidebar-current-project');
-    if (!current) return;
-
-    if (!activeProject) {
-      current.className = 'sidebar-project-empty';
-      current.innerHTML = 'Choose a source video to start a local project for this session.';
-      return;
-    }
-
-    const summary = getProjectCountSummary(activeProject);
-    const note = pendingProjectResume?.projectId === activeProject.id ? pendingProjectResume.note : null;
-    current.className = '';
-    current.innerHTML =
-      '<div class="sidebar-project-name">' + escHtml(getProjectLabel(activeProject)) + '</div>' +
-      '<div class="sidebar-project-meta">Last updated ' + escHtml(formatProjectDate(activeProject.last_modified || activeProject.updated_at)) + '</div>' +
-      '<div class="sidebar-project-summary">' + escHtml(summary || 'Saved project ready') + '</div>' +
-      (note
-        ? '<div class="project-inline-note ' + escHtml(note.tone || 'warn') + '">' +
-            '<strong>' + escHtml(note.title || 'Resume project') + '</strong>' +
-            escHtml(note.body || '') +
-            (note.action ? '<br><button class="btn-ghost btn-sm" type="button" onclick="triggerProjectRelinkPicker()">' + escHtml(note.action) + '</button>' : '') +
-          '</div>'
-        : '');
-  }
-
-  function renderRecentProjects() {
-    const list = document.getElementById('sidebar-recent-projects');
-    if (!list) return;
-
-    if (!recentProjects.length) {
-      list.innerHTML = '<div class="sidebar-project-empty">Select a source video to create the first local project. Recent clips, thumbnails, and exports will appear here.</div>';
-      return;
-    }
-
-    list.innerHTML = recentProjects.map(project => {
-      const summary = getProjectCountSummary(project) || 'Saved project';
-      const isActive = activeProject?.id && activeProject.id === project.id;
-      const lastView = project?.meta?.last_view === 'thumbnails' ? 'thumbnails' : 'clips';
-
-      return (
-        '<button class="sidebar-project-item' + (isActive ? ' active' : '') + '" type="button" oncontextmenu="showProjectContextMenu(\'' + escHtml(project.id) + '\', event); return false;" onclick="selectRecentProject(\'' + escHtml(project.id) + '\', \'' + lastView + '\')">' +
-          '<div class="sidebar-project-item-head">' +
-            '<div class="recent-project-name" title="' + escHtml(getProjectLabel(project)) + '">' + escHtml(getProjectLabel(project)) + '</div>' +
-            '<div class="recent-project-date">' + escHtml(formatProjectDate(project.last_modified)) + '</div>' +
-          '</div>' +
-          '<div class="sidebar-project-summary">' + escHtml(summary) + '</div>' +
-          '<div class="sidebar-project-status">' + escHtml(project.source_filename ? 'Click to resume this source video project' : 'Click to relink the source video and resume') + '</div>' +
-        '</button>'
-      );
-    }).join('');
   }
 
   // Actually remove a project (no prompts — callers confirm first).
@@ -3428,12 +3367,19 @@
       const data = await res.json().catch(function(){ return {}; });
       if (res.ok && data.success) {
         recentProjects = recentProjects.filter(function(p){ return p.id !== projectId; });
+        // Forget the deleted project everywhere, so nothing keeps saving into it (every
+        // later save used to fail silently with "project not found").
+        delete _projectCache[projectId];
+        if (_clipProjectId === projectId) _clipProjectId = null;
+        if (_thumbProjectId === projectId) _thumbProjectId = null;
+        if (activeProject && activeProject.id === projectId) setActiveProject(null, { refreshRecent: false });
         renderRecentProjects();
         renderProjectShells();
+        showToast('Project deleted.', 'success', 2500);
       } else {
-        alert('Could not delete the project. If you just updated, restart the launcher so the backend has the delete feature.');
+        showToast('Could not delete the project. If you just updated, restart the launcher.', 'error');
       }
-    } catch (_) { alert('Could not reach the backend to delete the project.'); }
+    } catch (_) { showToast('Could not reach the local server to delete the project.', 'error'); }
   }
 
   // ── Right-click context menu for recent projects ──
@@ -3545,6 +3491,8 @@
 
   function setActiveProject(project, options = {}) {
     activeProject = project ? JSON.parse(JSON.stringify(project)) : null;
+    // The cache holds the SAME object, so local edits to the active project stay in sync.
+    if (activeProject && activeProject.id) _projectCache[activeProject.id] = activeProject;
     renderProjectShells();
     if (options.refreshRecent !== false) {
       loadRecentProjects();
@@ -3553,12 +3501,6 @@
 
   function getLoadedSourceFileForView(view) {
     return view === 'thumbnails' ? _thumbFile : _clipFile;
-  }
-
-  function projectMatchesLoadedFile(project, view) {
-    const file = getLoadedSourceFileForView(view);
-    const expected = project?.source_filename || project?.source_video?.filename || '';
-    return !!file && !!expected && file.name === expected;
   }
 
   function dismissProjectRestoreBanner(view) {
@@ -3584,17 +3526,6 @@
     renderProjectShells();
   }
 
-  function setPendingProjectResume(project, targetTab, note = null) {
-    pendingProjectResume = project ? {
-      projectId: project.id,
-      targetTab: targetTab || 'clips',
-      project,
-      note,
-      action: 'relink',
-    } : null;
-    renderProjectShells();
-  }
-
   function closeProjectResumeDialog() {
     document.getElementById('dialog-project-resume')?.close();
   }
@@ -3607,71 +3538,48 @@
     document.getElementById(inputId)?.click();
   }
 
-  async function resumePendingProjectWithCurrentFile() {
-    const pending = pendingProjectResume;
-    if (!pending?.project) return;
-    const file = getLoadedSourceFileForView(pending.targetTab);
-    if (!file) {
-      triggerProjectRelinkPicker();
-      return;
+  // Clip-workflow events always belong to the Clips tab's project, whatever is "active".
+  const _CLIP_PROJECT_EVENTS = new Set(['transcript_loaded', 'clip_candidates_updated', 'clip_selected', 'export_created']);
+  // Frequent autosaves: don't re-fetch and rebuild the Recent Projects list for these
+  // (it reset the Today/This Week groups while you were browsing them).
+  const _QUIET_PROJECT_EVENTS = new Set(['clip_selected']);
+  async function updateProject(eventType, payload = {}, options = {}) {
+    let targetId = options.projectId || null;
+    if (!targetId && _CLIP_PROJECT_EVENTS.has(eventType)) {
+      targetId = _clipProjectId;
+      if (!targetId) return null;          // no Clips project open → never guess another one
     }
-    closeProjectResumeDialog();
-    const projectResponse = await openProjectForFile(file, pending.targetTab);
-    if (projectResponse?.project) {
-      finalizeProjectResume(projectResponse.project, pending.targetTab);
-    }
-  }
-
-  function handleProjectResumePrimaryAction() {
-    if (pendingProjectResume?.action === 'resume_current') {
-      resumePendingProjectWithCurrentFile();
-      return;
-    }
-    triggerProjectRelinkPicker();
-  }
-
-  function openProjectResumeDialog(project, targetTab, options = {}) {
-    if (!project) return;
-    const dialog = document.getElementById('dialog-project-resume');
-    const counts = getProjectCounts(project);
-    document.getElementById('resume-dialog-heading').textContent = options.heading || 'We found your saved project';
-    document.getElementById('resume-dialog-copy').textContent = options.copy || 'Choose the source video once and we will restore your saved work automatically.';
-    document.getElementById('resume-dialog-project-name').textContent = getProjectLabel(project);
-    document.getElementById('resume-dialog-project-copy').textContent = describeRestoreCounts(project) || 'Saved project data is ready to resume.';
-    document.getElementById('resume-dialog-stats').innerHTML = projectStatChips(counts) || '<span class="sidebar-project-stat">Saved project</span>';
-    document.getElementById('resume-dialog-meta').textContent = 'Last updated ' + formatProjectDate(project.last_modified || project.updated_at) + (project.source_filename ? ' • Source video: ' + project.source_filename : '');
-    document.getElementById('resume-dialog-primary').textContent = options.primaryLabel || 'Relink source video';
-    document.getElementById('resume-dialog-secondary').textContent = options.secondaryLabel || 'Keep current video';
-
-    pendingProjectResume = {
-      ...(pendingProjectResume || {}),
-      projectId: project.id,
-      targetTab: targetTab || 'clips',
-      project,
-      action: options.action || 'relink',
-      note: options.note || pendingProjectResume?.note || null,
-    };
-    renderProjectShells();
-    if (dialog && !dialog.open) dialog.showModal();
-  }
-
-  async function updateProject(eventType, payload = {}) {
-    if (!activeProject || !backendOnline) return null;
+    targetId = targetId || activeProject?.id;
+    if (!targetId || !backendOnline) return null;
     try {
       const res = await fetch(BACKEND + '/projects/update', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          project_id: activeProject.id,
+          project_id: targetId,
           event_type: eventType,
           payload,
         }),
       });
-      const data = await res.json();
+      const data = await res.json().catch(() => ({}));
       if (res.ok && data.project) {
-        const summary = data.summary || {};
-        setActiveProject({ ...summary, ...data.project });
+        const merged = { ...(data.summary || {}), ...data.project };
+        if (eventType === 'source_selected') {
+          if (payload.view === 'thumbnails') _thumbProjectId = merged.id; else _clipProjectId = merged.id;
+        }
+        const quiet = _QUIET_PROJECT_EVENTS.has(eventType);
+        // Only replace the ACTIVE project with this reply if it IS the active project —
+        // a late reply for another project used to switch the whole app back to it.
+        if (activeProject && activeProject.id === merged.id) {
+          setActiveProject(merged, { refreshRecent: !quiet });
+        } else {
+          _projectCache[merged.id] = JSON.parse(JSON.stringify(merged));
+          if (!quiet) loadRecentProjects();
+        }
         return data.project;
+      }
+      if (res.status === 404) {
+        showToast('Couldn’t save: this project no longer exists (it may have been deleted). Reopen the video to start a new project.', 'warn');
       }
     } catch (_) {}
     return null;
@@ -3808,67 +3716,6 @@
     );
   }
 
-  async function openProjectForFile(file, view) {
-    if (!file || !backendOnline) return null;
-    try {
-      const res = await fetch(BACKEND + '/projects/open_source', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ filename: file.name }),
-      });
-      const data = await res.json();
-      if (res.ok && data.project) {
-        const summary = data.summary || {};
-        setActiveProject({ ...summary, ...data.project });
-        await updateProject('source_selected', {
-          view,
-          source_path: data.resolved_source_path,
-        });
-        return data;
-      }
-    } catch (_) {}
-    return null;
-  }
-
-  function selectRecentProject(projectId, targetTab) {
-    const project = recentProjects.find(item => item.id === projectId);
-    if (!project) return;
-    const view = targetTab || project?.meta?.last_view || 'clips';
-    setActiveProject(project, { refreshRecent: false });
-    switchTab(view);
-    dismissProjectRestoreBanner(view === 'thumbnails' ? 'clips' : 'thumbnails');
-
-    if (projectMatchesLoadedFile(project, view)) {
-      setPendingProjectResume(project, view, {
-        tone: 'success',
-        title: 'Matching video ready',
-        body: 'Use Resume project to bring back the saved work for this source video.',
-      });
-      openProjectResumeDialog(project, view, {
-        heading: 'Resume this project now?',
-        copy: 'You already have the matching source video loaded. We can restore the saved project right away.',
-        primaryLabel: 'Resume project',
-        secondaryLabel: 'Keep current video',
-        action: 'resume_current',
-      });
-      return;
-    }
-
-    setPendingProjectResume(project, view, {
-      tone: 'warn',
-      title: 'Relink source video',
-      body: 'Choose the source video once and we will restore the saved project automatically.',
-      action: 'Choose source video',
-    });
-    openProjectResumeDialog(project, view, {
-      heading: 'We found your saved project',
-      copy: 'Choose the source video once and we will bring back your saved clips, thumbnails, and exports automatically. This does not start the project over.',
-      primaryLabel: 'Relink source video',
-      secondaryLabel: 'Keep current video',
-      action: 'relink',
-    });
-  }
-
   function getProjectCountSummary(project) {
     const counts = getProjectCounts(project);
     const parts = [];
@@ -3892,7 +3739,12 @@
 
   function continueCurrentProject(targetTab) {
     if (!activeProject?.id) return;
-    selectRecentProject(activeProject.id, targetTab || activeProject?.meta?.last_view || 'clips');
+    const view = targetTab || 'clips';   // always the clip editor, like the Recent Projects list
+    // Already loaded in that tab? Just go there — re-running the restore pulled you out of
+    // the clip editor back to the suggestions list.
+    const loadedId = view === 'thumbnails' ? _thumbProjectId : _clipProjectId;
+    if (loadedId === activeProject.id) { switchTab(view); return; }
+    selectRecentProject(activeProject.id, view);
   }
 
   function renderProjectShells() {
@@ -3917,7 +3769,7 @@
             '<div class="sidebar-project-name">' + escHtml(getProjectLabel(activeProject)) + '</div>' +
             '<div class="sidebar-project-meta">Last updated ' + escHtml(formatProjectDate(activeProject.last_modified || activeProject.updated_at)) + '</div>' +
           '</div>' +
-          '<button class="btn btn-sm sidebar-project-action" type="button" onclick="continueCurrentProject(\'' + escHtml(lastView) + '\')">Continue</button>' +
+          '<button class="btn btn-sm sidebar-project-action" type="button" onclick="continueCurrentProject(\'clips\')">Continue</button>' +
         '</div>' +
         (summary ? '<div class="sidebar-project-summary">' + escHtml(summary) + '</div>' : '') +
         (projectStatChips(counts) ? '<div class="sidebar-project-stats">' + projectStatChips(counts) + '</div>' : '') +
@@ -3936,7 +3788,7 @@
     renderThumbRecentVideos();   // Thumbnails-tab "Or pick a recent video" list
     if (!list) return;
 
-    if (!recentProjects.length) {
+    if (!recentProjects.filter(p => !isImageThumbProject(p)).length) {
       list.innerHTML = '<div class="sidebar-project-empty">Open a video once and it will stay here for quick return visits.</div>';
       return;
     }
@@ -3963,11 +3815,18 @@
       groups.earlier.push(project);
     });
 
+    // Keep each group open/closed the way the user left it when the list re-renders.
+    const _prevOpen = {};
+    list.querySelectorAll('details.sidebar-project-group').forEach(d => {
+      const lbl = d.querySelector('summary span')?.textContent;
+      if (lbl) _prevOpen[lbl] = d.open;
+    });
     const sections = [
       ['Today', groups.today, true],
       ['This Week', groups.week, groups.today.length === 0],
       ['Earlier', groups.earlier, false],
-    ].filter(([, items]) => items.length);
+    ].filter(([, items]) => items.length)
+     .map(([label, items, open]) => [label, items, label in _prevOpen ? _prevOpen[label] : open]);
 
     list.innerHTML = sections.map(([label, items, open]) => (
       '<details class="sidebar-project-group"' + (open ? ' open' : '') + '>' +
@@ -4085,6 +3944,8 @@
   function hydrateClipProjectSource(projectResponse) {
     const filename = projectResponse?.source_filename || projectResponse?.project?.source_filename || projectResponse?.project?.source_video?.filename || 'Video';
     const sourcePath = projectResponse?.source_path || projectResponse?.project?.source_path || projectResponse?.project?.source_video?.path || '';
+    releaseStoredObjectUrl('clips');
+    resetClipWorkspace();   // the saved project's clips are restored right after (finalizeProjectResume)
     _clipFile = {
       name: filename,
       source_path: sourcePath,
@@ -4179,8 +4040,14 @@
     const project = recentProjects.find(item => item.id === projectId);
     if (!project) return;
     const view = targetTab || project?.meta?.last_view || 'clips';
-    setActiveProject(project, { refreshRecent: false });
+    if (!backendOnline) {
+      showToast('The local server isn’t connected. Start the launcher, then click the project again.', 'warn');
+      return;
+    }
     switchTab(view);
+    // Shown as current in the sidebar, but NOT yet the Clips/Thumbnails project: saves keep
+    // going to the video that's actually loaded until this one's video opens.
+    setActiveProject(project, { refreshRecent: false });
     dismissProjectRestoreBanner(view === 'thumbnails' ? 'clips' : 'thumbnails');
 
     if (projectMatchesLoadedFile(project, view)) {
@@ -4294,9 +4161,30 @@
     }
   }
 
+  // A different source video is being loaded into the Clips tab (or the tab is reset):
+  // drop EVERYTHING that belonged to the previous one. Previously the old transcript stayed
+  // loaded, so Find Clips could run video A's transcript against video B, and A's cards or
+  // editor stayed on screen. `_clipWorkGen` lets slow replies for the old video (find
+  // transcript, Find Clips, Split, Whisper) notice they're stale and do nothing.
+  let _clipWorkGen = 0;
+  function resetClipWorkspace() {
+    _clipWorkGen++;
+    _clipProjectId = null;
+    _wordsData = null; _transcriptWords = []; _candidates = []; _splitParts = [];
+    _editCandidate = null; _savedClipExport = null;
+    window.clipsWordsData = null;
+    const sec = document.getElementById('candidates-section'); if (sec) sec.innerHTML = '';
+    const sk = document.getElementById('clips-skeleton'); if (sk) sk.style.display = 'none';
+    document.querySelectorAll('.inline-preview video').forEach(v => { try { v.pause(); v.removeAttribute('src'); v.load(); } catch (_) {} });
+    dismissProjectRestoreBanner('clips');
+    showStage(1);
+    updateFindButton();
+  }
+
   function resetToStage1(e) {
     if (e) e.preventDefault();
     releaseStoredObjectUrl('clips');
+    resetClipWorkspace();
     _clipFile = null; _wordsData = null; _candidates = []; _splitParts = [];
     // Reset video card
     const clcV = document.getElementById('clc-video');
@@ -4346,7 +4234,10 @@
 
     // Load video
     releaseStoredObjectUrl('clips');
+    resetClipWorkspace();
+    const gen = _clipWorkGen;
     _clipFile = file;
+    e.target.value = '';   // so choosing the same file again still fires 'change'
     const videoEl = document.getElementById('clips-video');
     videoEl.src = getPlayableVideoUrl('clips');
 
@@ -4354,7 +4245,9 @@
     showVideoLoaded(file.name);
 
     const projectResponse = await openProjectForFile(file, 'clips');
+    if (gen !== _clipWorkGen) return;   // another video was chosen meanwhile
     reconcilePendingProjectSelection(projectResponse, 'clips');
+    if (!projectResponse) showToast('The local server isn’t connected, so this video’s work won’t be saved. Start the launcher, then choose the video again.', 'warn');
 
     // Auto-find JSON via backend
     showJsonSearching();
@@ -4365,6 +4258,7 @@
         body: JSON.stringify({filename: file.name})
       });
       const data = await res.json();
+      if (gen !== _clipWorkGen) return;
       if (data.json_found) {
         window.clipsWordsData = data.json_content;
         showJsonLoaded(data.json_filename);
@@ -4378,8 +4272,10 @@
         showJsonNotFound();
       }
     } catch (err) {
+      if (gen !== _clipWorkGen) return;
       showJsonNotFound();
     }
+    if (gen !== _clipWorkGen) return;
     await maybeOfferProjectResume(projectResponse, 'clips');
   });
 
@@ -4419,6 +4315,7 @@
     card.style.cursor = 'default';
     subEl.style.display = 'none';
     subEl.innerHTML = '';
+    valEl.style.color = '';   // 'not_found' sets amber; don't let it stick to later states
 
     if (status === 'searching') {
       valEl.textContent = 'Searching for transcript\u2026';
@@ -4487,8 +4384,11 @@
 
   // ── Generate transcript (backend Whisper) ──
   async function generateTranscript() {
-    if (!_clipFile || !backendOnline) return;
+    if (!_clipFile) return;
+    if (!backendOnline) { showToast('The local server isn’t connected. Start the launcher, then try again.', 'warn'); return; }
+    const gen = _clipWorkGen;
     setJsonStatus('searching');
+    document.getElementById('clc-json-value').textContent = 'Creating transcript… this can take several minutes. Keep this tab open.';
     try {
       // We can't pass a file-system path from browser; upload the file instead
       const form = new FormData();
@@ -4496,6 +4396,7 @@
       else if (_clipFile?.source_path) form.append('source_path', _clipFile.source_path);
       const res = await fetch(BACKEND + '/generate_transcript_upload', { method: 'POST', body: form });
       const d = await res.json();
+      if (gen !== _clipWorkGen) return;   // a different video was loaded while Whisper ran
       if (d.words) {
         setWordsData(d.words, _clipFile.name.replace(/\.(mp4|mov)$/i, '') + ' - Transcript (Words).json');
         await updateProject('transcript_loaded', {
@@ -4505,11 +4406,12 @@
         });
       } else {
         setJsonStatus('not_found');
-        alert('Transcript generation failed: ' + (d.error || 'unknown error'));
+        showToast('Transcript generation failed: ' + (d.error || 'unknown error'), 'error');
       }
     } catch (err) {
+      if (gen !== _clipWorkGen) return;
       setJsonStatus('not_found');
-      alert('Request failed: ' + err.message);
+      showToast('Transcript generation failed: ' + err.message, 'error');
     }
   }
 
@@ -4613,6 +4515,7 @@
       .join(' ');
 
     // Show Stage 2 with skeleton
+    const gen = _clipWorkGen;
     document.getElementById('summary-filename').textContent = _clipFile.name;
     showStage(2);
     document.getElementById('clips-skeleton').style.display = 'block';
@@ -4625,6 +4528,7 @@
         body: JSON.stringify({ transcript, file_path: _clipFile.name })
       });
       const data = await res.json();
+      if (gen !== _clipWorkGen) return;   // another video/project was opened while Claude worked
       document.getElementById('clips-skeleton').style.display = 'none';
 
       if (data.error) {
@@ -4765,6 +4669,7 @@
     const nVal = document.getElementById('split-n-input').value.trim();
     const n_parts = nVal ? parseInt(nVal, 10) : null;
 
+    const gen = _clipWorkGen;
     document.getElementById('summary-filename').textContent = _clipFile.name;
     showStage(2);
     document.getElementById('clips-skeleton').style.display = 'block';
@@ -4777,6 +4682,7 @@
         body: JSON.stringify({ transcript, n_parts })
       });
       const data = await res.json();
+      if (gen !== _clipWorkGen) return;   // another video/project was opened meanwhile
       document.getElementById('clips-skeleton').style.display = 'none';
 
       if (data.error) {
@@ -4993,6 +4899,9 @@
   }
 
   // ── Select & Edit → Stage 3 ──
+  // Bumped each time a clip opens; slow AI replies (caption, emphasis, speaker framing)
+  // compare it to make sure they still belong to the clip that's on screen.
+  let _clipOpenGen = 0;
   function restoreSavedClipEdits(hookLine) {
     // If this clip was edited before (same hook line), restore trims + word
     // edits from the project store.
@@ -5008,7 +4917,18 @@
     thumbnailBlob = null; thumbnailBlobUrl = null;
     { const _tpp = document.getElementById('thumb-preview-panel'); if (_tpp) _tpp.classList.remove('active'); }
     _splitFromSave = false; _editorSplitScreen = _isPodDefault();  // reset split per clip; POD default
-    const saved = (activeProject?.edited_clips || []).find(c =>
+    // Every clip starts from a clean slate for its per-clip settings — these used to carry
+    // over from the PREVIOUS clip: speed (not intended), reframe crop, split-screen framing,
+    // the undo history (Ctrl+Z could restore the last clip's trims), and AI emphasis picks.
+    // A clip that was edited before gets its own values back just below.
+    _clipOpenGen++;
+    editorCaptionStyle.speed = 1;
+    editorCaptionStyle.reframe_x = 0;
+    _splitRegions = { top:{cx:0.28,cy:0.46,z:1.5}, bottom:{cx:0.72,cy:0.46,z:1.5} };
+    _editorUndoStack = []; _editorUndoLabel = '';
+    _aiEmphasisWords = null; _aiEmphasisRanFor = '';
+    _clipCaptionBusy = false;
+    const saved = (clipProject()?.edited_clips || []).find(c =>
       hookLine && c.hook_line === hookLine);
     if (!saved) return false;
     if (saved.ig_caption) { _clipIgCaption = saved.ig_caption; syncIgCaptionFields(); }
@@ -5063,7 +4983,8 @@
     syncSplitScreenUI();  // reflect restored/sticky split-screen choice
     _autoDetectSplit();   // POD default now; Claude-vision confirms + auto-frames
     maybeAutoReframe();   // wide/TheoEd single-speaker clips: auto-center on the speaker
-    if (editorCaptionStyle.show) setTimeout(() => runAiEmphasis(false), 400);
+    // Don't let the automatic AI pass overwrite emphasis the user already set on this clip.
+    if (editorCaptionStyle.show && !Object.keys(editorCaptionEmphasis || {}).length) setTimeout(() => runAiEmphasis(false), 400);
 
     const vid = document.getElementById('edit-video');
     vid.src = getPlayableVideoUrl('clips');
@@ -5577,6 +5498,10 @@
   }
 
   function resetToAISuggestion() {
+    // This also clears every cut and bleep — make it undoable (Ctrl+Z) and say so.
+    if ((editorCutRanges.length || editorBleepRanges.length) &&
+        !confirm('Reset to the suggested start/end? This also removes all your cuts and bleeps (Ctrl+Z undoes it).')) return;
+    pushEditorUndo('reset');
     editorInTime  = origInTime;
     editorOutTime = origOutTime;
     editorCutRanges = [];
@@ -5644,15 +5569,15 @@
 
   let _clipAutosaveTimer = null;
   function autosaveClipEdits() {
-    if (!_editCandidate || !activeProject) return;
+    if (!_editCandidate || !clipProject()) return;
     clearTimeout(_clipAutosaveTimer);
     _clipAutosaveTimer = setTimeout(function () {
       const payload = _buildClipEditPayload();
-      if (!activeProject.edited_clips) activeProject.edited_clips = [];
+      if (!clipProject().edited_clips) clipProject().edited_clips = [];
       const k = _editCandidate.hook_line;
       const entry = Object.assign({}, payload, { updated_at: new Date().toISOString() });
-      const idx = activeProject.edited_clips.findIndex(function (x) { return k && x.hook_line === k; });
-      if (idx >= 0) activeProject.edited_clips[idx] = entry; else activeProject.edited_clips.push(entry);
+      const idx = clipProject().edited_clips.findIndex(function (x) { return k && x.hook_line === k; });
+      if (idx >= 0) clipProject().edited_clips[idx] = entry; else clipProject().edited_clips.push(entry);
       try { updateProject('clip_selected', payload); } catch (_) {}
     }, 700);
   }
@@ -6308,7 +6233,11 @@
   // "saved" even when the server was offline or no project was open yet).
   async function saveCurrentThumbnailDraft(showFeedback = false) {
     if (!_sharedThumbnailDraft) return false;
-    if (!activeProject) {
+    // Save into the project this thumbnail belongs to: the Clips video's project when made
+    // from a clip, the Thumbnails tab's video/image project otherwise — never just
+    // "whatever is active" (that cross-filed drafts when both tabs were in use).
+    const _pid = _sharedThumbnailEntryPoint === 'clip' ? _clipProjectId : _thumbProjectId;
+    if (!_pid) {
       if (showFeedback) showToast('Not saved: this video’s project isn’t open yet. Make sure the local server is running, wait a moment, then try again.', 'warn');
       return false;
     }
@@ -6317,7 +6246,7 @@
       ..._sharedThumbnailDraft,
       context: _sharedThumbnailEntryPoint === 'clip' ? 'clip_export_dialog' : 'standalone_tab',
     };
-    const _saved = await updateProject('thumbnail_draft_saved', payload);
+    const _saved = await updateProject('thumbnail_draft_saved', payload, { projectId: _pid });
     if (!_saved) {
       if (showFeedback) showToast('Not saved: could not reach the local server. Your thumbnail is still open — try again once the server is running.', 'error');
       return false;
@@ -6539,9 +6468,8 @@
   // full draft from the open project; always hand back a deep copy so edits never
   // mutate the gallery's cached items.
   function _fullSavedThumbnailDraft(item) {
-    const full = (activeProject && activeProject.id === item.project_id)
-      ? (activeProject.thumbnail_drafts || []).find(d => d && d.draft_id === item.draft_id)
-      : null;
+    const _proj = _projectCache[item.project_id] || ((activeProject && activeProject.id === item.project_id) ? activeProject : null);
+    const full = _proj ? (_proj.thumbnail_drafts || []).find(d => d && d.draft_id === item.draft_id) : null;
     return JSON.parse(JSON.stringify((full && (full.available_frames || []).length) ? full : item.draft));
   }
 
@@ -6565,6 +6493,7 @@
         return;
       }
     }
+    _thumbProjectId = item.project_id || activeProject?.id || null;   // re-saves go back to ITS project
     if (_isImageThumbItem(item)) {
       // Image-based thumbnail: there is no video behind it.
       resetStandaloneThumbnailState();
@@ -6737,6 +6666,7 @@
       if (!d || !d.project) return null;
       try { localStorage.setItem('fve_image_thumbs_project', d.project.id); } catch (_) {}
       setActiveProject({ ...(d.summary || {}), ...d.project }, { refreshRecent: false });
+      _thumbProjectId = d.project.id;
       return d.project;
     } catch (_) { return null; }
   }
@@ -6779,6 +6709,7 @@
     if (drop) drop.classList.remove('loaded');
     const dz = document.getElementById('thumb-dz-label'); if (dz) dz.textContent = 'Drop an MP4 or MOV here';
     const gb = document.getElementById('btn-generate-thumb'); if (gb) gb.disabled = true;
+    _thumbProjectId = null;   // until the image project opens, nothing saves anywhere else
     const proj = await ensureImageThumbProject();
     if (!proj) showToast('The local server isn’t connected, so this thumbnail can be downloaded but not saved.', 'warn');
     _sharedThumbnailEntryPoint = 'standalone';
@@ -6889,6 +6820,7 @@
     if (!file) return;
     resetStandaloneThumbnailState();
     _thumbFile = file;
+    _thumbProjectId = null;   // set when this video's project opens (source_selected)
     this.value = '';   // so choosing the same file again still fires 'change'
     const drop = document.getElementById('thumb-drop');
     drop.classList.add('loaded');
@@ -8176,7 +8108,7 @@
   };
 
   function getCurrentProjectThumbnailDrafts() {
-    const curName = _clipFile?.name || activeProject?.source_filename || activeProject?.source_video?.filename || '';
+    const curName = _clipFile?.name || clipProject()?.source_filename || clipProject()?.source_video?.filename || '';
     const curCode = extractItemCode(curName);
     const seen = new Set();
     const out = [];
@@ -8192,7 +8124,7 @@
     };
     // This project's drafts first, then ANY saved thumbnail (other projects) with the same item
     // code — drafts can get stored under the wrong project, so match by code (e.g. THEO-170).
-    (activeProject?.thumbnail_drafts || []).forEach(consider);
+    (clipProject()?.thumbnail_drafts || []).forEach(consider);
     (_allSavedThumbnails || []).forEach(it => consider(it && it.draft));
     return out.sort((a, b) => String(b.saved_at || '').localeCompare(String(a.saved_at || '')));
   }
@@ -8201,7 +8133,7 @@
     const cloned = JSON.parse(JSON.stringify(draft || {}));
     cloned.entry_point = 'clip';
     cloned.source_filename = _clipFile?.name || cloned.source_filename || '';
-    cloned.source_path = activeProject?.source_path || activeProject?.source_video?.path || cloned.source_path || '';
+    cloned.source_path = clipProject()?.source_path || clipProject()?.source_video?.path || cloned.source_path || '';
     cloned.clip_start = editorInTime;
     cloned.clip_end = editorOutTime;
     if (duplicate || !cloned.draft_id) {
@@ -8237,8 +8169,8 @@
 
   function getSuggestedExportFolderName() {
     const base =
-      activeProject?.project_name ||
-      activeProject?.source_video?.bare_stem ||
+      clipProject()?.project_name ||
+      clipProject()?.source_video?.bare_stem ||
       (_clipFile ? _clipFile.name.replace(/\.(mp4|mov)$/i, '') : 'Source Video');
     return String(base || 'Source Video').trim();
   }
@@ -8251,6 +8183,10 @@
   }
 
   function closeExportFlowDialogs() {
+    if (typeof _exportInFlight !== 'undefined' && _exportInFlight) {
+      showToast('Still saving — please wait until it finishes.', 'info');
+      return;
+    }
     document.getElementById('dialog-export-flow')?.close();
     document.getElementById('dialog-post-save-thumbnail')?.close();
   }
@@ -8638,14 +8574,17 @@
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          project_name: activeProject?.project_name || '',
-          source_filename: activeProject?.source_filename || activeProject?.source_video?.filename || (_clipFile?.name || ''),
-          source_path: activeProject?.source_path || activeProject?.source_video?.path || _clipFile?.source_path || '',
+          project_name: clipProject()?.project_name || '',
+          source_filename: clipProject()?.source_filename || clipProject()?.source_video?.filename || (_clipFile?.name || ''),
+          source_path: clipProject()?.source_path || clipProject()?.source_video?.path || _clipFile?.source_path || '',
           clip_type: document.getElementById('flow-export-type')?.value || '',
         }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Could not check the Dropbox folder.');
+      // Remembered so the "Create '…'" button creates exactly the folder it names (it was
+      // never set, so the button created a differently-named folder with no parent).
+      _lastFolderLookup = data;
       if (!data.folder_exists && data.can_create_automatically && data.suggested_relative_folder) {
         statusEl.innerHTML =
           '<div style="padding:0 0 4px;">' +
@@ -8657,7 +8596,9 @@
       renderExportFolderLookup(data);
       statusEl.style.display = 'none';
     } catch (err) {
-      statusEl.innerHTML = '<div class="export-error"><strong>Could not check the folder:</strong> ' + escHtml(err.message) + '</div>';
+      // Offer a retry here — before, both save buttons stayed disabled with no way forward.
+      statusEl.innerHTML = '<div class="export-error"><strong>Could not check the folder:</strong> ' + escHtml(err.message) +
+        ' <button class="btn-ghost btn-sm" type="button" style="margin-left:8px;" onclick="lookupExportFolder()">Try again</button></div>';
     }
   }
 
@@ -8714,11 +8655,15 @@
     confirmExportFolderSelection(picker.value);
   }
 
-  async function attachThumbnailBlobToSavedClip(blob, mode, draftId = '') {
-    if (!_savedClipExport?.filename || !_savedClipExport?.folder_name) {
+  async function attachThumbnailBlobToSavedClip(blob, mode, draftId = '', exportInfo = null) {
+    // Snapshot of the clip this thumbnail belongs to: opening another clip while the
+    // cover burns clears _savedClipExport, which used to make this fail midway.
+    const _exp = exportInfo || (_savedClipExport ? { ..._savedClipExport } : null);
+    if (!_exp?.filename || !_exp?.folder_name) {
       showToast('Save the clip first before attaching a thumbnail.', 'warn');
       return;
     }
+    showToast('Adding the thumbnail cover to the saved clip…', 'info', 5000);
     const statusEl = document.getElementById('post-save-thumbnail-status');
     if (statusEl) {
       statusEl.style.display = 'block';
@@ -8728,15 +8673,15 @@
         '<p class="export-progress-label">Saving thumbnail to Dropbox…</p></div>';
     }
     const form = new FormData();
-    form.append('thumbnail', blob, _savedClipExport.filename.replace(/\.mp4$/i, '') + ' - Thumbnail.png');
-    form.append('suggested_name', _savedClipExport.filename);
-    form.append('target_folder', _savedClipExport.folder_name);
+    form.append('thumbnail', blob, _exp.filename.replace(/\.mp4$/i, '') + ' - Thumbnail.png');
+    form.append('suggested_name', _exp.filename);
+    form.append('target_folder', _exp.folder_name);
     const coverChk = document.getElementById('export-cover-frame');
     if (coverChk && coverChk.checked) form.append('cover_frame', '1');
     // Emily (June 12): no standalone thumbnail PNGs for now — the image only
     // exists to burn the Instagram cover. Flip to '1' to bring PNGs back.
     form.append('save_png', SAVE_THUMBNAIL_PNG ? '1' : '0');
-    if (SAVE_THUMBNAIL_PNG && _savedClipExport.airtable_record_id) form.append('airtable_record_id', _savedClipExport.airtable_record_id);
+    if (SAVE_THUMBNAIL_PNG && _exp.airtable_record_id) form.append('airtable_record_id', _exp.airtable_record_id);
     try {
       const res = await fetch(BACKEND + '/export_thumbnail', { method: 'POST', body: form });
       const data = await res.json();
@@ -8746,9 +8691,9 @@
         ? 'Clip and thumbnail saved. \u2713 Cover frame burned in \u2014 scrub to the very start of the clip to see it.'
         : 'Clip and thumbnail saved to Dropbox.', false, data.cover_burned ? data.first_frame_b64 : null);
       await updateProject('export_created', {
-        filename: _savedClipExport.filename,
-        clip_type: _savedClipExport.clip_type,
-        clip_dropbox_url: _savedClipExport.clip_dropbox_url,
+        filename: _exp.filename,
+        clip_type: _exp.clip_type,
+        clip_dropbox_url: _exp.clip_dropbox_url,
         thumbnail_dropbox_url: data.thumbnail_dropbox_url,
         thumbnail_mode: mode,
         thumbnail_draft_id: draftId,
@@ -8771,9 +8716,10 @@
       showToast('That thumbnail is no longer available.', 'warn');
       return;
     }
+    const _exp = _savedClipExport ? { ..._savedClipExport } : null;   // capture BEFORE the slow render
     try {
       const blob = await renderThumbnailDraftToBlob(draft);
-      await attachThumbnailBlobToSavedClip(blob, 'reuse_existing', draftId);
+      await attachThumbnailBlobToSavedClip(blob, 'reuse_existing', draftId, _exp);
     } catch (err) {
       showToast('The clip saved, but its thumbnail did not: ' + err.message, 'error', 10000);
     }
@@ -8836,7 +8782,7 @@
   function seedEditedKeys(candidates) {
     _editedClipKeys = new Set();
     _editedClipTimes = {};
-    const ec = (activeProject && activeProject.edited_clips) || [];
+    const ec = (clipProject() && clipProject().edited_clips) || [];
     (candidates || []).forEach(function (c) {
       const e = ec.find(function (x) { return c.hook_line && x.hook_line === c.hook_line; });
       if (_entryHasRealEdits(e, c)) {
@@ -8863,12 +8809,12 @@
     const hasEdits = !!_editCandidate && currentEditHasRealEdits();
     if (_editCandidate) {
       const payload = _buildClipEditPayload();
-      if (activeProject) {
-        if (!activeProject.edited_clips) activeProject.edited_clips = [];
+      if (clipProject()) {
+        if (!clipProject().edited_clips) clipProject().edited_clips = [];
         const k = _editCandidate.hook_line;
         const entry = Object.assign({}, payload, { updated_at: new Date().toISOString() });
-        const idx = activeProject.edited_clips.findIndex(function (x) { return k && x.hook_line === k; });
-        if (idx >= 0) activeProject.edited_clips[idx] = entry; else activeProject.edited_clips.push(entry);
+        const idx = clipProject().edited_clips.findIndex(function (x) { return k && x.hook_line === k; });
+        if (idx >= 0) clipProject().edited_clips[idx] = entry; else clipProject().edited_clips.push(entry);
       }
       if (hasEdits) _editedClipKeys.add(clipEditKey(_editCandidate)); else _editedClipKeys.delete(clipEditKey(_editCandidate));
       if (btn && !btn.dataset.label) btn.dataset.label = btn.innerHTML;
@@ -8876,24 +8822,20 @@
       try { await updateProject('clip_selected', payload); } catch (_) {}
       if (btn && hasEdits) btn.innerHTML = '✓ Edits saved';
     }
-    setTimeout(function () { showStage(2); renderCandidates(_candidates); if (btn && btn.dataset.label) btn.innerHTML = btn.dataset.label; }, hasEdits ? 480 : 0);
+    // Back to the list you came from: Sequential Split parts used to be replaced by the
+    // viral cards (or "Claude returned no candidates").
+    setTimeout(function () {
+      showStage(2);
+      if (_clipMode === 'split') renderParts(_splitParts); else renderCandidates(_candidates);
+      if (btn && btn.dataset.label) btn.innerHTML = btn.dataset.label;
+    }, hasEdits ? 480 : 0);
   }
 
   function openDoneEditingModal() {
-    // Persist the edited clip (trims + cuts + bleeps) so it survives
-    // project switching / resume.
-    updateProject('clip_selected', {
-      start_time: editorInTime,
-      end_time: editorOutTime,
-      hook_line: _editCandidate?.hook_line || '',
-      mode: _editCandidate?.part != null ? 'split' : 'viral',
-      cut_ranges: editorCutRanges,
-      bleep_ranges: editorBleepRanges,
-      caption_style: editorCaptionStyle,
-      caption_overrides: editorCaptionOverrides,
-      caption_emphasis: editorCaptionEmphasis,
-      caption_breaks: editorCaptionBreaks || [],
-    }).catch?.(() => {});
+    // Persist the edited clip so it survives project switching / resume. Uses the SAME
+    // payload as autosave — the hand-built one here left out the Instagram caption (the
+    // server then blanked the saved caption) and the split-screen framing.
+    updateProject('clip_selected', _buildClipEditPayload());
     openExportFormDialog();
   }
 
@@ -9044,9 +8986,11 @@
     _thumbTitlesLoading = true;
     dlgOpenEditor();
     dlgOpenFramePicker();
+    const _openGen = _clipOpenGen;
     try {
       const r = await fetchTitlesAndCaption(_sharedThumbnailDraft?.clip_start, _sharedThumbnailDraft?.clip_end);
       _thumbTitlesLoading = false;
+      if (_openGen !== _clipOpenGen) r.caption = '';   // a different clip is open now: keep the titles, drop the caption
       if (r.titles && r.titles.length) {
         _thumbTitles = r.titles;
         if (_sharedThumbnailDraft) _sharedThumbnailDraft.suggested_titles = r.titles;
@@ -9143,7 +9087,9 @@
     if (!backendOnline) { _igSetStatus('Backend offline \u2014 the caption needs the local server running.'); return; }
     const { startT, endT } = _igClipBounds();
     _igSetStatus('Generating caption\u2026');
+    const _openGen = _clipOpenGen;
     const r = await fetchTitlesAndCaption(startT, endT);
+    if (_openGen !== _clipOpenGen) return;   // a different clip is open now \u2014 don't save this caption onto it
     if (r.caption) { applyIgCaption(r.caption); _igSetStatus('Caption updated. Saved with the clip; written to Airtable on export.'); try { autosaveClipEdits(); } catch (_) {} }
     else _igSetStatus('Could not generate a caption (need a clip transcript and a running backend).');
   }
@@ -9156,8 +9102,12 @@
     if (startT == null || endT == null || startT >= endT) return;
     _clipCaptionBusy = true;
     _igSetStatus('Writing caption\u2026');
+    const _openGen = _clipOpenGen;
     try {
       const r = await fetchTitlesAndCaption(startT, endT);
+      // Opened another clip while this was being written: it would have been saved onto
+      // THAT clip (and sent to Airtable with it).
+      if (_openGen !== _clipOpenGen) return;
       if (r.caption) { applyIgCaption(r.caption); _igSetStatus('Caption ready. Edit freely \u2014 saved with the clip; written to Airtable on export.'); try { autosaveClipEdits(); } catch (_) {} }
       else _igSetStatus('');
       if (r.titles && r.titles.length && !(_thumbTitles && _thumbTitles.length)) { _thumbTitles = r.titles; if (_sharedThumbnailDraft) _sharedThumbnailDraft.suggested_titles = r.titles; }
@@ -10374,7 +10324,8 @@
     let items = [];
     try { const r = await fetch(BACKEND + '/thumbnails/list'); const d = await r.json(); items = d.thumbnails || []; }
     catch (e) { if (st) st.textContent = 'Could not load saved thumbnails.'; return; }
-    const pid = activeProject && activeProject.id;
+    // Saved thumbnails for the project this composer is working in (clip's or Thumbnails tab's).
+    const pid = (_sharedThumbnailEntryPoint === 'clip' ? _clipProjectId : _thumbProjectId) || (activeProject && activeProject.id);
     _savedThumbItems = items.filter(it => it.has_frame && (!pid || it.project_id === pid));
     if (!_savedThumbItems.length) { if (st) { st.style.display = 'block'; st.textContent = 'No saved thumbnails for this project yet — build one and click Save Draft.'; } return; }
     if (st) st.style.display = 'none';
@@ -11653,6 +11604,10 @@
       alert('Load a video first.');
       return;
     }
+    if (_exportInFlight) {
+      showToast('A clip is still saving — wait for it to finish before starting another save.', 'info');
+      return;
+    }
     // A new Save Clip is starting: nothing is saved yet for THIS clip, so a thumbnail
     // finished from here must come back to this window, not attach to an older clip.
     _savedClipExport = null;
@@ -11668,7 +11623,7 @@
     }
     // Filename: CODE - Source Title (\u201CFirst three words\u201D - Month D, YYYY).mp4
     // Typographic quotes — straight quotes are illegal in Windows filenames.
-    const srcNameForCode = _clipFile?.name || activeProject?.source_filename || '';
+    const srcNameForCode = _clipFile?.name || clipProject()?.source_filename || '';
     const code = extractItemCode(srcNameForCode);
     const srcTitle = (() => {
       let stem = String(srcNameForCode || '').replace(/\.(mp4|mov)$/i, '')
@@ -11734,7 +11689,7 @@
     // (resumed projects may not carry the code in _clipFile).
     const names = [
       filename || '',
-      activeProject?.source_filename || activeProject?.source_video?.filename || '',
+      clipProject()?.source_filename || clipProject()?.source_video?.filename || '',
     ];
     for (const name of names) {
       if (!name) continue;
@@ -11961,6 +11916,7 @@
       .map(w => w.word).join(' ').trim().slice(0, 3000);
     if (!transcript) return;
     if (btn) { btn.disabled = true; btn.textContent = 'Choosing\u2026'; }
+    const _openGen = _clipOpenGen;
     try {
       const res = await fetch(BACKEND + '/caption_emphasis', {
         method: 'POST',
@@ -11968,6 +11924,8 @@
         body: JSON.stringify({ clip_transcript: transcript }),
       });
       const data = await res.json();
+      // Another clip was opened while Claude chose words: don't apply THIS clip's picks there.
+      if (_openGen !== _clipOpenGen) { if (btn) { btn.disabled = false; btn.innerHTML = '&#10024; Re-run AI emphasis'; } return; }
       const words = (data.words || []).map(_normWord).filter(Boolean);
       const statusEl = document.getElementById('ai-emphasis-status');
       if (words.length) {
@@ -12107,14 +12065,19 @@
     catch (_) { return false; }
   }
   let _splitFromSave = false;
+  let _splitUserChose = -1;   // _clipOpenGen of the clip where the user flipped the split toggle
   async function _autoDetectSplit() {
     if (_splitFromSave) return;
     if (!backendOnline || !_clipFile) return;
+    const _openGen = _clipOpenGen;
     try {
       const body = { timestamp: editorInTime || 0, filename: (_clipFile.name || _clipFile.filename || '') };
       if (_clipFile.source_path) body.source_path = _clipFile.source_path;
       const res = await fetch(BACKEND + '/detect_speakers', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
       const d = await res.json();
+      // Ignore a late answer for a clip that's no longer open, and never override a
+      // split-screen choice the user already made on this clip.
+      if (_openGen !== _clipOpenGen || _splitUserChose === _clipOpenGen) return;
       if (_splitFromSave || !d || !d.checked) return;
       if (d.two_speakers) {
         if (d.left  != null) _splitRegions.top.cx    = Math.max(0.05, Math.min(0.95, d.left));
@@ -12183,15 +12146,17 @@
     const btn = document.getElementById('btn-auto-frame');
     const body = {
       clip_start: editorInTime, clip_end: editorOutTime,
-      source_path: (_clipFile && _clipFile.source_path) || (activeProject && (activeProject.source_path || (activeProject.source_video && activeProject.source_video.path))) || '',
-      filename: (_clipFile && _clipFile.name) || (activeProject && activeProject.source_filename) || '',
+      source_path: (_clipFile && _clipFile.source_path) || (clipProject() && (clipProject().source_path || (clipProject().source_video && clipProject().source_video.path))) || '',
+      filename: (_clipFile && _clipFile.name) || (clipProject() && clipProject().source_filename) || '',
     };
     if (!body.source_path && !body.filename) { if (!silent) setReframeStatus('No source video to analyze'); return; }
     if (btn) { btn.disabled = true; btn.textContent = 'Detecting\u2026'; }
     if (!silent) setReframeStatus('');
+    const _openGen = _clipOpenGen;
     try {
       const r = await fetch(BACKEND + '/detect_speaker_frame', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
       const j = await r.json();
+      if (_openGen !== _clipOpenGen) return;   // late answer for a clip that's no longer open
       if (j && j.checked && typeof j.speaker_x === 'number') {
         const rx = reframeXFromFraction(j.speaker_x);
         if (typeof pushEditorUndo === 'function') pushEditorUndo('reframe');
@@ -12464,7 +12429,10 @@
       overlay.classList.add('editing');
       const groups = buildClipCaptionGroups();
       const g = groups.find(x => x.index === gi);
-      overlay.textContent = g ? groupDisplayWords(g).map(w => w.text).join(' ') : '';
+      // Show the caption WITH its line breaks (joining with spaces flattened a two-line
+      // caption the moment you opened it, even if you changed nothing).
+      const _shown = g ? groupDisplayWords(g).map((w, i, a) => w.text + (w.br && i < a.length - 1 ? '\n' : ' ')).join('').trim() : '';
+      overlay.innerText = _shown;
       overlay.contentEditable = 'plaintext-only';
       overlay.focus();
       const range = document.createRange();
@@ -12479,9 +12447,14 @@
         // innerText preserves the line breaks typed with Enter
         const txt = overlay.innerText.replace(/[ \t]+/g, ' ').replace(/\n{2,}/g, '\n').trim();
         const orig = (g ? g.words.map(w => w.text).join(' ') : '');
-        if (txt && txt !== orig) { pushEditorUndo('caption-text'); editorCaptionOverrides[gi] = txt; }
-        else delete editorCaptionOverrides[gi];
-        delete editorCaptionEmphasis[gi];  // indices no longer line up
+        // Nothing changed (including Esc): leave the text, breaks and emphasis exactly as
+        // they were — this used to wipe the caption's emphasis every time.
+        if (txt !== _shown.replace(/[ \t]+/g, ' ').replace(/\n{2,}/g, '\n').trim()) {
+          pushEditorUndo('caption-text');
+          if (txt && txt !== orig) editorCaptionOverrides[gi] = txt;
+          else delete editorCaptionOverrides[gi];
+          delete editorCaptionEmphasis[gi];  // indices no longer line up
+        }
         _capEditingGroup = null;
         _capPendingRedraw = false;
         updateCaptionOverlay(true);
@@ -12490,7 +12463,7 @@
         // Enter inserts a line break (move words to a second line);
         // Ctrl/Cmd+Enter or clicking away commits; Esc cancels.
         if (ev.key === 'Enter' && (ev.ctrlKey || ev.metaKey)) { ev.preventDefault(); overlay.blur(); }
-        if (ev.key === 'Escape') { ev.preventDefault(); overlay.textContent = (g ? groupDisplayWords(g).map(w => w.text).join(' ') : ''); overlay.blur(); }
+        if (ev.key === 'Escape') { ev.preventDefault(); overlay.innerText = _shown; overlay.blur(); }
       };
       overlay.addEventListener('blur', commit);
       overlay.addEventListener('keydown', onKey);
@@ -12551,13 +12524,14 @@
   }
 
   async function doExport(withThumbnail = false) {
-    if (!_clipFile) { alert('No video loaded.'); return; }
+    if (_exportInFlight) { showToast('A save is already running — please wait for it to finish.', 'info'); return; }
+    if (!_clipFile) { showToast('No video loaded.', 'warn'); return; }
     const filename = document.getElementById('flow-export-filename').value.trim() || 'clip.mp4';
     const clipType = document.getElementById('flow-export-type').value;
     const statusEl = document.getElementById('export-flow-status');
     const btn      = document.getElementById('btn-save-clip-folder');
     if (!_selectedExportFolder) {
-      alert('Choose or create a folder before saving the clip.');
+      showToast('Choose or create a folder before saving the clip.', 'warn');
       return;
     }
     if (!withThumbnail && thumbnailBlob) {
@@ -12566,6 +12540,7 @@
       }
     }
 
+    _setExportInFlight(true);
     btn.disabled = true;
     statusEl.style.display = 'block';
 
@@ -12600,7 +12575,7 @@
     form.append('suggested_name', filename);
     form.append('clip_type', clipType);
     form.append('target_folder', _selectedExportFolder);
-    const srcName = _clipFile?.name || activeProject?.source_filename || activeProject?.source_video?.filename || '';
+    const srcName = _clipFile?.name || clipProject()?.source_filename || clipProject()?.source_video?.filename || '';
     const itemCode = extractItemCode(srcName);
     if (itemCode) form.append('item_code', itemCode);
     // Content Title: free-form value the user typed in the Save Clip form.
@@ -12689,6 +12664,7 @@
       // The server may rename the file (unsafe characters, or "(2)" so it never overwrites
       // an existing clip) — use the name it ACTUALLY saved from here on.
       const savedName = data.output_filename || filename;
+      showToast('Clip saved to Dropbox: ' + savedName, 'success', 6000);
       _savedClipExport = {
         filename: savedName,
         clip_type: clipType,
@@ -12761,8 +12737,28 @@
       if (_woBtn) _woBtn.disabled = false;
       if (_clickedBtn) _clickedBtn.innerHTML = _clickedOrig;
       if (_efSaving) { _efSaving.className = 'ef-saving err'; _efSaving.innerHTML = '<span>\u2715 Save failed: ' + escHtml(err.message) + '</span>'; }
+      showToast('Save failed: ' + err.message, 'error');
+    } finally {
+      _setExportInFlight(false);
     }
   }
+
+  // One Save Clip at a time. Cancel / Esc used to close the window while the save kept
+  // running, and reopening Save Clip re-enabled the buttons — so a second save of the same
+  // clip could start (two Dropbox files, two Airtable records).
+  let _exportInFlight = false;
+  function _setExportInFlight(on) {
+    _exportInFlight = !!on;
+    const cancel = document.getElementById('btn-export-flow-cancel');
+    if (cancel) { cancel.disabled = _exportInFlight; cancel.title = _exportInFlight ? 'Saving \u2014 please wait until it finishes' : ''; }
+  }
+  // Listen at the document (capture phase): the Save Clip <dialog> markup comes AFTER this
+  // script, so it doesn't exist yet when this line runs.
+  document.addEventListener('cancel', function (e) {
+    if (e.target && e.target.id === 'dialog-export-flow' && _exportInFlight) {
+      e.preventDefault(); showToast('Still saving \u2014 please wait until it finishes.', 'info');
+    }
+  }, true);
 
   // ── Edit Captions ──
   let _srtBlocks   = [];
@@ -13373,7 +13369,7 @@
   </div>
   <div id="export-flow-saving" class="ef-saving" style="display:none;"></div>
   <div class="dialog-footer">
-    <button class="btn-ghost" onclick="closeExportFlowDialogs()" style="background:#6B7280;color:#fff;border-color:#6B7280;">Cancel</button>
+    <button class="btn-ghost" id="btn-export-flow-cancel" onclick="closeExportFlowDialogs()" style="background:#6B7280;color:#fff;border-color:#6B7280;">Cancel</button>
     <span style="display:flex;flex-direction:column;gap:4px;margin-right:auto;">
     <label id="export-cover-frame-row" class="thumb-inline-row" style="font-size:12px;color:var(--text-2);cursor:pointer;" title="Instagram uses the first frame as the reel cover. This prepends your thumbnail as a single invisible frame so the Zapier-posted reel shows it as the cover.">
       <input type="checkbox" id="export-cover-frame" checked style="accent-color:var(--orange);width:15px;height:15px;cursor:pointer;">

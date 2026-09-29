@@ -69,7 +69,7 @@ CORS(app, origins=[
 
 # Bump this whenever the frontend/backend contract changes (the frontend
 # carries a matching EXPECTED_BACKEND_BUILD and warns when they differ).
-BACKEND_BUILD = "2026-09-29-safety"
+BACKEND_BUILD = "2026-09-29-clipstate"
 
 
 @app.errorhandler(Exception)
@@ -1769,9 +1769,25 @@ def update_project():
                     'caption_overrides': dict(list((payload.get('caption_overrides') or {}).items())[:60]),
                     'caption_emphasis': dict(list((payload.get('caption_emphasis') or {}).items())[:60]),
                     'caption_breaks': [int(b) for b in (payload.get('caption_breaks') or [])[:200] if isinstance(b, (int, float))],
-                    'ig_caption': (payload.get('ig_caption') or '')[:3000],
                     'updated_at': iso_now(),
                 }
+                # Only overwrite the saved caption when the page actually sent one — a
+                # payload without the field used to blank a hand-edited caption.
+                if 'ig_caption' in payload:
+                    clip_entry['ig_caption'] = (payload.get('ig_caption') or '')[:3000]
+                # Split-screen choice + per-cell framing (Round B, Sept 29 2026): the page
+                # always sent these, but they were dropped here, so a clip's manual split
+                # framing was lost and re-detected every time it was reopened.
+                if isinstance(payload.get('split_screen'), bool):
+                    clip_entry['split_screen'] = payload['split_screen']
+                _regions = payload.get('split_regions')
+                if isinstance(_regions, dict) and isinstance(_regions.get('top'), dict) and isinstance(_regions.get('bottom'), dict):
+                    def _cell(c):
+                        try:
+                            return {'cx': float(c.get('cx', 0.5)), 'cy': float(c.get('cy', 0.5)), 'z': float(c.get('z', 1.5))}
+                        except Exception:
+                            return {'cx': 0.5, 'cy': 0.5, 'z': 1.5}
+                    clip_entry['split_regions'] = {'top': _cell(_regions['top']), 'bottom': _cell(_regions['bottom'])}
                 # Key by hook_line so re-editing the same clip UPDATES the entry
                 # (keying by times created duplicates whenever trims changed).
                 upsert_project_list_item(
