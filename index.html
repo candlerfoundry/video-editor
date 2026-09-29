@@ -9074,9 +9074,16 @@
     if (!txt) txt = _wordsData.map(w => w.word).join(' ').trim();
     return txt.slice(0, maxChars);
   }
+  // True only while the thumbnail editor is OPEN from the Thumbnails tab. The entry-point
+  // variable alone is not enough: it defaults to 'standalone' and keeps its last value, so
+  // the clip editor (captions, Regenerate) must not be treated as standalone.
+  function _isStandaloneComposerOpen() {
+    const dlg = document.getElementById('dialog-thumb');
+    return !!(dlg && dlg.open && _sharedThumbnailEntryPoint === 'standalone');
+  }
   async function fetchTitlesAndCaption(startT, endT) {
     // Thumbnails tab: use THIS video's transcript (not whatever clip is loaded).
-    if (_sharedThumbnailEntryPoint === 'standalone') return fetchStandaloneTitles(startT, endT);
+    if (_isStandaloneComposerOpen()) return fetchStandaloneTitles(startT, endT);
     if (!backendOnline || !_wordsData) return { titles: [], caption: '' };
     if (startT == null || endT == null || startT >= endT) return { titles: [], caption: '' };
     const clip_transcript = _wordsData
@@ -9146,7 +9153,7 @@
   async function ensureIgCaption() {      // auto-generate once, only when empty
     // The Instagram caption belongs to a CLIP; from the Thumbnails tab this used to write a
     // caption for whatever clip was loaded in the Clips tab and autosave it there.
-    if (_sharedThumbnailEntryPoint === 'standalone') return;
+    if (_isStandaloneComposerOpen()) return;
     if (_clipIgCaption || _clipCaptionBusy || !backendOnline) return;
     const { startT, endT } = _igClipBounds();
     if (startT == null || endT == null || startT >= endT) return;

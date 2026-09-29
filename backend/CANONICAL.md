@@ -3047,6 +3047,12 @@ Three cards (`.thumb-start-grid` / `.thumb-start-card`):
 - `loadThumbnailGallery()` uses a generation token (`_thumbGalleryGen`): a newer load makes the
   older one stop — no more duplicate cards.
 
+**Hotfix (2026-09-29):** the standalone guards in `fetchTitlesAndCaption()` and
+`ensureIgCaption()` first checked `_sharedThumbnailEntryPoint === 'standalone'` alone. That
+variable DEFAULTS to `'standalone'` and keeps its last value, so the clip editor's Instagram
+caption stopped auto-generating and Regenerate used the Thumbnails-tab transcript path. Both now
+use `_isStandaloneComposerOpen()` (thumbnail dialog open AND standalone entry point).
+
 Still open (Round 3+): dead pre-June old in-tab editor code; gallery previews render
 sequentially at full size (slow with many thumbnails); image thumbnails are cover-cropped to 9:16
 (no "fit whole image" option yet); Save-Clip "Edit original" of another project's slim draft.
