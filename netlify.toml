@@ -1,5 +1,8 @@
 [build]
-  publish = "."
+  # Publish ONLY what the web page needs. `publish = "."` used to serve the whole repo
+  # publicly (CLAUDE.md, backend/CANONICAL.md, backend/server.py, the backend zip…).
+  command = "rm -rf site && mkdir site && cp -r index.html brand fonts TCF_Logo-Orange.png Graphic_1.png Graphic_2.png Graphic_3.png site/"
+  publish = "site"
 
 [[redirects]]
   from = "/*"

@@ -4,7 +4,7 @@
 ## IDENTITY
 - Repo: candlerfoundry/video-editor (org is candlerfoundry, NOT esavant)
 - Clone pattern: git clone https://{PAT}@github.com/candlerfoundry/video-editor.git /tmp/video-editor
-- Git identity: git config user.email "esavant@emory.edu" && git config user.name "Emily Savant"
+- Git identity: git config user.email "esavant@emory.edu" && git config user.name "Emily Avant"
 - Netlify auto-deploys from main branch (frontend only)
 
 ## SECRET / SESSION CONTEXT — PULL FROM AIRTABLE EVERY SESSION

@@ -58,11 +58,67 @@ else:
     thumb_logger.setLevel(max(LOG_LEVEL, logging.INFO))
 
 app = Flask(__name__)
-CORS(app)
+# Only the editor itself may call this server from a browser: the Netlify site (and its
+# deploy previews) plus pages served from this computer. Previously CORS(app) let ANY
+# website the user visited call these routes. (Round A safety, Sept 29 2026.)
+CORS(app, origins=[
+    r"https://([a-z0-9-]+--)?foundry-video-editor\.netlify\.app",
+    r"http://localhost(:\d+)?",
+    r"http://127\.0\.0\.1(:\d+)?",
+])
 
 # Bump this whenever the frontend/backend contract changes (the frontend
 # carries a matching EXPECTED_BACKEND_BUILD and warns when they differ).
-BACKEND_BUILD = "2026-07-01-editor3"
+BACKEND_BUILD = "2026-09-29-safety"
+
+
+@app.errorhandler(Exception)
+def _json_error(exc):
+    """Every unhandled error comes back as JSON {"error": ...} so the page can show a
+    readable message (Flask's HTML 500 page surfaced as "Unexpected token '<'")."""
+    from werkzeug.exceptions import HTTPException
+    if isinstance(exc, HTTPException):
+        return jsonify({'error': exc.description or exc.name}), exc.code
+    logger.exception('[server] Unhandled error')
+    return jsonify({'error': f'{type(exc).__name__}: {exc}'}), 500
+
+
+VIDEO_EXTENSIONS = {'.mp4', '.mov', '.m4v', '.webm', '.mkv', '.avi'}
+
+
+def is_video_file_path(path):
+    """A real, existing file with a video extension. Used wherever a browser-supplied
+    path is stored or read, so these routes can't be pointed at arbitrary files."""
+    try:
+        return bool(path) and os.path.isfile(path) and os.path.splitext(path)[1].lower() in VIDEO_EXTENSIONS
+    except Exception:
+        return False
+
+
+_WIN_ILLEGAL_FILENAME = re.compile(r'[<>:"/\\|?*\x00-\x1f]')
+
+
+def safe_clip_filename(name, default='clip.mp4'):
+    """Basename only, Windows-illegal characters replaced, always .mp4. (A typed title
+    with ? or : made ffmpeg fail; a ..\\ could escape the clips folder.)"""
+    name = os.path.basename(str(name or '').replace('\\', '/'))
+    name = _WIN_ILLEGAL_FILENAME.sub('-', name).strip().rstrip('. ')
+    if not name:
+        name = default
+    if not name.lower().endswith('.mp4'):
+        name += '.mp4'
+    return name
+
+
+def unique_path_in(folder, filename):
+    """folder/filename, or 'name (2).mp4', 'name (3).mp4'… if that already exists —
+    exports never overwrite an earlier clip."""
+    stem, ext = os.path.splitext(filename)
+    candidate, n = filename, 2
+    while os.path.exists(os.path.join(folder, candidate)):
+        candidate = f'{stem} ({n}){ext}'
+        n += 1
+    return candidate
 
 CREATE_NO_WINDOW = 0x08000000 if platform.system() == 'Windows' else 0
 
@@ -818,7 +874,13 @@ def make_source_key(source_path=None, filename=None):
     return hashlib.sha1(identity.encode('utf-8')).hexdigest()
 
 
+_PROJECT_ID_RE = re.compile(r'^[A-Za-z0-9_\-]{1,100}$')
+
+
 def get_project_path(project_id):
+    # Ids are sha1 hex; refuse anything else so a crafted id can't point outside the store.
+    if not _PROJECT_ID_RE.match(str(project_id or '')):
+        raise ValueError('invalid project_id')
     return os.path.join(project_store_dir, f'{project_id}.json')
 
 
@@ -983,7 +1045,10 @@ def load_transcript_words_from_json(json_path):
 
 
 def load_project(project_id):
-    path = get_project_path(project_id)
+    try:
+        path = get_project_path(project_id)
+    except ValueError:
+        return None
     if not os.path.exists(path):
         return None
     with open(path, 'r', encoding='utf-8') as handle:
@@ -993,8 +1058,14 @@ def load_project(project_id):
 def save_project(project):
     path = get_project_path(project['id'])
     project['updated_at'] = iso_now()
-    with open(path, 'w', encoding='utf-8') as handle:
+    # Crash-safe: write a temp file, then atomically swap it in. A crash/full disk
+    # mid-write used to leave truncated JSON and the whole project vanished.
+    tmp_path = path + '.tmp'
+    with open(tmp_path, 'w', encoding='utf-8') as handle:
         json.dump(project, handle, ensure_ascii=False, indent=2)
+        handle.flush()
+        os.fsync(handle.fileno())
+    os.replace(tmp_path, path)
 
 
 def create_project_record(project_id, filename, source_path):
@@ -1617,7 +1688,7 @@ def stream_project_source_video(project_id):
         abort(404)
 
     source_path = get_project_source_path(project)
-    if not source_path:
+    if not source_path or not is_video_file_path(source_path):
         abort(404)
 
     mime_type, _ = mimetypes.guess_type(source_path)
@@ -1651,7 +1722,8 @@ def update_project():
             if event_type == 'source_selected':
                 if payload.get('view'):
                     project['meta']['last_view'] = payload['view']
-                if payload.get('source_path'):
+                # Only store a path that is a real video file (not any file on disk).
+                if payload.get('source_path') and is_video_file_path(payload['source_path']):
                     project.setdefault('source_video', {})['path'] = payload['source_path']
             elif event_type == 'transcript_loaded':
                 project['transcript'] = {
@@ -2946,14 +3018,13 @@ def export_clip():
     """
     import urllib.request
     import urllib.parse
-    import dropbox as dbx_module
 
     if not FFMPEG_EXE:
         return jsonify({'error': 'ffmpeg not found. Expected at Dropbox\\Scripts\\FFMPEG\\ffmpeg.exe'}), 500
 
     file = request.files.get("file")
     source_path = (request.form.get("source_path") or "").strip()
-    if not file and (not source_path or not os.path.isfile(source_path)):
+    if not file and not is_video_file_path(source_path):
         return jsonify({"error": "No file provided"}), 400
 
     try:
@@ -3018,17 +3089,24 @@ def export_clip():
 
     thumbnail_file = request.files.get("thumbnail")
 
-    # Normalise output filename to .mp4
-    output_name = suggested_name if suggested_name.lower().endswith(".mp4") else suggested_name + ".mp4"
+    # Normalise output filename to a safe .mp4 name
+    output_name = safe_clip_filename(suggested_name)
     base_name   = os.path.splitext(output_name)[0]
     folder_name = target_folder or sanitize_social_media_relative_path(base_name)
 
     # Destination: ~/Dropbox/Social Media Clips/<source-video project>/
     clips_folder = build_social_media_local_path(folder_name)
     os.makedirs(clips_folder, exist_ok=True)
-    output_path  = os.path.join(clips_folder, output_name)
+    # Never overwrite an existing clip: same-day saves with the same first words (or a
+    # re-save) used to silently replace the earlier file. Pick "name (2).mp4" instead.
+    output_name = unique_path_in(clips_folder, output_name)
+    base_name   = os.path.splitext(output_name)[0]
+    final_path  = os.path.join(clips_folder, output_name)
 
     tmp_dir = tempfile.mkdtemp()
+    # ffmpeg writes into the temp folder; the finished file is moved into Dropbox only
+    # after every step succeeded, so a failed encode never leaves a half file syncing.
+    output_path = os.path.join(tmp_dir, 'export_out.mp4')
     try:
         source_name = file.filename if file else os.path.basename(source_path or 'video.mp4')
         src_ext    = os.path.splitext(source_name or 'video.mp4')[1].lower() or '.mp4'
@@ -3246,6 +3324,10 @@ def export_clip():
                 err = rb.stderr.decode("utf-8", errors="replace")[-400:]
                 logger.warning("[export] Cover-frame burn failed (clip kept without it): %s", err)
 
+        # ── Finished: move the encoded clip into the Dropbox folder in one step ──
+        shutil.move(output_path, final_path)
+        output_path = final_path
+
     finally:
         shutil.rmtree(tmp_dir, ignore_errors=True)
 
@@ -3459,7 +3541,9 @@ def export_thumbnail():
     save_png = (request.form.get("save_png") or "0").strip() in {"1", "true", "yes"}
     cover_burned = False
 
-    output_name = suggested_name if suggested_name.lower().endswith(".mp4") else suggested_name + ".mp4"
+    # Same cleaning as /export_clip, so the name the page got back (output_filename)
+    # finds the saved clip. No uniqueness here — this targets an EXISTING clip.
+    output_name = safe_clip_filename(suggested_name)
     base_name = os.path.splitext(output_name)[0]
     thumb_name = base_name + " - Thumbnail.png"
     clips_folder = build_social_media_local_path(folder_name)
@@ -3574,4 +3658,6 @@ if __name__ == "__main__":
         logger.info("API key loaded.")
     else:
         logger.warning("API key not found at %s", API_KEY_PATH)
-    app.run(host="0.0.0.0", port=5000, debug=False, threaded=True)
+    # 127.0.0.1 = reachable only from THIS computer. "0.0.0.0" also exposed the server
+    # to anyone on the same Wi-Fi (it has no login). (Round A safety, Sept 29 2026.)
+    app.run(host="127.0.0.1", port=5000, debug=False, threaded=True)

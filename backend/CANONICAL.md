@@ -1,7 +1,7 @@
 # CANONICAL.md - Foundry Video Editor Backend
 # Source of truth for critical backend and thumbnail behavior.
 # Every editing session must compare server.py to this file before changing fragile paths.
-# Last updated: July 28, 2026 (Photo Motion fully removed — see "Photo Motion — REMOVED" at end of file)
+# Last updated: Sept 29, 2026 (Round A safety — current build `2026-09-29-safety`; newest sections are at the END of this file)
 #
 # HOW TO USE THIS FILE:
 # 1. Read it before editing server.py or launcher/launcher.py.
@@ -41,10 +41,14 @@ if __name__ == '__main__':
     logger.info('[startup] Starting Foundry Video Editor backend...')
     logger.info('[startup] Python: %s', sys.executable)
     logger.info('[startup] ffmpeg: %s', FFMPEG_EXE)
-    app.run(host='0.0.0.0', port=5000, threaded=True)
+    app.run(host='127.0.0.1', port=5000, threaded=True)
 ```
 
 Why:
+- `host='127.0.0.1'` (since Sept 29 2026, Round A): the server has no login, so it must only be
+  reachable from this computer. `0.0.0.0` exposed it to everyone on the same Wi-Fi. Do NOT
+  "restore" 0.0.0.0. CORS is likewise restricted to the Netlify site + localhost (see the
+  Round A section at the end of this file).
 - `threaded=True` is required so `/health` keeps answering while long jobs run.
 - `sys.stdout = sys.stderr` protects older launcher builds that only drain stderr.
 - Thumbnail paths must use `logging`, not `print()`, so log volume is controlled and routable.
@@ -1137,7 +1141,8 @@ spec_to_ass v1 str()-ed them into the text).
   (pre-handshake backends) counts as stale.
 - The health poll contract from section 12 is unchanged (no early-return
   guard; 2.5s timeout; 3s interval).
-- Current build id: 2026-06-15-bleepfix.
+- Current build id: `2026-09-29-safety` (Sept 29 2026). Always check `BACKEND_BUILD` in server.py
+  and `EXPECTED_BACKEND_BUILD` in index.html rather than trusting this line.
 
 Regression risk: Medium — forgetting to bump BOTH constants makes every
 user see the stale banner (or worse, silences a real mismatch).
@@ -3058,3 +3063,49 @@ sequentially at full size (slow with many thumbnails); image thumbnails are cove
 (no "fit whole image" option yet); Save-Clip "Edit original" of another project's slim draft.
 Regression risk: Low–medium — frontend-only; verified in the browser against the live local
 backend with project writes, downloads and the titles API stubbed.
+
+## 2026-09-29 — Whole-app review, Round A: safety (build `2026-09-29-safety`)
+Handshake bumped on BOTH sides (`BACKEND_BUILD` / `EXPECTED_BACKEND_BUILD`) → full deploy:
+push (Netlify) + copy server.py next to the launcher + rebuild the flat zip + restart launcher.
+
+### Network exposure (server.py)
+- `app.run(host="127.0.0.1", …)` — was `0.0.0.0` (reachable from the whole Wi-Fi, no login).
+- `CORS(app, origins=[netlify site incl. deploy previews, http://localhost:*, http://127.0.0.1:*])`
+  — was `CORS(app)` (any website could call the API from the user's browser). A page opened
+  as a `file://` preview can no longer call the server; serve previews from localhost instead.
+- `get_project_path()` accepts only `^[A-Za-z0-9_-]{1,100}$` ids (raises ValueError;
+  `load_project()` returns None for a bad id).
+- `is_video_file_path()` (existing file + video extension) now gates: storing `source_path`
+  on `source_selected`, streaming `/projects/source_video/<id>`, and `/export_clip`'s
+  `source_path`. Previously any file on disk could be stored and then streamed back.
+
+### Data safety (server.py)
+- **Exports never overwrite.** `/export_clip`: `safe_clip_filename()` (basename only,
+  Windows-illegal `<>:"/\|?*` → `-`, always `.mp4`; typographic quotes kept), then
+  `unique_path_in()` picks `name (2).mp4`, `(3)`… if the file exists. ffmpeg writes to a temp
+  file; the finished clip (after the optional cover burn) is `shutil.move`d into Dropbox only
+  when every step succeeded — a failed encode leaves nothing half-written. The response's
+  `output_filename` is the name actually saved; the frontend (`doExport`) now uses it
+  (`savedName`) for `_savedClipExport.filename`, the success message and `export_created`, so the
+  later thumbnail attach (`/export_thumbnail`, which applies the same `safe_clip_filename()`
+  but NOT uniqueness) finds the right file.
+- **Crash-safe project saves.** `save_project()` writes `<id>.json.tmp`, fsyncs, then
+  `os.replace()` (was an in-place `'w'` write — truncated JSON made a project vanish).
+- **Readable errors.** `@app.errorhandler(Exception)` returns `{"error": …}` JSON (HTTP errors
+  keep their status). Unused `import dropbox` removed from the top of `export_clip`.
+
+### Hosting (netlify.toml)
+- Netlify now runs a build step that copies ONLY `index.html`, `brand/`, `fonts/`,
+  `TCF_Logo-Orange.png`, `Graphic_1-3.png` into `site/` and publishes that (`publish = "site"`).
+  Before, `publish = "."` served the whole repo (CLAUDE.md, CANONICAL.md, server.py, the zip).
+  `site/` is gitignored. If a new page asset is added, add it to the `cp` list.
+- Setup wizard (`#setup-view`): stale "Video Editor Downloads → start_server.bat" / Python steps
+  and the zip download button replaced with "Dropbox → Scripts → Foundry Video Editor → Start
+  Here to use Editor → START HERE (PC/Mac)".
+
+Verified: 18 server checks with Flask's test client against a temp project store (CORS
+allow/deny, JSON 404, id + path validation, atomic save), plus sandboxed real ffmpeg exports
+(Dropbox/Airtable disabled): unsafe name cleaned, second save became "(2)", thumbnail cover burn
+found the renamed clip.
+Regression risk: Medium — network/CORS changes affect every request; the page must be served
+from the Netlify site or localhost.
