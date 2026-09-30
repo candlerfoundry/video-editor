@@ -146,7 +146,9 @@ Regression risk: High.
 
 ---
 
-## 6. Thumbnail route and async job contract
+## 6. Thumbnail route and async job contract — REMOVED (Sept 30 2026, Round D)
+> `/thumbnail`, `/thumbnailstatus/<id>`, `_thumbnail_worker`, `thumbnail_jobs` and the Whisper-tiny
+> model were deleted; frames are picked by hand in the composer since June 10 (§21). Kept as history.
 
 > **DEPRECATED June 10, 2026 (manual thumbnail flow):** the live UI no longer
 > calls `/thumbnail` — frames are picked by hand (see section 21). The route,
@@ -179,7 +181,7 @@ Regression risk: Very high.
 
 ---
 
-## 7. Thumbnail frame sampling
+## 7. Thumbnail frame sampling — REMOVED with §6 (Round D); history only
 
 Canonical requirements inside `_thumbnail_worker()`:
 
@@ -204,7 +206,7 @@ Regression risk: High.
 
 ---
 
-## 8. Thumbnail extraction and logging
+## 8. Thumbnail extraction and logging — REMOVED with §6 (Round D); history only
 
 Canonical requirements:
 - Use `get_video_stream_info()` to capture raw size, display size, rotation, and orientation.
@@ -424,7 +426,7 @@ Regression risk: High.
 
 ---
 
-## 17. Clip export handoff and thumbnail reuse
+## 17. Clip export handoff and thumbnail reuse — SUPERSEDED by §21 / §25 and the Sept 2026 sections (the /thumbnail frame grid and "Regenerate" button it describes no longer exist)
 
 Canonical product rules:
 - After clip editing, users stay in the clip workflow and move directly into export choices.
@@ -3279,3 +3281,71 @@ the video and found again, landscape/portrait/rotated dimensions, /clips error, 
 image project) + browser checks (Find Clips error + Try again, Back / See results, empty state,
 size buttons gone, index-less SRT, banner suppressed, stray drop blocked), no console errors.
 Regression risk: Medium — /find_json selection and transcript saving change what gets loaded.
+
+## 2026-09-30 — Whole-app review, Round D: dead-code cleanup + docs (build `2026-09-30-cleanup`)
+Handshake bumped (routes removed) → full deploy. Removal rule used: a function/element/selector
+was deleted only when NOTHING outside the removed code still referred to it (scripted check,
+iterated to a fixed point; comments and dynamic class construction checked separately).
+
+### index.html (~1,900 lines removed this round; now ~11.6k lines, from ~13.4k before the review)
+- The OLD pre-June in-tab thumbnail editor: HTML `#thumb-state-processing`, `#thumb-state-hero`,
+  `#thumb-state-editor`; JS generateThumbnail, pollThumbnailJob, thumbShowState, thumbSetStep,
+  buildThumbHeroState, selectThumbFrame, setThumbTargetFormat, selectThumbStyle, redoFrames,
+  redoTitles, openThumbEditor, backToTitles, renderThumbCanvas, updateThumbText, setThumbFontSize /
+  Color / ColorFree / Overlay, downloadThumbPNG, syncThumbTargetFormat, applyStyleOverlay,
+  drawCoverFit, the `#thumb-text-drag` document mouse handlers, and the `_thumb*` globals they used
+  (`_thumbTitles`, `_thumbTargetFormat`, `_thumbFile` stay — live).
+- Style-card previews that drew into canvases that no longer exist: updateStyleCardPreviews (+ all
+  calls), renderFrameCanvas, applyThumbStyleOverlay, prepareStylePreviewCanvas, drawImageCover,
+  getCoverSourceRect, applyStylePreviewRatio, updateThumbFormatButtons, the `dlg-style-*` loop in
+  dlgBuildHeroState. `syncDlgTargetFormat()` now only sets the ratio + canvas layout; the window
+  resize handler only re-syncs the composer; DOMContentLoaded calls `setThumbPreviewRatio()`.
+- Save-Clip remnants: `#dialog-export` (never opened; its handlers didn't exist),
+  `#dialog-legacy-pre-export`, `#export-flow-thumb-frames`, renderExportFlowThumbGrid,
+  efPreviewLarge, efSelectFrame, efOpenVideoPicker/ClosePicker/PickScrub/UpdatePickTimecode/
+  CaptureVideoFrame, `_efSelectedThumbFrame` / `_efThumbFrames` and the unreachable doExport +
+  exportFlowOpenFullEditor branches, regenBtn/framesEl, unused `_exportThumbnailMode`,
+  `_selectedReuseThumbnailDraftId`, `_efThumbJobPending`; `saveClip` (old download flow) and
+  `buildClipCaptionsSrt` (the page sends `captions_spec`; the server's `captions_srt` path stays).
+- Never-called: bareStemJS, renderTranscript, showError, dlgApplyCaption, dlgSyncCaptionField,
+  setDlgTargetFormat, dlgRedoFrames, dlgSelectStyle, dlgBackToTitles, setDlgBgPill, setDlgColor,
+  setSelectedElemBrandColor, dlgMoveTextBoxLayer, setDlgTitleText, setDlgLogoEnabled/Placement/
+  Size, extractSpeakerName.
+- Caption split/merge (finished but never wired to a button; Emily doesn't use it — deleted):
+  materializeCaptionBreaks, splitCaptionGroupAtActiveWord, mergeCaptionGroupWithNext.
+- The unused wavesurfer.js <script> (loaded from unpkg on every visit).
+- ~14 KB of CSS whose classes/ids appear nowhere in the page or script (old waveform, style cards,
+  thumb size/format buttons, post-save panel, tag chips, mode bar, `.btn-dl-full`, …).
+
+### server.py (~470 lines removed)
+- Routes `/transcribe` (stub), `/generate_transcript` (superseded by `_upload`, which now saves),
+  `/thumbnail`, `/thumbnailstatus/<id>`; `_thumbnail_worker`, `thumbnail_jobs`, `get_whisper_tiny`
+  + `_WHISPER_TINY_MODEL`, `get_video_stream_info`, `get_caption_style`, `STYLE_STR`, the duplicate
+  `import glob`. `/thumbnails/reconcile` kept (one-time cleanup tool, harmless).
+- `get_whisper_model()` loads under `_WHISPER_LOCK` (two requests could each load the model).
+
+### Docs
+- CLAUDE.md: write-PAT record (recaOvVBu0kq9MCcU), real Dropbox paths (<Dropbox>/Scripts/…),
+  127.0.0.1 + restricted CORS, Netlify publish list, build handshake, flat `zip -j`, deploy =
+  copy server.py next to the launcher, Windows encoding gotcha, per-tab projects.
+- README.md rewritten for the current app (START HERE flow, tabs, naming, dev pointers).
+
+### Corrections to older sections of this file (they are kept as history; these win)
+- §3 ffmpeg: order is <Dropbox>/Scripts/FFMPEG/ffmpeg.exe, Dropbox/FFMPEG, Scripts/FFMPEG/bin, PATH;
+  its folder is also put on PATH for Whisper (Round C).
+- §4/§5: `find_video_in_dropbox()` itself checks/fills `video_path_cache` and skips hidden
+  folders; `/find_json` picks by bare stem (Round C). A first lookup can still walk Dropbox.
+- §15: the project store is per-OS (`_stable_app_data_root()`: LOCALAPPDATA on Windows,
+  ~/Library/Application Support on Mac); saves are atomic (Round A).
+- §19: cut/bleep ranges ARE persisted per clip (since §28) with split-screen choice/framing
+  (Round B).
+- §22: the Airtable clip record also gets "IG Social Media Caption".
+- §23: the cover burn prepends ~0.10 s at the source's native sample rate (see "coveraudio3").
+- §26: captions burn via `subtitles=filename=captions.ass`.
+- The Photo Motion sections near the end remain history only (feature removed July 28).
+
+Verified: server compiles; Round A (17/18 — the only "fail" is its hard-coded old build id),
+Round C (16/16) and export (10/10) test scripts pass on the trimmed server; browser smoke test
+across every tab, the image-based thumbnail composer (render, resize, expand), the clip editor
+(cut + undo), Save Clip open/close, Back to results and Edit Captions — no console errors.
+Regression risk: Low–medium — deletions only, each checked for remaining references.

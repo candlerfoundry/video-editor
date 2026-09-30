@@ -16,7 +16,6 @@
       font-display: swap;
     }
   </style>
-  <script src="https://unpkg.com/wavesurfer.js@7/dist/wavesurfer.min.js"></script>
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
@@ -147,19 +146,6 @@
       display: flex; align-items: center; justify-content: center;
       flex-shrink: 0; margin-top: 1px;
     }
-
-    .btn-dl-full {
-      display: block; width: 100%; text-align: center;
-      background: var(--surface);
-      border: 1px solid var(--border-2);
-      color: var(--text-2);
-      font-family: var(--font); font-size: 13px; font-weight: 500;
-      padding: 10px 20px; border-radius: 8px;
-      text-decoration: none;
-      transition: border-color 150ms, color 150ms;
-      margin-bottom: 18px;
-    }
-    .btn-dl-full:hover { border-color: var(--orange); color: var(--orange); }
 
     .wizard-status {
       display: flex; align-items: center; gap: 9px;
@@ -334,11 +320,6 @@
       font-size: 14px; color: var(--text-2);
       max-width: 500px; line-height: 1.6;
     }
-    .section-hero-action {
-      position: relative; z-index: 1;
-      align-self: flex-end;
-      flex-shrink: 0;
-    }
 
     /* ─── SHARED ELEMENTS ─── */
     .panel-body { padding: 32px 48px; }
@@ -367,11 +348,6 @@
     }
     .btn-ghost:hover { border-color: var(--orange); color: var(--orange); }
 
-    .btn-hero {
-      font-size: 14px; font-weight: 600;
-      padding: 11px 26px; border-radius: 9px;
-    }
-
     .card {
       background: var(--surface); border: 1px solid var(--border);
       border-radius: var(--r); padding: 20px 24px;
@@ -381,12 +357,6 @@
     .card:hover { border-color: rgba(232,84,26,0.28); box-shadow: 0 4px 16px rgba(0,0,0,0.08); }
     .card h3 { font-size: 14px; font-weight: 600; color: var(--text); margin-bottom: 6px; }
     .card p  { font-size: 13.5px; color: var(--text-2); line-height: 1.65; }
-
-    .card-accent {
-      border-left: 4px solid var(--orange);
-      border-radius: 0 var(--r) var(--r) 0;
-    }
-    .card-accent h3 { font-size: 16px; font-weight: 700; margin-bottom: 8px; }
 
     .project-shell-stat,
     .sidebar-project-stat {
@@ -674,12 +644,6 @@
     }
     .project-restore-banner .btn-ghost {
       flex-shrink: 0;
-    }
-    .recent-project-empty {
-      font-size: 13px;
-      color: var(--muted);
-      line-height: 1.6;
-      padding: 4px 0 2px;
     }
 
     .drop-zone {
@@ -1009,43 +973,10 @@
       color: var(--muted); margin-bottom: 8px;
     }
     .drop-zone-label svg { flex-shrink: 0; }
-
-    /* What Claude looks for tags */
-    .tag-row { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 16px; }
     .tag {
       display: inline-flex; align-items: center;
       padding: 6px 14px; border-radius: 20px;
       font-size: 12.5px; font-weight: 600; letter-spacing: 0.01em;
-    }
-    .tag-blue   { background: #EFF6FF; color: #1D4ED8; }
-    .tag-orange { background: var(--orange-tint); color: var(--orange); }
-    .tag-green  { background: #DCFCE7; color: #166534; }
-    .tag-purple { background: #F5F3FF; color: #6D28D9; }
-    .tag-red    { background: #FEF2F2; color: #DC2626; }
-
-    /* ─── THUMBNAILS STYLE GRID ─── */
-    .style-grid {
-      display: grid; grid-template-columns: repeat(3,1fr);
-      gap: 14px; margin-top: 24px;
-    }
-    .style-card {
-      background: var(--surface); border: 1px solid var(--border);
-      border-radius: var(--r); padding: 14px; text-align: center;
-      cursor: pointer; transition: border-color 150ms, box-shadow 150ms;
-      box-shadow: var(--shadow-sm);
-    }
-    .style-card:hover { border-color: var(--orange); box-shadow: 0 0 0 3px var(--orange-tint); }
-    .style-preview { height: 64px; border-radius: 6px; margin-bottom: 10px; }
-    .style-name { font-size: 13px; font-weight: 600; color: var(--text); }
-    .style-desc { font-size: 12px; color: var(--muted); margin-top: 3px; }
-    .warm-bar    { background: linear-gradient(135deg, #7a3010 0%, #c84826 60%, #f5a623 100%); }
-    .bold-corner { background: linear-gradient(135deg, #1a1a2e 0%, #2d2d5e 100%); }
-    .kinetic     { background: linear-gradient(135deg, #0a1628 0%, #1a3a2a 60%, #2a5a1a 100%); }
-    .style-preview-canvas {
-      display: block; width: min(100%, 170px); height: auto;
-      aspect-ratio: var(--thumb-preview-ratio, 16 / 9);
-      border-radius: 6px; margin: 0 auto 10px;
-      background: #111;
     }
 
     /* ─── EDIT CAPTIONS SPECIFIC ─── */
@@ -1095,17 +1026,6 @@
       border-radius: 4px; padding: 3px 8px;
       margin: -3px -8px;
     }
-    /* ─── MODE BAR (set start/end range) ─── */
-    .mode-bar {
-      display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
-      background: var(--surface); border: 1px solid var(--border);
-      border-radius: var(--r); padding: 11px 16px;
-      margin-bottom: 12px; box-shadow: var(--shadow-sm);
-    }
-    .mode-label {
-      font-size: 11px; font-weight: 700; text-transform: uppercase;
-      letter-spacing: 0.08em; color: var(--muted); flex-shrink: 0;
-    }
     .mode-toggle {
       display: flex; border: 1px solid var(--border-2);
       border-radius: 6px; overflow: hidden; flex-shrink: 0;
@@ -1118,26 +1038,6 @@
     }
     .mode-btn + .mode-btn { border-left: 1px solid var(--border-2); }
     .mode-btn.active { background: var(--orange); color: #fff; }
-    .mode-range-display {
-      flex: 1; font-size: 12.5px; font-family: var(--font-mono);
-      color: var(--text-2); min-width: 120px;
-    }
-    .btn-clear {
-      background: none; border: 1px solid var(--border-2);
-      color: var(--muted); font-family: var(--font);
-      font-size: 12px; font-weight: 500; padding: 4px 10px;
-      border-radius: 5px; cursor: pointer;
-      transition: border-color 150ms, color 150ms; flex-shrink: 0;
-    }
-    .btn-clear:hover { border-color: var(--orange); color: var(--orange); }
-
-    /* ─── TRANSCRIPT PANEL ─── */
-    .transcript-panel-wrap {
-      background: var(--surface); border: 1px solid var(--border);
-      border-radius: var(--r); padding: 18px 22px;
-      margin-bottom: 20px; max-height: 250px;
-      overflow-y: auto; box-shadow: var(--shadow-sm);
-    }
     #transcript-panel {
       font-size: 17px; font-weight: 400; line-height: 1.8;
       color: var(--text); font-family: var(--font);
@@ -1147,15 +1047,6 @@
       padding: 1px 1px; transition: background 80ms;
     }
     .tx-word:hover { background: #F0EDE6; }
-    .tx-word.sel-start {
-      background: var(--orange-tint2); color: var(--orange);
-      border-radius: 3px 0 0 3px;
-    }
-    .tx-word.in-range { background: var(--orange-tint); }
-    .tx-word.sel-end {
-      background: var(--orange-tint2); color: var(--orange);
-      border-radius: 0 3px 3px 0;
-    }
 
     /* ─── SKELETON LOADER ─── */
     .skeleton-card {
@@ -1179,9 +1070,6 @@
       border-color: rgba(232,84,26,0.35);
       box-shadow: 0 8px 24px rgba(0,0,0,0.10);
     }
-    .candidate-header {
-      display: flex; align-items: center; gap: 12px; margin-bottom: 12px;
-    }
     .score-badge {
       width: 38px; height: 38px; border-radius: 50%;
       display: flex; align-items: center; justify-content: center;
@@ -1190,18 +1078,6 @@
     .score-green  { background: #DCFCE7; color: #166534; }
     .score-amber  { background: #FEF3C7; color: #92400E; }
     .score-grey   { background: #F3F4F6; color: #6B7280; }
-    .candidate-ts {
-      font-family: var(--font-mono); font-size: 12px;
-      color: var(--orange); font-weight: 500; margin-top: 2px;
-    }
-    .candidate-hookline {
-      font-size: 15px; font-weight: 600; color: var(--text);
-      margin-bottom: 6px; line-height: 1.4;
-    }
-    .candidate-reason {
-      font-size: 13px; color: var(--text-2);
-      line-height: 1.65; margin-bottom: 14px;
-    }
     .candidate-actions { display: flex; gap: 8px; }
     .btn-sm { padding: 6px 14px !important; font-size: 12.5px !important; }
 
@@ -1211,14 +1087,7 @@
       box-shadow: 0 0 0 3px var(--orange-tint), var(--shadow-sm);
     }
     .candidate-card.selected:hover { transform: none; }
-    .candidate-card { cursor: default; }  /* the card itself isn't clickable — its buttons are */
-
-    /* ─── MINI-EDITOR ─── */
-    #mini-editor-controls {
-      margin-top: 16px;
-      padding-top: 16px;
-      border-top: 1px solid var(--border);
-    }
+    .candidate-card { cursor: default; }
     .editor-clip-label {
       font-size: 13px; font-weight: 600;
       color: var(--orange);
@@ -1228,31 +1097,6 @@
       padding: 7px 14px;
       margin-bottom: 14px;
       white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-    }
-
-    /* Waveform container */
-    .waveform-wrap {
-      position: relative;
-      border-radius: 6px;
-      overflow: hidden;
-      margin-bottom: 14px;
-      background: #F4F2EE;
-      border: 1px solid var(--border);
-      min-height: 60px;
-    }
-    #waveform { width: 100%; display: block; }
-
-    /* Handle overlay */
-    .handle-overlay {
-      position: absolute;
-      inset: 0;
-      pointer-events: none;
-    }
-    .region-fill {
-      position: absolute;
-      top: 0; bottom: 0;
-      background: rgba(232,84,26,0.14);
-      pointer-events: none;
     }
     .handle {
       position: absolute;
@@ -1281,8 +1125,6 @@
       background: var(--orange);
       border-radius: 4px;
     }
-    .handle-in  { border-radius: 2px 0 0 2px; }
-    .handle-out { border-radius: 0 2px 2px 0; }
 
     /* Time fields row */
     .editor-time-row {
@@ -1305,19 +1147,6 @@
       outline: none; transition: border-color 150ms;
     }
     .time-input:focus { border-color: var(--orange); }
-
-    /* Below-video button row */
-    .editor-btn-row {
-      display: flex; gap: 8px; flex-wrap: wrap;
-    }
-
-    /* ─── SAVE CLIP ROW ─── */
-    .save-clip-row {
-      margin-top: 16px;
-      padding-top: 16px;
-      border-top: 1px solid var(--border);
-      display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
-    }
 
     /* ─── EXPORT STATUS ─── */
     #export-status { margin-top: 12px; }
@@ -1380,34 +1209,6 @@
     }
     .export-error strong { font-weight: 600; }
 
-    /* ─── CUSTOM TIMELINE RANGE ─── */
-    #timeline-range {
-      width: 100%; height: 8px;
-      border-radius: 4px;
-      outline: none; cursor: pointer;
-      -webkit-appearance: none; appearance: none;
-      border: none;
-      background: rgba(0,0,0,0.12);
-      display: block; margin-bottom: 14px;
-    }
-    #timeline-range::-webkit-slider-thumb {
-      -webkit-appearance: none;
-      width: 16px; height: 16px;
-      border-radius: 50%;
-      background: var(--orange);
-      cursor: pointer;
-      border: 2px solid #fff;
-      box-shadow: 0 1px 4px rgba(0,0,0,0.25);
-    }
-    #timeline-range::-moz-range-thumb {
-      width: 16px; height: 16px;
-      border-radius: 50%;
-      background: var(--orange);
-      cursor: pointer;
-      border: 2px solid #fff;
-      box-shadow: 0 1px 4px rgba(0,0,0,0.25);
-    }
-
     /* ─── THUMBNAILS TAB ─── */
     .thumb-step-list {
       background: var(--surface); border: 1px solid var(--border);
@@ -1438,76 +1239,9 @@
       flex-shrink: 0;
       background: #111;
     }
-    #dlg-canvas, #thumb-canvas {
+    #dlg-canvas {
       border-radius: var(--r);
     }
-    #thumb-canvas { display: block; width: 100%; height: 100%; }
-    #thumb-text-drag {
-      position: absolute; cursor: move; user-select: none;
-      padding: 4px 10px;
-      border: 2px dashed rgba(255,255,255,0.55);
-      border-radius: 4px; text-align: center;
-      transform: translate(-50%, -50%);
-      white-space: pre-wrap; max-width: 88%;
-      pointer-events: all;
-    }
-    .title-card {
-      background: var(--surface); border: 1px solid var(--border);
-      border-radius: var(--r); padding: 10px 14px;
-      cursor: pointer;
-      transition: border-color 150ms, box-shadow 150ms, background 150ms;
-      font-size: 13.5px; font-weight: 500; line-height: 1.45; color: var(--text);
-      box-shadow: var(--shadow-sm);
-    }
-    .title-card:hover { border-color: var(--orange); }
-    .title-card.selected {
-      border-color: var(--orange); background: var(--orange-tint);
-      box-shadow: 0 0 0 3px var(--orange-tint);
-    }
-    .style-card.selected {
-      border-color: var(--orange);
-      box-shadow: 0 0 0 3px var(--orange-tint);
-    }
-    .thumb-font-select {
-      font-family: var(--font); font-size: 13px; font-weight: 500;
-      border: 1px solid var(--border-2); border-radius: 6px;
-      padding: 6px 10px; background: var(--surface); color: var(--text);
-      outline: none; cursor: pointer; width: 100%;
-    }
-    .thumb-font-select:focus { border-color: var(--orange); }
-    .thumb-size-btn {
-      width: 30px; height: 30px; border-radius: 6px;
-      background: var(--surface); border: 1px solid var(--border-2);
-      color: var(--text-2); font-size: 18px; font-weight: 500;
-      cursor: pointer; display: flex; align-items: center; justify-content: center;
-      transition: border-color 150ms, color 150ms;
-    }
-    .thumb-size-btn:hover { border-color: var(--orange); color: var(--orange); }
-    .thumb-size-val {
-      font-family: var(--font-mono); font-size: 13px; font-weight: 600;
-      color: var(--text); min-width: 32px; text-align: center;
-    }
-    .thumb-control-label {
-      font-size: 11px; font-weight: 700; text-transform: uppercase;
-      letter-spacing: 0.07em; color: var(--muted); margin-bottom: 6px;
-    }
-
-    /* ─── TRANSCRIPT CLIP VIEW ─── */
-    .tx-word.out-of-clip { opacity: 0.4; }
-    .tx-clip-marker {
-      display: block;
-      font-size: 10px; font-weight: 700;
-      text-transform: uppercase; letter-spacing: 0.08em;
-      color: var(--orange);
-      margin: 8px 0 4px;
-    }
-    #transcript-toggle {
-      background: none; border: none;
-      color: var(--orange); font-size: 12px; font-weight: 500;
-      cursor: pointer; font-family: var(--font); padding: 0;
-      text-decoration: underline;
-    }
-    #transcript-toggle:hover { color: var(--orange-hover); }
 
     /* ─── STAGE 3 TWO-COLUMN EDITOR LAYOUT ─── */
     .editor-two-col {
@@ -1592,7 +1326,6 @@
       background: var(--orange); color: #fff; border-radius: 4px;
     }
     .tx-word.tx-bleep:hover { background: #FDE68A; }
-    .tx-mode-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 8px; }
     .clip-cuts-list { margin-top: 12px; border: 1px solid var(--border); border-radius: 8px; padding: 8px 10px; background: var(--surface); }
     .clip-cuts-list .cuts-title { font-size: 12px; font-weight: 700; letter-spacing: 0.07em; text-transform: uppercase; color: var(--muted); margin-bottom: 7px; }
     .clip-ig-box { margin-top: 12px; border: 1px solid #D5E2F2; border-radius: 8px; padding: 8px 10px; background: #F5F8FD; }
@@ -1663,7 +1396,6 @@
     .split-controls .ss-ctl-val { font-size:11px; color:var(--text-2); min-width:34px; }
     .split-controls .ss-hint { font-size:11px; color:var(--muted); }
     #split-canvas { position:absolute; inset:0; width:100%; height:100%; z-index:4; cursor:move; background:#000; border-radius:8px; }
-    .speed-btn.active { background: var(--orange); border-color: var(--orange); color: #fff; }
     #dlg-canvas-wrap.pan-mode { cursor: grab; }
     #dlg-canvas-wrap.pan-mode:active { cursor: grabbing; }
     #dlg-canvas-wrap.pan-mode .dlg-overlay-text,
@@ -1755,7 +1487,6 @@
     }
     #dialog-export-flow,
     #dialog-project-resume { max-width: min(720px, 95vw); }
-    .modal-icon { font-size: 38px; text-align: center; margin-bottom: 12px; }
     .modal-heading {
       font-family: var(--font-serif); font-size: 20px; font-weight: 700;
       color: var(--text); margin-bottom: 8px; text-align: center;
@@ -1804,17 +1535,6 @@
     }
     .export-form-input:focus, .export-form-select:focus { border-color: var(--orange); }
     .export-form-select { cursor: pointer; }
-    .export-form-readonly {
-      display: block; width: 100%; font-size: 13px; color: var(--muted);
-      font-family: var(--font-mono); padding: 9px 12px; background: var(--sidebar-bg);
-      border: 1px solid var(--border); border-radius: 8px;
-    }
-    .export-flow-intro {
-      margin-bottom: 18px;
-      font-size: 13px;
-      color: var(--text-2);
-      line-height: 1.65;
-    }
     .export-folder-card {
       border: 1px solid var(--border);
       border-radius: 12px;
@@ -1838,23 +1558,6 @@
       color: var(--text);
       margin-top: 6px;
     }
-    .export-folder-actions,
-    .post-save-actions {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 10px;
-      margin-top: 14px;
-    }
-    .export-folder-choice {
-      display: flex;
-      flex-direction: column;
-      gap: 10px;
-      padding: 14px;
-      border: 1px dashed var(--border-2);
-      border-radius: 10px;
-      background: var(--sidebar-bg);
-      margin-top: 12px;
-    }
     .export-folder-selected {
       margin-top: 14px;
       padding: 12px 14px;
@@ -1865,70 +1568,7 @@
       font-size: 13px;
       line-height: 1.6;
     }
-    .post-save-note {
-      margin-top: 10px;
-      font-size: 13px;
-      color: var(--text-2);
-      line-height: 1.6;
-    }
-    .post-save-thumbnail-list {
-      display: flex;
-      flex-direction: column;
-      gap: 12px;
-      margin-top: 16px;
-    }
-    .post-save-thumb-card {
-      display: grid;
-      grid-template-columns: minmax(140px, 180px) 1fr;
-      gap: 14px;
-      padding: 14px;
-      border: 1px solid var(--border);
-      border-radius: 12px;
-      background: var(--surface);
-    }
-    .post-save-thumb-preview-wrap {
-      display: flex;
-      align-items: center;
-      justify-content: center;
-    }
-    .post-save-thumb-preview {
-      width: 100%;
-      min-height: 220px;
-      border-radius: 10px;
-      border: 1px solid var(--border);
-      background: #111;
-      color: #fff;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      font-size: 12px;
-      text-align: center;
-      overflow: hidden;
-    }
-    .post-save-thumb-preview.loading {
-      background: #2A2A2A;
-      color: rgba(255,255,255,0.72);
-    }
-    .post-save-thumb-preview img {
-      display: block;
-      width: 100%;
-      height: auto;
-      object-fit: contain;
-    }
-    .post-save-thumb-meta {
-      display: flex;
-      flex-direction: column;
-      gap: 8px;
-      min-width: 0;
-    }
     @media (max-width: 720px) {
-      .post-save-thumb-card {
-        grid-template-columns: 1fr;
-      }
-      .post-save-thumb-preview {
-        max-width: 220px;
-        margin: 0 auto;
-      }
     }
     /* Thumbnail preview strip in clip panel */
     #thumb-preview-panel {
@@ -1962,34 +1602,6 @@
       font-size: 10px; font-weight: 700; letter-spacing: 0.04em;
       color: #fff; background: rgba(0,0,0,0.6); padding: 1px 6px; border-radius: 4px;
       filter: none;
-    }
-    .thumb-format-group {
-      display: flex;
-      gap: 8px;
-      flex-wrap: wrap;
-      margin-bottom: 14px;
-    }
-    .thumb-format-btn {
-      border: 1px solid var(--border-2);
-      background: var(--surface);
-      color: var(--text-2);
-      border-radius: 999px;
-      padding: 8px 12px;
-      font: inherit;
-      font-size: 12.5px;
-      font-weight: 600;
-      cursor: pointer;
-      transition: border-color 150ms, background-color 150ms, color 150ms, box-shadow 150ms;
-    }
-    .thumb-format-btn:hover {
-      border-color: var(--orange);
-      color: var(--text);
-    }
-    .thumb-format-btn.selected {
-      border-color: var(--orange);
-      background: var(--orange-tint);
-      color: var(--orange);
-      box-shadow: 0 0 0 3px var(--orange-tint);
     }
     #dlg-overlay-layer {
       position: absolute;
@@ -2083,27 +1695,6 @@
       color: var(--muted);
       margin-bottom: 8px;
     }
-    .design-elem-btn {
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      width: 36px;
-      height: 36px;
-      border: 1.5px solid var(--border);
-      border-radius: 8px;
-      background: var(--surface);
-      cursor: pointer;
-      transition: border-color 150ms, background 150ms;
-      padding: 4px;
-      font-family: inherit;
-    }
-    .design-elem-btn:hover {
-      border-color: var(--orange);
-      background: var(--orange-tint, rgba(200,72,38,0.07));
-    }
-    .design-elem-emoji {
-      font-size: 18px;
-    }
     .dlg-design-elem-overlay {
       position: absolute;
       cursor: move;
@@ -2177,8 +1768,6 @@
     .dlg-layer-btns { flex: 0 0 auto; display: flex; gap: 3px; }
     .dlg-layer-btns .btn-sm { padding: 1px 7px; font-size: 11px; line-height: 1.4; }
     .dlg-layer-btns .btn-sm[disabled] { opacity: 0.3; cursor: default; }
-    .thumb-editor-input,
-    .thumb-editor-textarea,
     .thumb-editor-select {
       width: 100%;
       font: inherit;
@@ -2188,11 +1777,6 @@
       border: 1px solid var(--border-2);
       border-radius: 10px;
       padding: 10px 12px;
-    }
-    .thumb-editor-textarea {
-      min-height: 84px;
-      resize: vertical;
-      line-height: 1.45;
     }
     .thumb-editor-grid {
       display: grid;
@@ -2207,11 +1791,6 @@
       gap: 6px;
       width: 320px;
       margin-bottom: 12px;
-    }
-    #export-flow-thumb-frames.frame-grid {
-      grid-template-columns: repeat(auto-fill, minmax(80px, 1fr));
-      gap: 6px;
-      width: auto;
     }
     .frame-cell {
       position: relative;
@@ -2889,173 +2468,6 @@
           </div>
         </div>
 
-        <!-- STATE 2: Processing -->
-        <div id="thumb-state-processing" style="display:none;">
-          <div class="thumb-step-list">
-            <div class="thumb-step" id="tstep-1"><div class="thumb-step-dot"></div>Extracting frames&hellip;</div>
-            <div class="thumb-step" id="tstep-2"><div class="thumb-step-dot"></div>Finding best shot&hellip;</div>
-            <div class="thumb-step" id="tstep-3"><div class="thumb-step-dot"></div>Generating titles&hellip;</div>
-            <div class="thumb-step" id="tstep-4"><div class="thumb-step-dot"></div>Ready</div>
-          </div>
-          <div class="skeleton-card" style="height:180px;max-width:560px;"></div>
-        </div>
-
-        <!-- STATE 3: Hero + Titles -->
-        <div id="thumb-state-hero" style="display:none;">
-          <div style="display:flex;gap:24px;flex-wrap:wrap;align-items:flex-start;margin-bottom:20px;">
-
-            <!-- Frame selection grid -->
-            <div style="flex-shrink:0;">
-              <div class="thumb-control-label" style="margin-bottom:8px;">CHOOSE YOUR BEST FRAME</div>
-              <div id="thumb-frame-grid" class="frame-grid"></div>
-              <div style="display:flex;gap:8px;margin-top:8px;flex-wrap:wrap;">
-                <button class="btn-ghost btn-sm" id="btn-redo-frames" onclick="redoFrames()">
-                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                       stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
-                    <polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 .49-3.2"/>
-                  </svg>
-                  Redo Frames
-                </button>
-                <button class="btn-ghost btn-sm" id="btn-redo-titles" onclick="redoTitles()">
-                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                       stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
-                    <polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 .49-3.2"/>
-                  </svg>
-                  Redo Titles
-                </button>
-              </div>
-            </div>
-
-            <!-- Style picker -->
-            <div style="flex:1;min-width:260px;">
-              <div class="thumb-control-label" style="margin-bottom:8px;">Thumbnail Format</div>
-              <div class="thumb-format-group">
-                <button type="button" class="thumb-format-btn selected" data-thumb-format-target="main" data-thumb-format="instagram" onclick="setThumbTargetFormat('instagram')">9:16 &middot; Reels &amp; Shorts</button>
-              </div>
-              <div class="thumb-control-label" style="margin-bottom:8px;">Style</div>
-              <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;">
-                <div class="style-card" id="style-warm_bar" onclick="selectThumbStyle('warm_bar')">
-                  <canvas class="style-preview-canvas" id="style-canvas-warm_bar" width="160" height="90"></canvas>
-                  <div class="style-name">Caption Bar</div>
-                </div>
-                <div class="style-card" id="style-bold_corner" onclick="selectThumbStyle('bold_corner')">
-                  <canvas class="style-preview-canvas" id="style-canvas-bold_corner" width="160" height="90"></canvas>
-                  <div class="style-name">Bold Title</div>
-                </div>
-                <div class="style-card" id="style-kinetic_slash" onclick="selectThumbStyle('kinetic_slash')">
-                  <canvas class="style-preview-canvas" id="style-canvas-kinetic_slash" width="160" height="90"></canvas>
-                  <div class="style-name">Split</div>
-                </div>
-              </div>
-            </div>
-
-          </div>
-
-          <!-- Title cards -->
-          <div class="thumb-control-label" style="margin-bottom:10px;">Choose a Title</div>
-          <div id="thumb-titles-grid"
-               style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:20px;"></div>
-        </div>
-
-        <!-- STATE 4: Canvas Editor -->
-        <div id="thumb-state-editor" style="display:none;">
-          <button class="stage3-back" onclick="backToTitles()">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                 stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
-              <polyline points="15 18 9 12 15 6"/>
-            </svg>
-            Back to titles
-          </button>
-
-          <div style="display:flex;gap:24px;flex-wrap:wrap;align-items:flex-start;">
-
-            <!-- Canvas -->
-            <div>
-              <div class="thumb-canvas-wrap" id="thumb-canvas-wrap">
-                <canvas id="thumb-canvas" width="1280" height="720"></canvas>
-                <div id="thumb-text-drag"></div>
-              </div>
-              <p style="font-size:12px;color:var(--muted);margin-top:8px;">
-                Drag the title text to reposition it.
-              </p>
-            </div>
-
-            <!-- Controls -->
-            <div style="flex:1;min-width:200px;display:flex;flex-direction:column;gap:12px;">
-              <div class="card">
-                <h3 style="margin-bottom:14px;">Text Style</h3>
-                <div style="display:flex;flex-direction:column;gap:14px;">
-                  <div>
-                    <div class="thumb-control-label">Thumbnail Format</div>
-                    <div class="thumb-format-group" style="margin-bottom:0;">
-                      <button type="button" class="thumb-format-btn selected" data-thumb-format-target="main" data-thumb-format="instagram" onclick="setThumbTargetFormat('instagram')">9:16 &middot; Reels &amp; Shorts</button>
-                    </div>
-                  </div>
-
-                  <div>
-                    <div class="thumb-control-label">Font</div>
-                    <select class="thumb-font-select" id="thumb-font-select" onchange="updateThumbText();renderThumbCanvas()">
-                  <option value="'Handmade Sans'" style="font-family:'Handmade Sans'">Handmade Sans</option>
-                  <option value="'Montserrat'" style="font-family:'Montserrat',sans-serif">Montserrat</option>
-                  <option value="'Covered By Your Grace'" style="font-family:'Covered By Your Grace'">Covered By Your Grace</option>
-                  <option value="'Permanent Marker'" style="font-family:'Permanent Marker'">Permanent Marker</option>
-                  <option value="'Rock Salt'" style="font-family:'Rock Salt'">Rock Salt</option>
-                  <option value="'Shadows Into Light Two'" style="font-family:'Shadows Into Light Two'">Shadows Into Light Two</option>
-                  <option value="'Waiting for the Sunrise'" style="font-family:'Waiting for the Sunrise'">Waiting for the Sunrise</option>
-                    </select>
-                  </div>
-
-                  <div>
-                    <div class="thumb-control-label">Text Color</div>
-                    <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;">
-                      <button class="color-swatch selected" style="background:#FFFFFF;border-color:#ccc;" onclick="setThumbColor('#ffffff',this)" title="White"></button>
-                      <button class="color-swatch" style="background:#111111;" onclick="setThumbColor('#111111',this)" title="Black"></button>
-                      <button class="color-swatch" style="background:#E8541A;" onclick="setThumbColor('#E8541A',this)" title="CF Orange"></button>
-                      <button class="color-swatch" style="background:#F5A623;" onclick="setThumbColor('#F5A623',this)" title="CF Amber"></button>
-                      <button class="color-swatch" style="background:#2D6A4F;" onclick="setThumbColor('#2D6A4F',this)" title="CF Green"></button>
-                      <input type="color" id="thumb-color-custom" value="#ffffff"
-                             style="width:28px;height:28px;border:1px solid var(--border);border-radius:4px;cursor:pointer;padding:0;flex-shrink:0;"
-                             oninput="setThumbColorFree(this.value)">
-                    </div>
-                  </div>
-
-                  <div>
-                    <div class="thumb-control-label">Size &nbsp;<span id="thumb-size-val">64</span>px</div>
-                    <input type="range" id="thumb-size-slider" min="24" max="120" value="64"
-                           style="width:100%;accent-color:var(--orange);"
-                           oninput="setThumbFontSize(this.value)">
-                  </div>
-
-                  <div style="display:flex;align-items:center;gap:10px;">
-                    <div class="thumb-control-label" style="margin-bottom:0;">Text Shadow</div>
-                    <input type="checkbox" id="thumb-shadow-toggle" checked
-                           style="accent-color:var(--orange);width:16px;height:16px;cursor:pointer;"
-                           onchange="updateThumbText();renderThumbCanvas()">
-                  </div>
-
-                  <div>
-                    <div class="thumb-control-label">Text Background &nbsp;<span id="thumb-overlay-val">0</span>%</div>
-                    <input type="range" id="thumb-overlay-slider" min="0" max="80" value="0"
-                           style="width:100%;accent-color:var(--orange);"
-                           oninput="setThumbOverlay(this.value)">
-                  </div>
-
-                </div>
-              </div>
-              <button class="btn" onclick="downloadThumbPNG()" style="align-self:flex-start;">
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                     stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
-                  <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/>
-                  <polyline points="7 10 12 15 17 10"/>
-                  <line x1="12" y1="15" x2="12" y2="3"/>
-                </svg>
-                Download PNG
-              </button>
-            </div>
-
-          </div>
-        </div>
-
         <div id="thumb-tab-preview-panel" class="card" style="display:none; margin-top:20px;">
           <h3 style="margin-bottom:12px;">Latest Thumbnail Draft</h3>
           <div style="display:flex; gap:16px; align-items:flex-start; flex-wrap:wrap;">
@@ -3256,7 +2668,7 @@
   // Must match BACKEND_BUILD in server.py — bumped together whenever the
   // frontend/backend contract changes. A mismatch means the user is running
   // an old backend (launcher not restarted after a deploy).
-  const EXPECTED_BACKEND_BUILD = '2026-09-30-ux';
+  const EXPECTED_BACKEND_BUILD = '2026-09-30-cleanup';
 
   if (document.fonts && document.fonts.load) { document.fonts.load("700 64px 'Handmade Sans'").catch(function(){}); document.fonts.load("700 64px 'Montserrat'").catch(function(){}); }
   let _staleBackendWarned = false;
@@ -4254,21 +3666,6 @@
   }
 
   // ── Strip known video suffixes from filename stem (mirrors server.py bare_stem) ──
-  function bareStemJS(filename) {
-    let stem = filename.replace(/\.[^.]+$/, '');
-    const patterns = [
-      /\s*-\s*Horizontal\s*-\s*Uncaptioned/i,
-      /\s*-\s*Vertical\s*-\s*Uncaptioned/i,
-      /\s*\(Uncaptioned\)/i,
-      /\s*-\s*Uncaptioned/i,
-      /\s*\(Captioned\)/i,
-      /\s*-\s*Horizontal/i,
-      /\s*-\s*Vertical/i,
-    ];
-    for (const pat of patterns) stem = stem.replace(pat, '').trim();
-    return stem;
-  }
-
   // ── Single MP4 picker — backend locates matching Words JSON in Dropbox ──
   document.getElementById('clips-file').addEventListener('change', async function(e) {
     const file = e.target.files[0];
@@ -4498,20 +3895,6 @@
   }
 
   // ── Helper: render transcript into #transcript-panel ──
-  function renderTranscript(words) {
-    const panel = document.getElementById('transcript-panel');
-    panel.innerHTML = '';
-    words.forEach((w, i) => {
-      const span = document.createElement('span');
-      span.className = 'tx-word';
-      span.dataset.idx = i;
-      span.dataset.start = w.start ?? 0;
-      span.dataset.end   = w.end   ?? 0;
-      span.textContent = (w.word ?? w.text ?? '') + ' ';
-      panel.appendChild(span);
-    });
-  }
-
   // Transcript word click (Stage 3)
   document.getElementById('transcript-panel').addEventListener('click', function (e) {
     if (_txSuppressClick) { _txSuppressClick = false; return; }
@@ -5466,10 +4849,6 @@
 
 
   // ── Helper: escHtml ──
-  function showError(msg) {
-    alert(msg);
-  }
-
   function escHtml(s) {
     return String(s)
       .replace(/&/g, '&amp;')
@@ -6070,8 +5449,6 @@
   // ══════════════════════════════════════════
 
   let _thumbFile           = null;
-  let _thumbFrames         = [];     // array of base64 JPEGs from backend (up to 8)
-  let _thumbSelectedFrame  = 0;      // index into _thumbFrames
   let _thumbTitles         = [];
   const FOUNDRY_LOGO_ASSET = 'TCF_Logo-Orange.png';
   const THUMB_LAYOUT_PRESETS = {
@@ -6087,16 +5464,6 @@
     kinetic_slash: 'bottom_banner',
   };
 
-  let _thumbStyle          = 'lower_third';
-  let _thumbTitle          = '';
-  let _thumbFontFamily     = 'Handmade Sans';
-  let _thumbFontSize       = 64;     // canvas-resolution px (1280-wide canvas)
-  let _thumbCanvasTX       = 640;    // text center X in canvas-space (0-1280)
-  let _thumbCanvasTY       = 590;    // text center Y in canvas-space (0-720)
-  let _thumbTextColor      = '#ffffff';
-  let _thumbShadowOn       = true;
-  let _thumbOverlayOpacity = 0;      // 0-80
-  let _thumbVideoInfo      = null;
   let _thumbTargetFormat   = 'instagram';
   let _sharedThumbnailEntryPoint = 'standalone';
   let _sharedThumbnailDraft = null;
@@ -6936,279 +6303,6 @@
   })();
 
   // ── Thumbnail async polling helper ──
-  async function pollThumbnailJob(jobId, onComplete, onError) {
-    for (;;) {
-      await new Promise(r => setTimeout(r, 2000));
-      try {
-        const res  = await fetch(BACKEND + '/thumbnailstatus/' + jobId);
-        const data = await res.json();
-        if (data.status === 'complete') { onComplete(data); return; }
-        if (data.status === 'error')    { onError(data.error || 'Unknown error'); return; }
-        // status === 'processing' → keep polling
-      } catch (e) {
-        onError('Poll failed: ' + e.message); return;
-      }
-    }
-  }
-
-  function thumbShowState(state) {
-    ['upload', 'processing', 'hero', 'editor'].forEach(s => {
-      const el = document.getElementById('thumb-state-' + s);
-      if (el) el.style.display = s === state ? 'block' : 'none';
-    });
-  }
-
-  function thumbSetStep(n) {
-    for (let i = 1; i <= 4; i++) {
-      const el = document.getElementById('tstep-' + i);
-      if (!el) continue;
-      el.className = 'thumb-step' + (i < n ? ' done' : i === n ? ' active' : '');
-    }
-  }
-
-  async function generateThumbnail() {
-    if (!_thumbFile) { alert('Load a video first.'); return; }
-    if (!backendOnline) { alert('Backend is not connected.'); return; }
-
-    thumbShowState('processing');
-    thumbSetStep(1);
-
-    // Build clip transcript from words data if available
-    let clip_transcript = '';
-    if (_wordsData && editorInTime < editorOutTime) {
-      clip_transcript = _wordsData
-        .filter(w => (w.start ?? 0) < editorOutTime && (w.end ?? w.start ?? 0) >= editorInTime)
-        .map(w => w.word).join(' ').trim();
-    }
-
-    const form = new FormData();
-    form.append('filename',        _thumbFile.name);
-    form.append('clipstart',       editorInTime  > 0 ? String(editorInTime)  : '');
-    form.append('clipend',         editorOutTime > 0 ? String(editorOutTime) : '');
-    form.append('clip_transcript', clip_transcript);
-
-    let jobId;
-    try {
-      const res  = await fetch(BACKEND + '/thumbnail', { method: 'POST', body: form });
-      const data = await res.json();
-      if (!res.ok || data.error) {
-        thumbShowState('upload');
-        alert('Thumbnail failed: ' + (data.error || res.statusText));
-        return;
-      }
-      jobId = data.jobid;
-    } catch (err) {
-      thumbShowState('upload');
-      alert('Request failed: ' + err.message);
-      return;
-    }
-
-    // Step indicators while polling
-    const t1 = setTimeout(() => thumbSetStep(2), 8000);
-    const t2 = setTimeout(() => thumbSetStep(3), 25000);
-
-    pollThumbnailJob(
-      jobId,
-      data => {
-        clearTimeout(t1); clearTimeout(t2);
-        _thumbFrames        = data.frames || [];
-        _thumbSelectedFrame = 0;
-        _thumbTitles        = data.titles || [];
-        _thumbVideoInfo     = data.video_info || null;
-        thumbSetStep(4);
-        setTimeout(() => { buildThumbHeroState(); thumbShowState('hero'); }, 400);
-      },
-      err => {
-        clearTimeout(t1); clearTimeout(t2);
-        thumbShowState('upload');
-        alert('Thumbnail generation failed: ' + err);
-      }
-    );
-  }
-
-  function buildThumbHeroState() {
-    syncThumbTargetFormat(_thumbTargetFormat);
-    // Frame grid
-    const fg = document.getElementById('thumb-frame-grid');
-    fg.innerHTML = '';
-    _thumbFrames.forEach((b64, i) => {
-      const cell = document.createElement('div');
-      cell.className = 'frame-cell' + (i === _thumbSelectedFrame ? ' selected' : '');
-      const img = document.createElement('img');
-      img.src = 'data:image/jpeg;base64,' + b64;
-      img.alt = 'Frame ' + (i + 1);
-      cell.appendChild(img);
-      cell.addEventListener('click', () => selectThumbFrame(i));
-      fg.appendChild(cell);
-    });
-
-    // Reset style cards + render previews
-    _thumbStyle = 'lower_third';
-    getThumbnailLayoutIds().forEach(s => {
-      const el = document.getElementById('style-' + s);
-      if (el) el.classList.toggle('selected', s === _thumbStyle);
-    });
-    updateStyleCardPreviews(_thumbFrames, _thumbSelectedFrame, 'style-canvas-');
-
-    // Title cards — enforce 60-char display cap
-    const grid = document.getElementById('thumb-titles-grid');
-    grid.innerHTML = '';
-    _thumbTitles.forEach(t => {
-      const display = t.length > 60 ? t.slice(0, 60) : t;
-      const card = document.createElement('div');
-      card.className = 'title-card';
-      card.textContent = display;
-      card.addEventListener('click', () => {
-        document.querySelectorAll('#thumb-titles-grid .title-card').forEach(c => c.classList.remove('selected'));
-        card.classList.add('selected');
-        _thumbTitle = display;
-        openThumbEditor();
-      });
-      grid.appendChild(card);
-    });
-  }
-
-  function selectThumbFrame(idx) {
-    _thumbSelectedFrame = idx;
-    document.querySelectorAll('#thumb-frame-grid .frame-cell').forEach((c, i) => {
-      c.classList.toggle('selected', i === idx);
-    });
-    updateStyleCardPreviews(_thumbFrames, idx, 'style-canvas-');
-    // Re-render canvas if editor is open
-    const ed = document.getElementById('thumb-state-editor');
-    if (ed && ed.style.display !== 'none') renderThumbCanvas();
-  }
-
-  function setThumbTargetFormat(format) {
-    syncThumbTargetFormat(format);
-    const pos = getDefaultThumbTextPosition(_thumbStyle, format);
-    _thumbCanvasTX = pos.x;
-    _thumbCanvasTY = pos.y;
-    updateStyleCardPreviews(_thumbFrames, _thumbSelectedFrame, 'style-canvas-');
-    const ed = document.getElementById('thumb-state-editor');
-    if (ed && ed.style.display !== 'none') {
-      renderThumbCanvas();
-      requestAnimationFrame(() => updateThumbText());
-    }
-  }
-
-  function selectThumbStyle(style) {
-    _thumbStyle = normalizeThumbnailLayout(style);
-    getThumbnailLayoutIds().forEach(s => {
-      const el = document.getElementById('style-' + s);
-      if (el) el.classList.toggle('selected', s === _thumbStyle);
-    });
-    updateStyleCardPreviews(_thumbFrames, _thumbSelectedFrame, 'style-canvas-');
-    const ed = document.getElementById('thumb-state-editor');
-    if (ed && ed.style.display !== 'none') renderThumbCanvas();
-  }
-
-  async function redoFrames() {
-    if (!_thumbFile || !backendOnline) return;
-    const btn = document.getElementById('btn-redo-frames');
-    btn.disabled = true;
-    const origHtml = btn.innerHTML;
-    btn.textContent = 'Fetching\u2026';
-    const form = new FormData();
-    form.append('filename',  _thumbFile.name);
-    form.append('clipstart', editorInTime  > 0 ? String(editorInTime)  : '');
-    form.append('clipend',   editorOutTime > 0 ? String(editorOutTime) : '');
-    try {
-      const startRes = await fetch(BACKEND + '/thumbnail', { method: 'POST', body: form });
-      const startData = await startRes.json();
-      if (startData.jobid) {
-        pollThumbnailJob(
-          startData.jobid,
-          data => {
-            if (data.frames && data.frames.length) {
-              _thumbFrames = data.frames; _thumbSelectedFrame = 0;
-              _thumbVideoInfo = data.video_info || _thumbVideoInfo;
-              if (data.titles && data.titles.length) _thumbTitles = data.titles;
-              buildThumbHeroState();
-            }
-            btn.disabled = false; btn.innerHTML = origHtml;
-          },
-          () => { btn.disabled = false; btn.innerHTML = origHtml; }
-        );
-        return; // btn re-enabled in callbacks
-      }
-    } catch (_) {}
-    btn.disabled = false; btn.innerHTML = origHtml;
-  }
-
-  async function redoTitles() {
-    if (!_thumbFile || !backendOnline) return;
-    const btn = document.getElementById('btn-redo-titles');
-    btn.disabled = true;
-    const origHtml = btn.innerHTML;
-    btn.textContent = 'Generating\u2026';
-    let clip_transcript = '';
-    if (_wordsData && editorInTime < editorOutTime) {
-      clip_transcript = _wordsData
-        .filter(w => (w.start ?? 0) < editorOutTime && (w.end ?? w.start ?? 0) >= editorInTime)
-        .map(w => w.word).join(' ').trim();
-    }
-    const form = new FormData();
-    form.append('filename',        _thumbFile.name);
-    form.append('clipstart',       editorInTime  > 0 ? String(editorInTime)  : '');
-    form.append('clipend',         editorOutTime > 0 ? String(editorOutTime) : '');
-    form.append('clip_transcript', clip_transcript);
-    try {
-      const startRes  = await fetch(BACKEND + '/thumbnail', { method: 'POST', body: form });
-      const startData = await startRes.json();
-      if (startData.jobid) {
-        pollThumbnailJob(
-          startData.jobid,
-          data => {
-            if (data.titles && data.titles.length) { _thumbTitles = data.titles; buildThumbHeroState(); }
-            btn.disabled = false; btn.innerHTML = origHtml;
-          },
-          () => { btn.disabled = false; btn.innerHTML = origHtml; }
-        );
-        return;
-      }
-    } catch (_) {}
-    btn.disabled = false; btn.innerHTML = origHtml;
-  }
-
-  function openThumbEditor() {
-    // Reset controls to defaults
-    _thumbFontFamily     = 'Handmade Sans';
-    _thumbFontSize       = 64;
-    _thumbTextColor      = '#ffffff';
-    _thumbShadowOn       = true;
-    _thumbOverlayOpacity = 0;
-
-    const fontSel = document.getElementById('thumb-font-select');
-    if (fontSel) fontSel.value = 'Handmade Sans';
-    const sizeSlider = document.getElementById('thumb-size-slider');
-    if (sizeSlider) sizeSlider.value = 64;
-    const shadowChk = document.getElementById('thumb-shadow-toggle');
-    if (shadowChk) shadowChk.checked = true;
-    const overlaySlider = document.getElementById('thumb-overlay-slider');
-    if (overlaySlider) overlaySlider.value = 0;
-    const overlayVal = document.getElementById('thumb-overlay-val');
-    if (overlayVal) overlayVal.textContent = '0';
-    const sizeVal = document.getElementById('thumb-size-val');
-    if (sizeVal) sizeVal.textContent = '64';
-    const customColor = document.getElementById('thumb-color-custom');
-    if (customColor) customColor.value = '#ffffff';
-    document.querySelectorAll('#thumb-state-editor .color-swatch').forEach((b, i) => {
-      b.classList.toggle('selected', i === 0);
-    });
-
-    const thumbPos = getDefaultThumbTextPosition(_thumbStyle, _thumbTargetFormat);
-    _thumbCanvasTX = thumbPos.x;
-    _thumbCanvasTY = thumbPos.y;
-
-    syncThumbTargetFormat(_thumbTargetFormat);
-    thumbShowState('editor');
-    renderThumbCanvas();
-    requestAnimationFrame(() => updateThumbText());
-  }
-
-  function backToTitles() { thumbShowState('hero'); }
-
   function getThumbImageSrc(b64) {
     return 'data:image/jpeg;base64,' + b64;
   }
@@ -7237,12 +6331,6 @@
     if (normalized === 'top_banner') return { x, y: index === 0 ? cfg.height * 0.18 : cfg.height * 0.62, width: cfg.width * (index === 0 ? 0.84 : 0.62), align: 'center' };
     if (normalized === 'bottom_banner') return { x, y: index === 0 ? cfg.height * 0.83 : cfg.height * 0.24, width: cfg.width * (index === 0 ? 0.86 : 0.52), align: 'center' };
     return { x, y: index === 0 ? cfg.height * 0.70 : cfg.height * 0.20, width: cfg.width * (index === 0 ? 0.62 : 0.46), align: 'center' };
-  }
-
-  function updateThumbFormatButtons(target, format) {
-    document.querySelectorAll(`.thumb-format-btn[data-thumb-format-target="${target}"]`).forEach(btn => {
-      btn.classList.toggle('selected', btn.dataset.thumbFormat === format);
-    });
   }
 
   function setThumbPreviewRatio(format) {
@@ -7298,66 +6386,11 @@
     _fitRaf = requestAnimationFrame(function () { _fitRaf = null; fitDlgCanvas(); });
   });
 
-  function applyStylePreviewRatio(prefix, format) {
-    const cfg = getThumbTargetConfig(format);
-    const ratio = `${cfg.width} / ${cfg.height}`;
-    getThumbnailLayoutIds().forEach(style => {
-      const canvas = document.getElementById((prefix || 'style-canvas-') + style);
-      if (!canvas) return;
-      canvas.style.aspectRatio = ratio;
-    });
-  }
-
-  function syncThumbTargetFormat(format) {
-    _thumbTargetFormat = format;
-    updateThumbFormatButtons('main', format);
-    setThumbPreviewRatio(format);
-    applyStylePreviewRatio('style-canvas-', format);
-    applyEditorCanvasLayout('thumb-canvas', 'thumb-canvas-wrap', format);
-  }
-
   function syncDlgTargetFormat(format) {
     _dlgTargetFormat = format;
-    updateThumbFormatButtons('dialog', format);
     setThumbPreviewRatio(format);
-    applyStylePreviewRatio('dlg-style-canvas-', format);
     applyEditorCanvasLayout('dlg-canvas', 'dlg-canvas-wrap', format);
     requestAnimationFrame(fitDlgCanvas);
-  }
-
-  function getCoverSourceRect(srcW, srcH, destW, destH) {
-    const srcRatio = srcW / srcH;
-    const destRatio = destW / destH;
-    if (srcRatio > destRatio) {
-      const sh = srcH;
-      const sw = sh * destRatio;
-      return { sx: (srcW - sw) / 2, sy: 0, sw, sh };
-    }
-    const sw = srcW;
-    const sh = sw / destRatio;
-    return { sx: 0, sy: (srcH - sh) / 2, sw, sh };
-  }
-
-  function drawImageCover(ctx, img, W, H) {
-    const crop = getCoverSourceRect(img.naturalWidth, img.naturalHeight, W, H);
-    ctx.imageSmoothingEnabled = true;
-    ctx.imageSmoothingQuality = 'high';
-    ctx.drawImage(img, crop.sx, crop.sy, crop.sw, crop.sh, 0, 0, W, H);
-  }
-
-  function renderFrameCanvas(canvas, b64, style, afterDraw) {
-    if (!canvas || !b64) return;
-    const ctx = canvas.getContext('2d');
-    const W = canvas.width;
-    const H = canvas.height;
-    const img = new Image();
-    img.onload = function () {
-      ctx.clearRect(0, 0, W, H);
-      drawImageCover(ctx, img, W, H);
-      applyThumbStyleOverlay(ctx, W, H, style);
-      if (afterDraw) afterDraw(ctx, W, H);
-    };
-    img.src = getThumbImageSrc(b64);
   }
 
   function loadImageElement(src) {
@@ -7388,19 +6421,6 @@
     ctx.globalAlpha = (logo.opacity ?? 100) / 100;
     ctx.drawImage(logo._img, logo.x - width / 2, logo.y - height / 2, width, height);
     ctx.globalAlpha = _pa;
-  }
-
-  function prepareStylePreviewCanvas(canvas, format) {
-    const cfg = getThumbTargetConfig(format);
-    const dpr = window.devicePixelRatio || 1;
-    const cssWidth = Math.max(1, Math.round(canvas.clientWidth || 160));
-    const cssHeight = Math.max(1, Math.round(canvas.clientHeight || Math.round(cssWidth * cfg.height / cfg.width)));
-    const pixelWidth = Math.max(160, Math.round(cssWidth * dpr));
-    const pixelHeight = Math.max(90, Math.round(cssHeight * dpr));
-    if (canvas.width !== pixelWidth || canvas.height !== pixelHeight) {
-      canvas.width = pixelWidth;
-      canvas.height = pixelHeight;
-    }
   }
 
   // ── Free-form text-box sizing helpers ──────────────────────────────
@@ -7673,85 +6693,6 @@
   }
 
   // ── Canvas rendering (object-fit cover + style overlay) ──
-  function renderThumbCanvas() {
-    const canvas = document.getElementById('thumb-canvas');
-    const b64 = _thumbFrames[_thumbSelectedFrame];
-    renderFrameCanvas(canvas, b64, _thumbStyle);
-    return;
-    if (!canvas || !b64) return;
-    const ctx = canvas.getContext('2d');
-    const W = 1280, H = 720;
-    const img = new Image();
-    img.onload = function () {
-      ctx.clearRect(0, 0, W, H);
-
-      // object-fit: cover — fill 16:9 without stretching or cropping aspect ratio
-      const scale = Math.max(W / img.naturalWidth, H / img.naturalHeight);
-      const sw = img.naturalWidth * scale, sh = img.naturalHeight * scale;
-      ctx.drawImage(img, (W - sw) / 2, (H - sh) / 2, sw, sh);
-
-      // Style overlay
-      applyThumbStyleOverlay(ctx, W, H, _thumbStyle);
-    };
-    img.src = 'data:image/jpeg;base64,' + b64;
-  }
-
-  // Shared style overlay helper — used by renderThumbCanvas + downloadThumbPNG
-  function applyThumbStyleOverlay(ctx, W, H, style) {
-    const normalized = normalizeThumbnailLayout(style);
-    if (normalized === 'lower_third') {
-      const fade = ctx.createLinearGradient(0, H * 0.44, 0, H);
-      fade.addColorStop(0, 'rgba(8,8,8,0)');
-      fade.addColorStop(1, 'rgba(8,8,8,0.82)');
-      ctx.fillStyle = fade;
-      ctx.fillRect(0, H * 0.44, W, H * 0.56);
-      ctx.fillStyle = 'rgba(10,10,10,0.78)';
-      ctx.fillRect(0, H * 0.68, W, H * 0.32);
-      ctx.fillStyle = '#E8541A';
-      ctx.fillRect(W * 0.06, H * 0.68 - 10, W * 0.32, 10);
-      return;
-    }
-    if (normalized === 'centered_headline') {
-      const scrim = ctx.createLinearGradient(0, 0, 0, H);
-      scrim.addColorStop(0, 'rgba(4,4,4,0.18)');
-      scrim.addColorStop(1, 'rgba(4,4,4,0.58)');
-      ctx.fillStyle = scrim;
-      ctx.fillRect(0, 0, W, H);
-      ctx.fillStyle = 'rgba(10,10,10,0.48)';
-      ctx.fillRect(W * 0.12, H * 0.28, W * 0.76, H * 0.34);
-      ctx.fillStyle = '#E8541A';
-      ctx.fillRect(W * 0.2, H * 0.64, W * 0.6, 8);
-      return;
-    }
-    if (normalized === 'top_banner') {
-      ctx.fillStyle = 'rgba(10,10,10,0.66)';
-      ctx.fillRect(0, 0, W, H * 0.26);
-      ctx.fillStyle = '#E8541A';
-      ctx.fillRect(0, 0, W, 10);
-      const fade = ctx.createLinearGradient(0, H * 0.18, 0, H * 0.45);
-      fade.addColorStop(0, 'rgba(10,10,10,0.28)');
-      fade.addColorStop(1, 'rgba(10,10,10,0)');
-      ctx.fillStyle = fade;
-      ctx.fillRect(0, H * 0.18, W, H * 0.27);
-      return;
-    }
-    if (normalized === 'bottom_banner') {
-      ctx.fillStyle = 'rgba(12,12,12,0.82)';
-      ctx.fillRect(0, H * 0.72, W, H * 0.28);
-      ctx.fillStyle = '#E8541A';
-      ctx.fillRect(0, H * 0.72, W, 10);
-      return;
-    }
-    const vignette = ctx.createRadialGradient(W / 2, H / 2, H * 0.18, W / 2, H / 2, H * 0.82);
-    vignette.addColorStop(0, 'rgba(0,0,0,0)');
-    vignette.addColorStop(1, 'rgba(0,0,0,0.52)');
-    ctx.fillStyle = vignette;
-    ctx.fillRect(0, 0, W, H);
-  }
-
-  // Keep applyStyleOverlay as alias so dialog canvas code still works
-  function applyStyleOverlay(ctx, W, H, style) { applyThumbStyleOverlay(ctx, W, H, style); }
-
   async function renderThumbnailDraftToCanvas(canvas, draft, options = {}) {
     if (!canvas || !draft) return false;
     const frame = (draft.available_frames || [])[draft.selected_frame_index || 0];
@@ -7839,35 +6780,6 @@
   }
 
   // ── Style card previews: draw selected frame + each style overlay on mini canvases ──
-  function updateStyleCardPreviews(frames, selectedIdx, prefix) {
-    const b64 = (frames || _thumbFrames)[selectedIdx !== undefined ? selectedIdx : _thumbSelectedFrame];
-    if (!b64) return;
-    const format = prefix === 'dlg-style-canvas-' ? _dlgTargetFormat : _thumbTargetFormat;
-    const styles = getThumbnailLayoutIds();
-    styles.forEach(style => {
-      const cv = document.getElementById((prefix || 'style-canvas-') + style);
-      if (!cv) return;
-      prepareStylePreviewCanvas(cv, format);
-      renderFrameCanvas(cv, b64, style);
-    });
-    return;
-    const W = 160, H = 90;
-    styles.forEach(style => {
-      const cv = document.getElementById((prefix || 'style-canvas-') + style);
-      if (!cv) return;
-      const ctx = cv.getContext('2d');
-      const img = new Image();
-      img.onload = function () {
-        ctx.clearRect(0, 0, W, H);
-        const scale = Math.max(W / img.naturalWidth, H / img.naturalHeight);
-        const sw = img.naturalWidth * scale, sh = img.naturalHeight * scale;
-        ctx.drawImage(img, (W - sw) / 2, (H - sh) / 2, sw, sh);
-        applyThumbStyleOverlay(ctx, W, H, style);
-      };
-      img.src = 'data:image/jpeg;base64,' + b64;
-    });
-  }
-
   // Cover-fit with user zoom (1-3x) and pan offsets (-1..1 within the available margin).
   function drawImageCoverZoomed(ctx, img, W, H, zoom, ox, oy) {
     zoom = Math.max(1, Math.min(3, zoom || 1));
@@ -7884,229 +6796,14 @@
     ctx.drawImage(img, sx, sy, sw, sh, 0, 0, W, H);
   }
 
-  // Keep drawCoverFit as alias so dialog canvas code still works
-  function drawCoverFit(ctx, img, W, H) {
-    drawImageCover(ctx, img, W, H);
-    return;
-    const scale = Math.max(W / img.naturalWidth, H / img.naturalHeight);
-    const sw = img.naturalWidth * scale, sh = img.naturalHeight * scale;
-    ctx.drawImage(img, (W - sw) / 2, (H - sh) / 2, sw, sh);
-  }
-
   window.addEventListener('resize', () => {
-    syncThumbTargetFormat(_thumbTargetFormat);
     syncDlgTargetFormat(_dlgTargetFormat);
-    updateStyleCardPreviews(_thumbFrames, _thumbSelectedFrame, 'style-canvas-');
-    updateStyleCardPreviews(_dlgFrames, _dlgSelectedFrame, 'dlg-style-canvas-');
   });
 
+  // The Thumbnails-tab preview image uses --thumb-preview-ratio (9:16).
   document.addEventListener('DOMContentLoaded', () => {
-    syncThumbTargetFormat(_thumbTargetFormat);
+    setThumbPreviewRatio(_thumbTargetFormat);
   });
-
-  // ── Draggable text overlay div ──
-  function updateThumbText() {
-    const drag = document.getElementById('thumb-text-drag');
-    if (!drag) return;
-
-    const fontSel   = document.getElementById('thumb-font-select');
-    const shadowChk = document.getElementById('thumb-shadow-toggle');
-    if (fontSel)   _thumbFontFamily = fontSel.value;
-    if (shadowChk) _thumbShadowOn   = shadowChk.checked;
-
-    const { scaleX, scaleY } = getThumbCanvasScale('thumb-canvas', 'thumb-canvas-wrap');
-    const displayPx = Math.round(_thumbFontSize / Math.max(scaleX, scaleY));
-
-    drag.style.fontFamily    = _thumbFontFamily + ', sans-serif';
-    drag.style.fontSize      = displayPx + 'px';
-    drag.style.fontWeight    = '700';
-    drag.style.color         = _thumbTextColor;
-    drag.style.textShadow    = _thumbShadowOn ? '2px 2px 8px rgba(0,0,0,0.8)' : 'none';
-    drag.style.lineHeight    = '1.25';
-    drag.style.letterSpacing = '-0.01em';
-
-    const alpha = _thumbOverlayOpacity / 100;
-    if (alpha > 0) {
-      drag.style.background   = `rgba(17,17,17,${alpha})`;
-      drag.style.padding      = '6px 14px';
-      drag.style.borderRadius = '4px';
-    } else {
-      drag.style.background   = 'transparent';
-      drag.style.padding      = '4px 10px';
-      drag.style.borderRadius = '';
-    }
-
-    drag.textContent = _thumbTitle;
-    const sizeVal = document.getElementById('thumb-size-val');
-    if (sizeVal) sizeVal.textContent = _thumbFontSize;
-
-    drag.style.left = (_thumbCanvasTX / scaleX) + 'px';
-    drag.style.top  = (_thumbCanvasTY / scaleY) + 'px';
-  }
-
-  // ── Control change handlers ──
-  function setThumbFontSize(val) {
-    _thumbFontSize = Math.max(24, Math.min(120, parseInt(val)));
-    const sizeVal = document.getElementById('thumb-size-val');
-    if (sizeVal) sizeVal.textContent = _thumbFontSize;
-    updateThumbText();
-  }
-
-  function setThumbColor(hex, btn) {
-    _thumbTextColor = hex;
-    document.querySelectorAll('#thumb-state-editor .color-swatch').forEach(b => b.classList.remove('selected'));
-    if (btn) btn.classList.add('selected');
-    const custom = document.getElementById('thumb-color-custom');
-    if (custom) custom.value = hex;
-    updateThumbText();
-    renderThumbCanvas();
-  }
-
-  function setThumbColorFree(hex) {
-    _thumbTextColor = hex;
-    document.querySelectorAll('#thumb-state-editor .color-swatch').forEach(b => b.classList.remove('selected'));
-    updateThumbText();
-    renderThumbCanvas();
-  }
-
-  function setThumbOverlay(val) {
-    _thumbOverlayOpacity = parseInt(val);
-    const span = document.getElementById('thumb-overlay-val');
-    if (span) span.textContent = _thumbOverlayOpacity;
-    updateThumbText();
-  }
-
-  // ── Drag logic for text overlay ──
-  (function () {
-    let dragging = false, startX, startY, origTX, origTY;
-
-    document.addEventListener('mousedown', function (e) {
-      if (!e.target.closest('#thumb-text-drag')) return;
-      dragging = true;
-      startX = e.clientX; startY = e.clientY;
-      origTX = _thumbCanvasTX; origTY = _thumbCanvasTY;
-      e.preventDefault();
-    });
-
-    document.addEventListener('mousemove', function (e) {
-      if (!dragging) return;
-      const { scaleX, scaleY } = getThumbCanvasScale('thumb-canvas', 'thumb-canvas-wrap');
-      const canvas = document.getElementById('thumb-canvas');
-      const dx = (e.clientX - startX) * scaleX;
-      const dy = (e.clientY - startY) * scaleY;
-      _thumbCanvasTX = Math.max(60, Math.min((canvas?.width || 1280) - 60, origTX + dx));
-      _thumbCanvasTY = Math.max(40, Math.min((canvas?.height || 720) - 40,  origTY + dy));
-      const drag = document.getElementById('thumb-text-drag');
-      if (drag) {
-        drag.style.left = (_thumbCanvasTX / scaleX) + 'px';
-        drag.style.top  = (_thumbCanvasTY / scaleY) + 'px';
-      }
-    });
-
-    document.addEventListener('mouseup', () => { dragging = false; });
-  })();
-
-  // ── Download PNG — bake canvas + text into final image ──
-  function downloadThumbPNG() {
-    const canvas = document.getElementById('thumb-canvas');
-    const b64 = _thumbFrames[_thumbSelectedFrame];
-    if (!canvas || !b64) return;
-    renderFrameCanvas(canvas, b64, _thumbStyle, (ctx, W) => {
-      drawThumbTextBlock(
-        ctx, W, _thumbTitle, _thumbFontSize, _thumbFontFamily,
-        _thumbCanvasTX, _thumbCanvasTY, _thumbTextColor, _thumbShadowOn, _thumbOverlayOpacity
-      );
-      const stem = _thumbFile ? _thumbFile.name.replace(/\.(mp4|mov)$/i, '') : 'thumbnail';
-      canvas.toBlob(blob => {
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url; a.download = stem + ' - Thumbnail.png'; a.click();
-        updateProject('thumbnail_saved', {
-          title: _thumbTitle,
-          style: _thumbStyle,
-          target_format: _thumbTargetFormat,
-          context: 'thumbnail_tab',
-        });
-        setTimeout(() => URL.revokeObjectURL(url), 5000);
-      }, 'image/png');
-    });
-    return;
-    if (!canvas || !b64) return;
-    const ctx = canvas.getContext('2d');
-    const W = 1280, H = 720;
-    const img = new Image();
-    img.onload = function () {
-      ctx.clearRect(0, 0, W, H);
-
-      // Cover-fit draw
-      const scale = Math.max(W / img.naturalWidth, H / img.naturalHeight);
-      const sw = img.naturalWidth * scale, sh = img.naturalHeight * scale;
-      ctx.drawImage(img, (W - sw) / 2, (H - sh) / 2, sw, sh);
-
-      applyThumbStyleOverlay(ctx, W, H, _thumbStyle);
-
-      // Dark text background overlay
-      if (_thumbOverlayOpacity > 0) {
-        const alpha = _thumbOverlayOpacity / 100;
-        ctx.font = `700 ${_thumbFontSize}px ${_thumbFontFamily}, sans-serif`;
-        const maxW = W * 0.85;
-        const words = (_thumbTitle || '').split(' ');
-        const lines = []; let ln = '';
-        for (const w of words) {
-          const test = (ln ? ln + ' ' : '') + w;
-          if (ctx.measureText(test).width > maxW && ln) { lines.push(ln); ln = w; } else ln = test;
-        }
-        if (ln) lines.push(ln);
-        const lineH = _thumbFontSize * 1.25;
-        const boxH  = lines.length * lineH + 24;
-        const boxW  = Math.min(maxW + 28, W * 0.9);
-        const boxY  = _thumbCanvasTY - lines.length * lineH / 2 - 12;
-        ctx.fillStyle = `rgba(17,17,17,${alpha})`;
-        ctx.beginPath();
-        if (ctx.roundRect) {
-          ctx.roundRect(_thumbCanvasTX - boxW / 2, boxY, boxW, boxH, 8);
-        } else {
-          ctx.rect(_thumbCanvasTX - boxW / 2, boxY, boxW, boxH);
-        }
-        ctx.fill();
-      }
-
-      // Text
-      ctx.save();
-      ctx.textAlign    = 'center';
-      ctx.textBaseline = 'middle';
-      if (_thumbShadowOn) {
-        ctx.shadowColor   = 'rgba(0,0,0,0.8)';
-        ctx.shadowBlur    = 8;
-        ctx.shadowOffsetX = 2;
-        ctx.shadowOffsetY = 2;
-      }
-      ctx.fillStyle = _thumbTextColor;
-      ctx.font = `700 ${_thumbFontSize}px ${_thumbFontFamily}, sans-serif`;
-
-      const maxW = W * 0.8;
-      const words = (_thumbTitle || '').split(' ');
-      const lines = []; let ln = '';
-      for (const w of words) {
-        const test = (ln ? ln + ' ' : '') + w;
-        if (ctx.measureText(test).width > maxW && ln) { lines.push(ln); ln = w; } else ln = test;
-      }
-      if (ln) lines.push(ln);
-      const lineH = _thumbFontSize * 1.25;
-      let ty = _thumbCanvasTY - (lines.length - 1) * lineH / 2;
-      for (const l of lines) { ctx.fillText(l, _thumbCanvasTX, ty); ty += lineH; }
-      ctx.restore();
-
-      const stem = _thumbFile ? _thumbFile.name.replace(/\.(mp4|mov)$/i, '') : 'thumbnail';
-      canvas.toBlob(blob => {
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url; a.download = stem + ' - Thumbnail.png'; a.click();
-        setTimeout(() => URL.revokeObjectURL(url), 5000);
-      }, 'image/png');
-    };
-    img.src = 'data:image/jpeg;base64,' + b64;
-  }
 
   // Shared word-wrap helper (still used by dialog canvas code)
   function wrapText(ctx, text, maxW) {
@@ -8133,14 +6830,9 @@
   const SAVE_THUMBNAIL_PNG = true;   // June 29: save thumbnail PNG to Dropbox + patch "Thumbnail - Dropbox URL" in Airtable so the thumbnail is previewable before posting
   let thumbnailBlob    = null;   // PNG blob captured from dialog canvas
   let thumbnailBlobUrl = null;   // object URL for in-app display
-  let _exportThumbnailMode = 'video_only';
-  let _selectedReuseThumbnailDraftId = null;
   let _selectedExportFolder = '';
   let _lastFolderLookup = null;
-  let _efSelectedThumbFrame   = -1;   // index into _efThumbFrames; -1 = none selected
-  let _efThumbFrames          = [];   // base64 frames generated for export-flow thumbnail
   let _efSelectedDraftId      = null; // draft id if user chose an existing draft
-  let _efThumbJobPending      = false;
   let _savedClipExport = null;
   let _dlgStyle          = 'lower_third';
   let _dlgTitle          = '';
@@ -8375,12 +7067,9 @@
   async function startExportFlowThumb(forceRegenerate) {
     const section  = document.getElementById('export-flow-thumb-section');
     const statusEl = document.getElementById('export-flow-thumb-status');
-    const framesEl = document.getElementById('export-flow-thumb-frames');
-    const regenBtn = document.getElementById('btn-export-regen-thumb');
     const editorBtn= document.getElementById('btn-export-open-editor');
     if (!section) return;
 
-    _efSelectedThumbFrame = -1;
     _efSelectedDraftId    = null;
     section.style.display = 'block';
 
@@ -8434,7 +7123,6 @@
     // June 11, 2026: ALL frame picking/editing lives in the Create Thumbnail
     // composer. The save modal only shows what is ready and offers entry.
     if (!_clipFile) return;
-    if (regenBtn) regenBtn.style.display = 'none';
     if (editorBtn) {
       editorBtn.classList.remove('btn-sm', 'btn');
       editorBtn.innerHTML =
@@ -8442,7 +7130,6 @@
         (drafts.length ? 'Create New Thumbnail' : 'Create thumbnail');
       editorBtn.style.cssText = 'display:inline-flex;align-items:center;gap:8px;background:#2553D6;color:#fff;border:none;border-radius:10px;padding:12px 22px;font-size:14px;font-weight:600;cursor:pointer;';
     }
-    if (framesEl) framesEl.innerHTML = '';
     const readyRow = document.getElementById('export-flow-thumb-ready');
     const previewImg = document.getElementById('export-flow-thumb-preview');
     if (thumbnailBlob && thumbnailBlobUrl) {
@@ -8466,71 +7153,8 @@
     }
   }
 
-  function renderExportFlowThumbGrid() {
-    const framesEl = document.getElementById('export-flow-thumb-frames');
-    if (!framesEl || !_efThumbFrames.length) return;
-    framesEl.innerHTML = '';
-    _efThumbFrames.forEach((b64, i) => {
-      const cell = document.createElement('div');
-      cell.className = 'frame-cell' + (i === _efSelectedThumbFrame ? ' selected' : '');
-      cell.style.cursor = 'pointer';
-      const img = document.createElement('img');
-      img.src = 'data:image/jpeg;base64,' + b64;
-      img.style.cssText = 'width:100%;height:100%;object-fit:cover;display:block;';
-      const zoomHint = document.createElement('div');
-      zoomHint.style.cssText = 'position:absolute;bottom:4px;right:4px;background:rgba(0,0,0,0.55);color:#fff;border-radius:4px;font-size:9px;padding:2px 4px;pointer-events:none;opacity:0;transition:opacity 0.15s;';
-      zoomHint.textContent = 'double-click to zoom';
-      cell.style.position = 'relative';
-      cell.appendChild(img);
-      cell.appendChild(zoomHint);
-      cell.addEventListener('mouseenter', () => zoomHint.style.opacity = '1');
-      cell.addEventListener('mouseleave', () => zoomHint.style.opacity = '0');
-      cell.addEventListener('click', () => { efSelectFrame(i); });
-      cell.addEventListener('dblclick', (e) => { e.stopPropagation(); efPreviewLarge(i); });
-      framesEl.appendChild(cell);
-    });
-  }
-
-  function efPreviewLarge(idx) {
-    const b64 = _efThumbFrames[idx];
-    if (!b64) return;
-    // Remove any existing preview
-    const existing = document.getElementById('ef-large-preview-overlay');
-    if (existing) existing.remove();
-    const overlay = document.createElement('div');
-    overlay.id = 'ef-large-preview-overlay';
-    overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.82);z-index:99999;display:flex;align-items:center;justify-content:center;cursor:zoom-out;';
-    const img = document.createElement('img');
-    img.src = 'data:image/jpeg;base64,' + b64;
-    img.style.cssText = 'max-width:90vw;max-height:88vh;border-radius:10px;box-shadow:0 8px 40px rgba(0,0,0,0.6);object-fit:contain;';
-    const closeBtn = document.createElement('button');
-    closeBtn.style.cssText = 'position:fixed;top:16px;right:20px;background:rgba(255,255,255,0.15);border:1px solid rgba(255,255,255,0.25);color:#fff;border-radius:8px;padding:6px 14px;font-size:13px;cursor:pointer;font-family:inherit;';
-    closeBtn.textContent = '✕ Close';
-    closeBtn.addEventListener('click', (e) => { e.stopPropagation(); overlay.remove(); });
-    overlay.addEventListener('click', () => overlay.remove());
-    img.addEventListener('click', (e) => e.stopPropagation());
-    overlay.appendChild(img);
-    overlay.appendChild(closeBtn);
-    document.body.appendChild(overlay);
-  }
-
-  function efSelectFrame(idx) {
-    _efSelectedThumbFrame = idx;
-    _efSelectedDraftId    = null;
-    document.querySelectorAll('#export-flow-thumb-frames .frame-cell').forEach((c, i) => {
-      c.classList.toggle('selected', i === idx);
-    });
-    const saveWithBtn = document.getElementById('btn-save-with-thumb');
-    if (saveWithBtn) {
-      saveWithBtn.disabled = false;
-      saveWithBtn.style.display = '';
-    }
-  }
-
   function efUseDraft(draftId) {
     _efSelectedDraftId    = draftId;
-    _efSelectedThumbFrame = -1;
-    document.querySelectorAll('#export-flow-thumb-frames .frame-cell').forEach(c => c.classList.remove('selected'));
     const saveWithBtn = document.getElementById('btn-save-with-thumb');
     if (saveWithBtn) { saveWithBtn.disabled = false; saveWithBtn.style.display = ''; }
     // Prominent selection: bold ring + badge on the chosen card, dim the rest so
@@ -8559,10 +7183,6 @@
 
   function exportFlowOpenFullEditor() {
     document.getElementById('dialog-export-flow')?.close();
-    if (_efSelectedThumbFrame >= 0 && _efThumbFrames.length) {
-      _dlgFrames = _efThumbFrames;
-      _dlgSelectedFrame = _efSelectedThumbFrame;
-    }
     // If a thumbnail is already in progress for THIS clip (frames present), reopen it
     // directly so "Edit thumbnail…" never re-prompts the frame picker. Only a genuine
     // brand-new thumbnail (no frames anywhere) goes through openThumbDialog -> picker.
@@ -8571,67 +7191,6 @@
     const haveFrames = (wip?.available_frames?.length) || _dlgFrames.length;
     if (sameClip && haveFrames) { reopenThumbDialog(); return; }
     openThumbDialog();
-  }
-
-  function efOpenVideoPicker() {
-    const panel = document.getElementById('ef-video-picker');
-    if (!panel) return;
-    panel.style.display = 'block';
-    const vid = document.getElementById('ef-pick-video');
-    if (!vid) return;
-    const src = getPlayableVideoUrl('clips') || getPlayableVideoUrl('thumbnails');
-    if (src && vid.src !== src) { vid.crossOrigin = 'anonymous'; vid.src = src; vid.load(); }
-    vid.addEventListener('loadedmetadata', function onMeta() {
-      vid.removeEventListener('loadedmetadata', onMeta);
-      const scrub = document.getElementById('ef-pick-scrub');
-      const start = editorInTime || 0;
-      const end   = editorOutTime || vid.duration;
-      if (scrub) { scrub.min = start; scrub.max = end; scrub.value = start; }
-      vid.currentTime = start;
-      efUpdatePickTimecode();
-    }, { once: true });
-  }
-  function efCloseVideoPicker() {
-    const panel = document.getElementById('ef-video-picker');
-    if (panel) panel.style.display = 'none';
-    const vid = document.getElementById('ef-pick-video');
-    if (vid) { vid.pause(); vid.src = ''; }
-  }
-  function efPickScrub(val) {
-    const vid = document.getElementById('ef-pick-video');
-    if (vid) { vid.currentTime = parseFloat(val); efUpdatePickTimecode(); }
-  }
-  function efUpdatePickTimecode() {
-    const vid  = document.getElementById('ef-pick-video');
-    const span = document.getElementById('ef-pick-timecode');
-    if (!vid || !span) return;
-    const t = vid.currentTime || 0;
-    span.textContent = Math.floor(t/60) + ':' + Math.floor(t%60).toString().padStart(2,'0');
-  }
-  async function efCaptureVideoFrame() {
-    const vid = document.getElementById('ef-pick-video');
-    if (!vid) return;
-    try {
-      const cv = document.createElement('canvas');
-      cv.width = vid.videoWidth || 1280; cv.height = vid.videoHeight || 720;
-      cv.getContext('2d').drawImage(vid, 0, 0, cv.width, cv.height);
-      const scale = Math.min(1, 1600 / Math.max(cv.width, cv.height));
-      const out = document.createElement('canvas');
-      out.width = Math.round(cv.width * scale); out.height = Math.round(cv.height * scale);
-      out.getContext('2d').drawImage(cv, 0, 0, out.width, out.height);
-      const b64 = out.toDataURL('image/jpeg', 0.92).split(',')[1];
-      _efThumbFrames = [b64, ..._efThumbFrames].slice(0, 12);
-      _efSelectedThumbFrame = 0;
-      // Mirror into the composer's frame list so "Edit in detail" never asks
-      // the user to pick the same frame twice.
-      _dlgFrames = [b64, ..._dlgFrames.filter(f => f !== b64)].slice(0, 12);
-      _dlgSelectedFrame = 0;
-      renderExportFlowThumbGrid();
-      efSelectFrame(0);
-      efCloseVideoPicker();
-    } catch (err) {
-      alert('Could not capture frame: ' + err.message);
-    }
   }
 
   async function lookupExportFolder() {
@@ -8992,7 +7551,6 @@
     const expanded = dlg.classList.toggle('expanded');
     btn.textContent = expanded ? 'Collapse \u2199' : 'Expand \u2197';
     requestAnimationFrame(() => {
-      updateStyleCardPreviews(_dlgFrames, _dlgSelectedFrame, 'dlg-style-canvas-');
       fitDlgCanvas();
       if (document.getElementById('dlg-state-editor').style.display !== 'none') dlgDrawCanvas();
     });
@@ -9001,7 +7559,6 @@
   // Free drag-resize of the Create Thumbnail window via the corner grip.
   function _thumbResizeReflow() {
     try {
-      updateStyleCardPreviews(_dlgFrames, _dlgSelectedFrame, 'dlg-style-canvas-');
       fitDlgCanvas();
       if (document.getElementById('dlg-state-editor').style.display !== 'none') dlgDrawCanvas();
     } catch (_) {}
@@ -9191,9 +7748,6 @@
   // Back-compat wrappers used by the composer markup.
   function dlgOnCaptionInput(v) { igCaptionInput(v); }
   function dlgRegenerateCaption() { return regenerateIgCaption(); }
-  function dlgApplyCaption(v) { applyIgCaption(v); }
-  function dlgSyncCaptionField() { syncIgCaptionFields(); }
-
   function dlgBuildHeroState() {
     syncDraftFromDialogState();
     syncDlgTargetFormat(_dlgTargetFormat);
@@ -9218,11 +7772,6 @@
     }
 
     _dlgStyle = normalizeThumbnailLayout(_sharedThumbnailDraft?.style || 'lower_third');
-    getThumbnailLayoutIds().forEach(s => {
-      const el = document.getElementById('dlg-style-' + s);
-      if (el) el.classList.toggle('selected', s === _dlgStyle);
-    });
-    updateStyleCardPreviews(_dlgFrames, _dlgSelectedFrame, 'dlg-style-canvas-');
     const grid = document.getElementById('dlg-titles-grid');
     if (grid) {
       grid.innerHTML = '';
@@ -9262,7 +7811,6 @@
     document.querySelectorAll('#dlg-frame-grid .frame-cell').forEach((c, i) => {
       c.classList.toggle('selected', i === idx);
     });
-    updateStyleCardPreviews(_dlgFrames, idx, 'dlg-style-canvas-');
     syncDraftFromDialogState();
     if (document.getElementById('dlg-state-editor').style.display !== 'none') dlgDrawCanvas();
   }
@@ -9293,43 +7841,6 @@
     if (m) m.classList.toggle('hidden', !on);
   }
 
-  function setDlgTargetFormat(format) {
-    const previous = _dlgTargetFormat;
-    syncDlgTargetFormat(format);
-    if (_sharedThumbnailDraft && previous && previous !== format) {
-      const fromCfg = getThumbTargetConfig(previous);
-      const toCfg = getThumbTargetConfig(format);
-      (_sharedThumbnailDraft.text_boxes || []).forEach(box => {
-        box.x = box.x != null ? (box.x / fromCfg.width) * toCfg.width : box.x;
-        box.y = box.y != null ? (box.y / fromCfg.height) * toCfg.height : box.y;
-        if (box.width) box.width = (box.width / fromCfg.width) * toCfg.width;
-      });
-      if (_sharedThumbnailDraft.logo) {
-        _sharedThumbnailDraft.logo.x = (_sharedThumbnailDraft.logo.x / fromCfg.width) * toCfg.width;
-        _sharedThumbnailDraft.logo.y = (_sharedThumbnailDraft.logo.y / fromCfg.height) * toCfg.height;
-        _sharedThumbnailDraft.logo.width = (_sharedThumbnailDraft.logo.width / fromCfg.width) * toCfg.width;
-      }
-    }
-    // Persist the chosen format to the draft BEFORE applyDraftToDialogState(), which
-    // re-reads _dlgTargetFormat FROM the draft. Without this, the var reverted to the
-    // draft's stale format ('instagram') and the YouTube Shorts toggle never stuck — it
-    // looked like clicking did nothing (the resize re-sync then snapped buttons back). (#2)
-    if (_sharedThumbnailDraft) _sharedThumbnailDraft.target_format = format;
-    applyDraftToDialogState();
-    updateStyleCardPreviews(_dlgFrames, _dlgSelectedFrame, 'dlg-style-canvas-');
-    dlgBuildHeroState();
-    syncDraftFromDialogState();
-    if (document.getElementById('dlg-state-editor').style.display !== 'none') {
-      dlgDrawCanvas();
-      requestAnimationFrame(() => dlgUpdateText());
-    }
-  }
-
-  // Manual flow: "redo frames" just reopens the picker.
-  async function dlgRedoFrames() {
-    dlgOpenFramePicker();
-  }
-
   // Item 4 (June 12): use an uploaded image as the thumbnail base frame.
   function dlgUploadImageAsFrame(input) {
     const file = input.files && input.files[0];
@@ -9348,7 +7859,6 @@
         pushDlgUndo('upload-image');
         _dlgFrames = [b64, ..._dlgFrames].slice(0, 12);
         _dlgSelectedFrame = 0;
-        _efThumbFrames = _dlgFrames;
         if (_sharedThumbnailDraft) {
           _sharedThumbnailDraft.available_frames = _dlgFrames;
           _sharedThumbnailDraft.selected_frame_index = 0;
@@ -9360,25 +7870,6 @@
       img.src = reader.result;
     };
     reader.readAsDataURL(file);
-  }
-
-  function dlgSelectStyle(style) {
-    _dlgStyle = normalizeThumbnailLayout(style);
-    (_sharedThumbnailDraft?.text_boxes || []).forEach((box, index) => {
-      const pos = getDefaultThumbTextPosition(_dlgStyle, _dlgTargetFormat, index);
-      box.x = pos.x;
-      box.y = pos.y;
-      box.width = pos.width;
-      box.align = pos.align;
-    });
-    getThumbnailLayoutIds().forEach(s => {
-      const el = document.getElementById('dlg-style-' + s);
-      if (el) el.classList.toggle('selected', s === _dlgStyle);
-    });
-    updateStyleCardPreviews(_dlgFrames, _dlgSelectedFrame, 'dlg-style-canvas-');
-    dlgBuildHeroState();
-    syncDraftFromDialogState();
-    if (document.getElementById('dlg-state-editor').style.display !== 'none') dlgDrawCanvas();
   }
 
   async function dlgRedoTitles() {
@@ -9465,8 +7956,6 @@
     refreshColorTriggers();
   }
 
-  function dlgBackToTitles() { dlgShowState('editor'); }
-
   async function dlgDrawCanvas() {
     const canvas = document.getElementById('dlg-canvas');
     // Empty-state card over the canvas until there is a frame to show (the editor
@@ -9541,11 +8030,6 @@
       const b = document.getElementById('dlg-align-' + a);
       if (b) b.classList.toggle('selected', _dlgAlign === a);
     });
-  }
-
-  function setDlgBgPill(on) {
-    _dlgBgPill = !!on;
-    dlgUpdateText();
   }
 
   function setDlgLogoOpacity(val) {
@@ -9735,20 +8219,6 @@
     });
   }
 
-
-  function setDlgColor(hex, btn) {
-    if (_dlgEditingTextId && _dlgApplyColorToSelection(hex)) {
-      const cst = document.getElementById('dlg-color-custom'); if (cst) cst.value = hex;
-      return;
-    }
-    _dlgTextColor = hex;
-    const box = getActiveThumbnailTextBox(); if (box) { box.color = hex; box.runs = null; }
-    document.querySelectorAll('#dlg-state-editor .color-swatch').forEach(b => b.classList.remove('selected'));
-    if (btn) btn.classList.add('selected');
-    const custom = document.getElementById('dlg-color-custom');
-    if (custom) custom.value = hex;
-    dlgUpdateText();
-  }
 
   function setDlgColorFree(hex) {
     if (_dlgEditingTextId && _dlgApplyColorToSelection(hex)) return;
@@ -10129,7 +8599,6 @@
     const b64 = out.toDataURL('image/jpeg', 0.92).split(',')[1];
     _dlgFrames = [..._dlgFrames.filter(f => f !== b64), b64].slice(-12);
     _dlgSelectedFrame = _dlgFrames.indexOf(b64);
-    _efThumbFrames = _dlgFrames;
     if (!_dlgVideoInfo && vidEl.videoWidth) {
       _dlgVideoInfo = {
         width: vidEl.videoWidth, height: vidEl.videoHeight, rotation: 0,
@@ -10728,12 +9197,6 @@
     if (typeof renderLayerPanel === 'function') renderLayerPanel();
   }
 
-  function setSelectedElemBrandColor(color) {
-    if (!_dlgSelectedElemId) return;
-    setDesignElemColor(_dlgSelectedElemId, color);
-    renderDesignElementList();
-  }
-
   function setDesignElemColor(id, color) {
     var found = (_sharedThumbnailDraft?.graphic_elements || []).find(function(e) { return e.id === id; });
     if (!found) return;
@@ -10896,19 +9359,6 @@
     dlgOpenEditor();
   }
 
-  function dlgMoveTextBoxLayer(dir) {
-    if (!_sharedThumbnailDraft) return;
-    const arr = _sharedThumbnailDraft.text_boxes || [];
-    const i = arr.findIndex(function(b){ return b.id === _sharedThumbnailDraft.selected_text_box_id; });
-    if (i < 0) return;
-    const j = dir === 'forward' ? i + 1 : i - 1;
-    if (j < 0 || j >= arr.length) return;
-    pushDlgUndo('layer');
-    const tmp = arr[i]; arr[i] = arr[j]; arr[j] = tmp;
-    applyDraftToDialogState();
-    dlgOpenEditor();
-  }
-
   function dlgApplySuggestedTitle(title) {
     pushDlgUndo('apply-title');
     _dlgTitle = title;
@@ -10927,52 +9377,6 @@
     if (sel) sel.textContent = (title || 'Text Box').slice(0, 60);
     const ta = document.getElementById('dlg-title-input');
     if (ta) ta.value = title;
-  }
-
-  function setDlgTitleText(value) {
-    pushDlgUndo('type');
-    _dlgTitle = value;
-    dlgUpdateText();
-    // Update the selected text-box chip label in place. Do NOT call
-    // dlgBuildHeroState() here — rebuilding the frame grid on every keystroke
-    // made the source frame flicker/disappear while typing.
-    const boxList = document.getElementById('dlg-textbox-list');
-    const sel = boxList ? boxList.querySelector('.thumb-chip.selected') : null;
-    if (sel) sel.textContent = (value || 'Text Box').slice(0, 60);
-  }
-
-  function setDlgLogoEnabled(enabled) {
-    if (!_sharedThumbnailDraft) return;
-    _sharedThumbnailDraft.logo = normalizeThumbnailLogo({
-      ..._sharedThumbnailDraft.logo,
-      enabled: !!enabled,
-    }, _dlgTargetFormat);
-    dlgBuildHeroState();
-    dlgDrawCanvas();
-  }
-
-  function setDlgLogoPlacement(placement) {
-    if (!_sharedThumbnailDraft) return;
-    const defaults = getDefaultThumbLogoPosition(_dlgTargetFormat, placement);
-    _sharedThumbnailDraft.logo = normalizeThumbnailLogo({
-      ..._sharedThumbnailDraft.logo,
-      placement,
-      x: defaults.x,
-      y: defaults.y,
-      width: _sharedThumbnailDraft.logo?.width || defaults.width,
-    }, _dlgTargetFormat);
-    dlgBuildHeroState();
-    dlgDrawCanvas();
-  }
-
-  function setDlgLogoSize(value) {
-    if (!_sharedThumbnailDraft) return;
-    _sharedThumbnailDraft.logo = normalizeThumbnailLogo({
-      ..._sharedThumbnailDraft.logo,
-      width: Math.max(80, parseInt(value, 10) || 80),
-    }, _dlgTargetFormat);
-    dlgBuildHeroState();
-    dlgDrawCanvas();
   }
 
   // ── Unified layer ordering (text boxes + graphic elements + logo) ──
@@ -11748,17 +10152,6 @@
     return m ? m[1] : '';
   }
 
-  // Speaker is the last " - " part of the cleaned filename per the naming
-  // convention: "[CODE] - [Full Title] - [Speaker] - Horizontal - Uncaptioned".
-  function extractSpeakerName(filename) {
-    let stem = String(filename || '').replace(/\.(mp4|mov)$/i, '');
-    stem = stem.replace(/\s*-\s*(Horizontal|Vertical|Uncaptioned|Captioned)\s*/gi, ' ')
-               .replace(/\s*\((Captioned|Uncaptioned)\)\s*/gi, ' ');
-    const parts = stem.split(' - ').map(s => s.trim()).filter(Boolean);
-    if (parts.length >= 3) return parts[parts.length - 1];
-    return '';
-  }
-
   function detectClipType(filename) {
     // Check the given filename, then the project's source video filename
     // (resumed projects may not carry the code in _clipFile).
@@ -11903,45 +10296,6 @@
       start = end;
     }
     return groups;
-  }
-
-  function materializeCaptionBreaks() {
-    if (editorCaptionBreaks && editorCaptionBreaks.length) return;
-    const groups = buildClipCaptionGroups();
-    editorCaptionBreaks = groups.slice(1).map(g => g.words[0].gIdx);
-  }
-
-  function splitCaptionGroupAtActiveWord() {
-    pushEditorUndo('split-caption');
-    const vid = document.getElementById('edit-video');
-    if (!vid) return;
-    const t = vid.currentTime;
-    const groups = buildClipCaptionGroups();
-    const g = groups.find(x => t >= x.srcStart && t < x.srcEnd);
-    if (!g || g.words.length < 2) return;
-    let ai = g.words.findIndex(w => t >= w.srcStart && t < w.srcEnd);
-    if (ai <= 0) ai = Math.ceil(g.words.length / 2);
-    materializeCaptionBreaks();
-    const breakIdx = g.words[ai].gIdx;
-    if (!editorCaptionBreaks.includes(breakIdx)) editorCaptionBreaks.push(breakIdx);
-    editorCaptionOverrides = {}; reapplyAiEmphasis();
-    updateCaptionOverlay(true);
-  }
-
-  function mergeCaptionGroupWithNext() {
-    pushEditorUndo('merge-caption');
-    const vid = document.getElementById('edit-video');
-    if (!vid) return;
-    const t = vid.currentTime;
-    const groups = buildClipCaptionGroups();
-    const g = groups.find(x => t >= x.srcStart && t < x.srcEnd);
-    if (!g) return;
-    const next = groups.find(x => x.index === g.index + 1);
-    if (!next) return;
-    materializeCaptionBreaks();
-    editorCaptionBreaks = editorCaptionBreaks.filter(b => b !== next.words[0].gIdx);
-    editorCaptionOverrides = {}; reapplyAiEmphasis();
-    updateCaptionOverlay(true);
   }
 
   function groupDisplayWords(group) {
@@ -12546,58 +10900,6 @@
     });
   })();
 
-  // Build an SRT for the edited clip from the Words JSON: times remapped onto
-  // the output timeline (cuts removed), bleeped words masked. Used by the
-  // "Burn captions" export option so vertical clips get right-sized captions
-  // from UNCAPTIONED sources (baked-in captions from 16:9 masters cannot be
-  // resized or repositioned).
-  function buildClipCaptionsSrt() {
-    if (!_wordsData || !_wordsData.length) return '';
-    const cuts = editorCutRanges
-      .map(r => [Math.max(r.start, editorInTime), Math.min(r.end, editorOutTime)])
-      .filter(r => r[1] - r[0] > 0.05)
-      .sort((a, b) => a[0] - b[0]);
-    const kept = [];
-    let cursor = editorInTime;
-    for (const [cs, ce] of cuts) {
-      if (cs - cursor > 0.05) kept.push([cursor, cs]);
-      cursor = Math.max(cursor, ce);
-    }
-    if (editorOutTime - cursor > 0.05) kept.push([cursor, editorOutTime]);
-    if (!kept.length) kept.push([editorInTime, editorOutTime]);
-
-    let offset = 0;
-    const words = [];
-    for (const [s, e] of kept) {
-      for (const w of _wordsData) {
-        const ws = w.start ?? 0, we = w.end ?? ws;
-        if (ws < e && we > s) {
-          let text = (w.word ?? '').trim();
-          if (!text) continue;
-          if (isWordBleeped(w)) text = '****';
-          words.push({ start: Math.max(0, ws - s) + offset, end: Math.max(0.1, Math.min(e, we) - s) + offset, text });
-        }
-      }
-      offset += e - s;
-    }
-    if (!words.length) return '';
-
-    const fmt = t => {
-      t = Math.max(0, t);
-      const h = Math.floor(t / 3600), m = Math.floor(t / 60) % 60, sec = Math.floor(t % 60);
-      const ms = Math.min(999, Math.round((t % 1) * 1000));
-      const p = n => String(n).padStart(2, '0');
-      return p(h) + ':' + p(m) + ':' + p(sec) + ',' + String(ms).padStart(3, '0');
-    };
-    let out = '', idx = 1;
-    for (let i = 0; i < words.length; i += 10) {  // house style: max 10 words/entry
-      const grp = words.slice(i, i + 10);
-      out += (idx++) + '\n' + fmt(grp[0].start) + ' --> ' + fmt(grp[grp.length - 1].end) + '\n' +
-             grp.map(w => w.text).join(' ') + '\n\n';
-    }
-    return out;
-  }
-
   async function doExport(withThumbnail = false) {
     if (_exportInFlight) { showToast('A save is already running — please wait for it to finish.', 'info'); return; }
     if (!_clipFile) { showToast('No video loaded.', 'warn'); return; }
@@ -12777,30 +11079,11 @@
         thumbnail_draft_id: '',
       });
       if (withThumbnail) {
-        // Attach the selected thumbnail (composer-made blob, draft, or legacy frame)
+        // Attach the selected thumbnail (composer-made blob, or a saved draft)
         if (thumbnailBlob && !_efSelectedDraftId) {
           await attachThumbnailBlobToSavedClip(thumbnailBlob, 'create_new', _sharedThumbnailDraft?.draft_id || '').catch(() => {});
         } else if (_efSelectedDraftId) {
           await attachExistingThumbnailDraft(_efSelectedDraftId).catch(() => {});
-        } else if (_efSelectedThumbFrame >= 0 && _efThumbFrames.length) {
-          // Build a quick draft from selected frame using default lower-third layout
-          _thumbFile = _clipFile;
-          _sharedThumbnailEntryPoint = 'clip';
-          const firstTitle = (_thumbTitles && _thumbTitles[0]) || '';
-          _sharedThumbnailDraft = buildDefaultThumbnailDraft({
-            entryPoint: 'clip',
-            file: _clipFile,
-            targetFormat: _dlgTargetFormat || 'instagram',
-            style: 'lower_third',
-            frames: _efThumbFrames,
-            suggestedTitles: _thumbTitles || [],
-            textBoxes: firstTitle ? [makeThumbnailTextBox(firstTitle, { id: 'text-1', x: null, y: null, width: null })] : null,
-            selectedFrameIndex: _efSelectedThumbFrame,
-            videoInfo: null,
-          });
-          syncDraftFromDialogState();
-          const blob = await renderThumbnailDraftToBlob(_sharedThumbnailDraft).catch(() => null);
-          if (blob) await attachThumbnailBlobToSavedClip(blob, 'new_thumbnail', null).catch(() => {});
         }
       }
     } catch (err) {
@@ -12915,66 +11198,6 @@
   }
 
   // ── Save Clip → POST /export_clip → download ──
-  async function saveClip() {
-    if (!_clipFile) {
-      alert('Load a video file first.');
-      return;
-    }
-
-    const statusEl = document.getElementById('export-status');
-    const btnSave  = document.getElementById('btn-save-clip');
-
-    // Show shimmer progress
-    btnSave.disabled = true;
-    statusEl.style.display = 'block';
-    statusEl.innerHTML =
-      '<div class="export-progress-bar"><div class="export-shimmer"></div></div>' +
-      '<p class="export-progress-label">Cutting clip with ffmpeg\u2026</p>';
-
-    const baseName     = _clipFile.name.replace(/\.(mp4|mov)$/i, '');
-    const startFmt     = editorInTime.toFixed(1);
-    const endFmt       = editorOutTime.toFixed(1);
-    const suggestedName = baseName + ' - Clip (' + startFmt + '-' + endFmt + ').mp4';
-
-    const form = new FormData();
-    if (_clipFile instanceof Blob) form.append('file', _clipFile);
-    else if (_clipFile?.source_path) form.append('source_path', _clipFile.source_path);
-    form.append('starttime', editorInTime);
-    form.append('endtime', editorOutTime);
-    form.append('suggested_name', suggestedName);
-
-    try {
-      const res = await fetch(BACKEND + '/export_clip', { method: 'POST', body: form });
-
-      if (!res.ok) {
-        let errMsg = res.statusText;
-        try { const d = await res.json(); errMsg = d.error || errMsg; } catch (_) {}
-        throw new Error(errMsg);
-      }
-
-      // Extract filename from Content-Disposition if present
-      const cd = res.headers.get('Content-Disposition') || '';
-      const nameMatch = cd.match(/filename[^;=\n]*=["']?([^"'\n]+)/i);
-      const downloadName = nameMatch ? nameMatch[1].trim() : suggestedName;
-
-      const blob = await res.blob();
-      const blobUrl = URL.createObjectURL(blob);
-
-      statusEl.innerHTML =
-        '<div class="export-success">' +
-          '<svg class="export-success-icon" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>' +
-          '<div class="export-success-text"><strong>Clip ready!</strong><span>' + escHtml(downloadName) + '</span></div>' +
-          '<a href="' + blobUrl + '" download="' + escHtml(downloadName) + '" class="btn btn-sm">Download</a>' +
-        '</div>';
-
-    } catch (err) {
-      statusEl.innerHTML =
-        '<div class="export-error"><strong>Export failed:</strong> ' + escHtml(err.message) + '</div>';
-    } finally {
-      btnSave.disabled = false;
-    }
-  }
-
   // ── Draggable dialog: dialog-export-flow (transform-based) ──
   (function () {
     var dlg = document.getElementById('dialog-export-flow');
@@ -13017,22 +11240,6 @@
 <!-- ══════════════════════════════════════════
      DIALOGS
      ══════════════════════════════════════════ -->
-
-<!-- Save Clip Dialog -->
-<dialog id="dialog-legacy-pre-export" hidden>
-  <div class="dialog-body" style="padding:36px 32px;">
-    <div class="modal-icon">🎬</div>
-    <div class="modal-heading">Before you export&hellip;</div>
-    <p class="modal-body-text">Would you like to create a thumbnail for this clip?</p>
-    <div style="display:flex;flex-direction:column;gap:10px;margin-top:28px;">
-      <button class="btn" style="justify-content:center;font-size:14px;padding:11px 24px;" onclick="openThumbDialog()">
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="M21 15l-5-5L5 21"/></svg>
-        Yes, Create Thumbnail
-      </button>
-      <button class="btn-ghost" style="justify-content:center;" onclick="skipToExport()">Skip &mdash; Export Now</button>
-    </div>
-  </div>
-</dialog>
 
 <!-- Thumbnail Creator Dialog -->
 <dialog id="dialog-saved-thumbs">
@@ -13322,85 +11529,6 @@
   </div>
 </dialog>
 
-<!-- Export Form Dialog -->
-<dialog id="dialog-export">
-  <div class="dialog-header">
-    <h2>Export &amp; Save</h2>
-  </div>
-  <div class="dialog-body">
-    <div class="export-form-row">
-      <label class="export-form-label" for="export-filename">File Name</label>
-      <input type="text" id="export-filename" class="export-form-input" placeholder="clip-filename.mp4" />
-    </div>
-    <div class="export-form-row">
-      <label class="export-form-label" for="export-type">Clip Type</label>
-      <select id="export-type" class="export-form-select">
-        <option value="Podcast Clip">Podcast Clip</option>
-        <option value="3MB Clip">3MB Clip</option>
-        <option value="TheoEd Clip">TheoEd Clip</option>
-        <option value="Unstuck">Unstuck</option>
-        <option value="Blog Promo">Blog Promo</option>
-        <option value="Course Promo">Course Promo</option>
-        <option value="">No type</option>
-      </select>
-    </div>
-    <div class="export-form-row">
-      <label class="export-form-label">Save Location</label>
-      <span class="export-form-readonly">~/Dropbox/Social Media Clips/</span>
-    </div>
-    <div class="export-form-row">
-      <label class="export-form-label">Thumbnail</label>
-      <div style="display:flex;flex-direction:column;gap:10px;">
-        <div style="display:flex;gap:8px;flex-wrap:wrap;">
-          <button type="button" class="btn-ghost btn-sm" id="export-thumb-mode-video" onclick="setExportThumbnailMode('video_only')">Video Only</button>
-          <button type="button" class="btn-ghost btn-sm" id="export-thumb-mode-create" onclick="setExportThumbnailMode('create_new')">Video + Create Thumbnail</button>
-          <button type="button" class="btn-ghost btn-sm" id="export-thumb-mode-existing" onclick="setExportThumbnailMode('reuse_existing')">Video + Existing Thumbnail</button>
-        </div>
-        <div id="export-thumb-help" style="font-size:12px;color:var(--muted);line-height:1.55;"></div>
-      </div>
-    </div>
-    <div id="export-thumb-create-panel" style="display:none;margin-bottom:12px;padding:12px;background:var(--sidebar-bg);border:1px solid var(--border);border-radius:var(--r);">
-      <div style="display:flex;justify-content:space-between;gap:12px;align-items:flex-start;flex-wrap:wrap;">
-        <div>
-          <div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:0.07em;color:var(--orange);margin-bottom:4px;">Create or Edit Thumbnail</div>
-          <div id="export-thumb-create-meta" style="font-size:13px;color:var(--text-2);line-height:1.6;">Design a thumbnail for this clip.</div>
-        </div>
-        <div style="display:flex;gap:8px;flex-wrap:wrap;">
-          <button type="button" class="btn btn-sm" onclick="openThumbnailComposerForExport()">Create Thumbnail</button>
-          <button type="button" class="btn-ghost btn-sm" onclick="saveCurrentThumbnailDraft(true)">Save Draft</button>
-        </div>
-      </div>
-    </div>
-    <div id="export-thumb-existing-panel" style="display:none;margin-bottom:12px;padding:12px;background:var(--sidebar-bg);border:1px solid var(--border);border-radius:var(--r);">
-      <div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:0.07em;color:var(--text);margin-bottom:8px;">Project Thumbnails</div>
-      <div id="export-existing-thumbnails" style="display:flex;flex-direction:column;gap:10px;"></div>
-    </div>
-    <div id="export-thumb-preview-row"
-         style="display:none;margin-bottom:4px;padding:12px;background:var(--sidebar-bg);
-                border:1px solid var(--border);border-radius:var(--r);align-items:center;gap:12px;">
-      <img id="export-thumb-img" src="" alt="Thumbnail"
-           style="width:auto;height:auto;max-width:110px;max-height:120px;aspect-ratio:var(--thumb-preview-ratio,16 / 9);object-fit:contain;background:#111;
-                  border:1px solid var(--border);flex-shrink:0;" />
-      <div>
-        <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.07em;color:var(--green);margin-bottom:3px;">Thumbnail ready</div>
-        <div id="export-thumb-preview-meta" style="font-size:13px;color:var(--text-2);">Will be saved alongside your clip</div>
-      </div>
-    </div>
-  </div>
-  <div id="export-dialog-status" style="display:none;padding:0 24px 16px;"></div>
-  <div class="dialog-footer">
-    <button class="btn-ghost" onclick="document.getElementById('dialog-export').close()">Cancel</button>
-    <button class="btn" id="btn-export-save" onclick="doExport()">
-      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
-        <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/>
-        <polyline points="7 10 12 15 17 10"/>
-        <line x1="12" y1="15" x2="12" y2="3"/>
-      </svg>
-      Export &amp; Save
-    </button>
-  </div>
-</dialog>
-
 <dialog id="dialog-export-flow">
   <div class="dialog-header">
     <h2>Save Clip</h2>
@@ -13449,7 +11577,6 @@
           Create thumbnail…
         </button>
       </div>
-      <div id="export-flow-thumb-frames" class="frame-grid" style="display:none;"></div>
     </div>
   </div>
   <div id="export-flow-saving" class="ef-saving" style="display:none;"></div>

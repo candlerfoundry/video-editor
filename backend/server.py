@@ -69,7 +69,7 @@ CORS(app, origins=[
 
 # Bump this whenever the frontend/backend contract changes (the frontend
 # carries a matching EXPECTED_BACKEND_BUILD and warns when they differ).
-BACKEND_BUILD = "2026-09-30-ux"
+BACKEND_BUILD = "2026-09-30-cleanup"
 
 
 @app.errorhandler(Exception)
@@ -122,7 +122,6 @@ def unique_path_in(folder, filename):
 
 CREATE_NO_WINDOW = 0x08000000 if platform.system() == 'Windows' else 0
 
-STYLE_STR = "Fontname=Arial,Outline=1,Shadow=0,BorderStyle=1,Spacing=1"
 
 # ── Dropbox portable paths ──
 def resolve_dropbox_root():
@@ -135,7 +134,6 @@ def resolve_dropbox_root():
     (Scripts/Foundry Video Editor). Falls back to ~/Dropbox. Windows is
     unaffected: ~/Dropbox already holds the marker, so it is returned first.
     """
-    import glob
     home = os.path.expanduser('~')
     marker = os.path.join('Scripts', 'Foundry Video Editor')
     seen = set()
@@ -185,10 +183,7 @@ logger.info('[startup] Python: %s', sys.executable)
 logger.info('[startup] Working dir: %s', os.getcwd())
 logger.info('[startup] ffmpeg: %s', FFMPEG_EXE)
 
-# ── Thumbnail async job store ──
-thumbnail_jobs = {}  # {job_id: {status, result, error, created_at}}
-
-# ── Video path cache (populated by /find_json, reused by /thumbnail) ──
+# ── Video path cache (filled by find_video_in_dropbox / project opens / /find_json) ──
 video_path_cache = {}  # {filename: full_absolute_path}
 project_store_lock = threading.Lock()
 def _stable_app_data_root():
@@ -248,21 +243,16 @@ def find_video_in_dropbox(filename):
     logger.warning('[find_video] "%s" not found in Dropbox', filename)
     return None
 
-# ── Whisper models (loaded once on first use) ──
+# ── Whisper model (loaded once on first use) ──
 _WHISPER_MODEL      = None
-_WHISPER_TINY_MODEL = None
+_WHISPER_LOCK       = threading.Lock()   # two requests must not each load the multi-GB model
 
 def get_whisper_model():
     global _WHISPER_MODEL
-    if _WHISPER_MODEL is None:
-        _WHISPER_MODEL = whisper.load_model("medium")
+    with _WHISPER_LOCK:
+        if _WHISPER_MODEL is None:
+            _WHISPER_MODEL = whisper.load_model("medium")
     return _WHISPER_MODEL
-
-def get_whisper_tiny():
-    global _WHISPER_TINY_MODEL
-    if _WHISPER_TINY_MODEL is None:
-        _WHISPER_TINY_MODEL = whisper.load_model("tiny")
-    return _WHISPER_TINY_MODEL
 
 
 # ── SRT helpers ──
@@ -635,116 +625,6 @@ def get_video_dimensions(video_path, ffmpeg_exe):
         return 1920, 1080
 
 
-def get_video_stream_info(video_path, ffmpeg_exe):
-    """
-    Returns raw stream dimensions plus display dimensions that account for rotation metadata.
-    """
-    def _probe(ffprobe_exe):
-        result = subprocess.run(
-            [ffprobe_exe, '-v', 'error', '-select_streams', 'v:0',
-             '-show_entries', 'stream=width,height,side_data_list:stream_tags=rotate',
-             '-of', 'json', video_path],
-            capture_output=True, text=True, timeout=10,
-            creationflags=CREATE_NO_WINDOW,
-        )
-        data = json.loads(result.stdout or '{}')
-        stream = (data.get('streams') or [{}])[0]
-        width = int(stream.get('width') or 1920)
-        height = int(stream.get('height') or 1080)
-
-        rotation = 0
-        tags = stream.get('tags') or {}
-        if tags.get('rotate') is not None:
-            try:
-                rotation = int(float(tags['rotate']))
-            except Exception:
-                rotation = 0
-
-        if not rotation:
-            for side_data in stream.get('side_data_list') or []:
-                if side_data.get('rotation') is None:
-                    continue
-                try:
-                    rotation = int(float(side_data['rotation']))
-                    break
-                except Exception:
-                    continue
-
-        rotation = rotation % 360
-        if rotation in (90, 270):
-            display_width, display_height = height, width
-        else:
-            display_width, display_height = width, height
-
-        info = {
-            'width': width,
-            'height': height,
-            'rotation': rotation,
-            'display_width': display_width,
-            'display_height': display_height,
-            'orientation': 'portrait' if display_height > display_width else 'landscape',
-        }
-        thumb_logger.info(
-            'Source stream %sx%s rotation=%s display=%sx%s orientation=%s',
-            width, height, rotation, display_width, display_height, info['orientation'],
-        )
-        return info
-
-    ffprobe = ffmpeg_exe.replace('ffmpeg.exe', 'ffprobe.exe') if ffmpeg_exe != 'ffmpeg' else 'ffprobe'
-    try:
-        return _probe(ffprobe)
-    except Exception as e:
-        if ffprobe != 'ffprobe':
-            try:
-                return _probe('ffprobe')
-            except Exception:
-                pass
-        thumb_logger.warning('ffprobe stream probe failed, using default metadata: %s', e)
-        return {
-            'width': 1920,
-            'height': 1080,
-            'rotation': 0,
-            'display_width': 1920,
-            'display_height': 1080,
-            'orientation': 'landscape',
-        }
-
-
-def get_caption_style(width, height):
-    """
-    Returns a dict of ffmpeg subtitle style params based on video dimensions.
-    Vertical (portrait): larger font, higher vertical position, narrower margins.
-    Horizontal (landscape): standard font and positioning.
-    Square: intermediate values.
-    """
-    aspect = width / height if height > 0 else 1.78
-
-    if aspect < 0.75:      # vertical / portrait (e.g. 9:16 iPhone, 1080x1920)
-        return {
-            'fontsize': 36,
-            'margin_v': int(height * 0.12),
-            'margin_h': int(width * 0.05),
-            'bold': 1,
-            'label': 'vertical',
-        }
-    elif aspect > 1.4:     # horizontal / landscape (e.g. 16:9)
-        return {
-            'fontsize': 22,
-            'margin_v': int(height * 0.06),
-            'margin_h': int(width * 0.04),
-            'bold': 1,
-            'label': 'horizontal',
-        }
-    else:                  # square or near-square
-        return {
-            'fontsize': 28,
-            'margin_v': int(height * 0.08),
-            'margin_h': int(width * 0.04),
-            'bold': 1,
-            'label': 'square',
-        }
-
-
 # ── Health ──
 @app.route("/health", methods=["GET"])
 def health():
@@ -843,28 +723,6 @@ def caption():
         download_name=output_name,
         mimetype="video/mp4",
     )
-
-
-# ── Transcribe ──
-@app.route("/transcribe", methods=["POST"])
-def transcribe():
-    """
-    Accepts: { "file_path": "...", "model": "tiny"|"medium" }
-    Returns: { "transcript": "...", "srt_path": "...", "words_path": "..." }
-    Session 2/3: wire Whisper here.
-    """
-    data = request.get_json(force=True)
-    file_path = data.get("file_path", "")
-    base = os.path.splitext(file_path)[0]
-
-    return jsonify({
-        "status": "stub",
-        "message": "Whisper transcription not yet implemented",
-        "input": file_path,
-        "srt_path": base + " (Time-Stamped).srt",
-        "clean_path": base + " (Clean).txt",
-        "words_path": base + " (Words).json",
-    })
 
 
 # ── Find JSON ──
@@ -2026,51 +1884,6 @@ def find_json():
         return jsonify({'json_found': False, 'error': str(e)})
 
 
-# ── Generate Transcript ──
-@app.route("/generate_transcript", methods=["POST"])
-def generate_transcript():
-    """
-    Accepts: { "file_path": "C:/path/to/Video.mp4" }
-    Runs Whisper medium, saves (Words).json alongside source.
-    Returns: { "json_path": "..." }
-    """
-    data = request.get_json(force=True)
-    file_path = data.get("file_path", "").strip()
-    if not file_path or not os.path.isfile(file_path):
-        return jsonify({"error": "file_path not found"}), 400
-
-    directory = os.path.dirname(file_path)
-    stem = os.path.splitext(os.path.basename(file_path))[0]
-    out_path = os.path.join(directory, stem + ' - Transcript (Words).json')
-
-    # Copy to clean temp path to handle special characters
-    tmp_dir = tempfile.mkdtemp()
-    try:
-        src_ext     = os.path.splitext(file_path)[1].lower() or '.mp4'
-        clean_input = os.path.join(tmp_dir, 'source' + src_ext)
-        shutil.copy2(file_path, clean_input)
-
-        model = get_whisper_model()
-        result = model.transcribe(clean_input, word_timestamps=True)
-
-        words = []
-        for seg in result.get('segments', []):
-            for w in seg.get('words', []):
-                words.append({
-                    'word':  w.get('word', ''),
-                    'start': round(w.get('start', 0.0), 3),
-                    'end':   round(w.get('end',   0.0), 3),
-                })
-
-        with open(out_path, 'w', encoding='utf-8') as f:
-            json.dump(words, f, ensure_ascii=False, indent=2)
-
-    finally:
-        shutil.rmtree(tmp_dir, ignore_errors=True)
-
-    return jsonify({"json_path": out_path})
-
-
 # ── Generate Transcript (upload) ──
 @app.route("/generate_transcript_upload", methods=["POST"])
 def generate_transcript_upload():
@@ -2143,290 +1956,6 @@ def generate_transcript_upload():
 
 
 # ── Thumbnails — async job worker ──
-
-def _thumbnail_worker(job_id, filename, clipstart, clipend, clip_transcript):
-    import base64
-    from PIL import Image as PILImage
-    import numpy as np
-
-    try:
-        # Clean up jobs older than 10 minutes
-        now = datetime.datetime.utcnow()
-        for jid in list(thumbnail_jobs.keys()):
-            age = (now - thumbnail_jobs[jid].get('created_at', now)).total_seconds()
-            if age > 600:
-                thumbnail_jobs.pop(jid, None)
-
-        # Check cache first (populated by /find_json); os.walk only as fallback
-        video_path = video_path_cache.get(filename)
-        if video_path and not os.path.exists(video_path):
-            thumb_logger.info('Job %s cached path stale, re-walking: %s', job_id, video_path)
-            video_path = None
-
-        if not video_path:
-            thumb_logger.info('Job %s cache miss for "%s"; searching Dropbox', job_id, filename)
-            video_path = find_video_in_dropbox(filename)
-            if video_path:
-                video_path_cache[filename] = video_path
-
-        if not video_path:
-            thumb_logger.warning('Job %s failed: video "%s" not found in Dropbox', job_id, filename)
-            thumbnail_jobs[job_id] = {
-                'status': 'error',
-                'error': f'Video "{filename}" not found in Dropbox',
-            }
-            return
-
-        thumb_logger.info('Job %s started for "%s"', job_id, video_path)
-
-        tmp_dir = tempfile.mkdtemp()
-        try:
-            stream_info = get_video_stream_info(video_path, FFMPEG_EXE)
-
-            # ── Get total duration ──
-            ffprobe_exe = FFMPEG_EXE.replace('ffmpeg.exe', 'ffprobe.exe') if (
-                FFMPEG_EXE and FFMPEG_EXE != 'ffmpeg'
-            ) else 'ffprobe'
-            if not os.path.isfile(ffprobe_exe):
-                ffprobe_exe = 'ffprobe'
-            probe = subprocess.run(
-                [ffprobe_exe, '-v', 'error', '-show_entries', 'format=duration',
-                 '-of', 'json', video_path],
-                capture_output=True, text=True, creationflags=CREATE_NO_WINDOW
-            )
-            try:
-                total_duration = float(json.loads(probe.stdout)['format']['duration'])
-            except Exception:
-                total_duration = 90.0
-
-            # Always sample full video for thumbnail frame selection
-            # (user wants to pick the best moment from anywhere in the video)
-            start_t = 17.0 if total_duration > 20.0 else 0.0
-            end_t = max(start_t, total_duration - 0.25)
-            if end_t <= start_t + 0.01:
-                timestamps = [round(start_t, 3)]
-            else:
-                timestamps = [start_t + i * (end_t - start_t) / 29 for i in range(30)]
-            thumb_logger.info(
-                'Job %s sampling %s timestamps from %.1fs to %.1fs',
-                job_id, len(timestamps), start_t, end_t,
-            )
-
-            # ── Extract frames ──
-            scored = []
-            frame_errors = 0
-            for i, ts in enumerate(timestamps):
-                fp = os.path.join(tmp_dir, f'frame_{i:03d}.jpg')
-                subprocess.run(
-                    [FFMPEG_EXE, '-y', '-ss', str(ts), '-i', video_path,
-                     '-frames:v', '1', '-q:v', '2', fp],
-                    capture_output=True, creationflags=CREATE_NO_WINDOW
-                )
-                if not os.path.isfile(fp):
-                    continue
-                try:
-                    img = PILImage.open(fp)
-                    arr = np.array(img.convert('L'), dtype=float)
-                    sharpness = float(np.var(np.gradient(arr)))
-                    mean_brightness = float(np.mean(arr))
-                    # Hard-reject completely black frames (cuts/fades)
-                    if mean_brightness < 15:
-                        thumb_logger.debug(
-                            'Job %s frame %s ts=%.1fs SKIPPED black frame brightness=%.1f',
-                            job_id, i, ts, mean_brightness,
-                        )
-                        continue
-                    # Composite score: penalize dark frames strongly
-                    # brightness_weight: 0.15 (very dark) → 1.0 (well-lit, brightness >= 80)
-                    brightness_weight = min(1.0, max(0.15, (mean_brightness - 20) / 60.0))
-                    composite = sharpness * brightness_weight
-                    thumb_logger.debug(
-                        'Job %s frame %s ts=%.1fs sharpness=%.1f brightness=%.1f weight=%.2f score=%.1f',
-                        job_id, i, ts, sharpness, mean_brightness, brightness_weight, composite,
-                    )
-                    scored.append((composite, fp))
-                except Exception as fe:
-                    frame_errors += 1
-                    thumb_logger.debug('Job %s frame %s failed to score: %s', job_id, i, fe)
-
-            if not scored:
-                thumb_logger.warning('Job %s failed: could not extract usable frames', job_id)
-                thumbnail_jobs[job_id] = {
-                    'status': 'error',
-                    'error': 'Could not extract usable frames from video',
-                }
-                return
-
-            scored.sort(reverse=True)
-            scored = scored[:8]
-            thumb_logger.info(
-                'Job %s extracted %s usable frames (%s frame errors), keeping top %s',
-                job_id, len(scored), frame_errors, len(scored),
-            )
-
-            frame_b64s = []
-            encoded_sizes = []
-            for _, fp in scored:
-                try:
-                    pil = PILImage.open(fp).convert('RGB')
-                    original_size = pil.size
-                    pil.thumbnail((1600, 1600), PILImage.LANCZOS)
-                    buf = io.BytesIO()
-                    pil.save(buf, 'JPEG', quality=92, optimize=True)
-                    encoded_sizes.append((original_size, pil.size))
-                    thumb_logger.debug(
-                        'Job %s encoded frame %s: %sx%s -> %sx%s',
-                        job_id, os.path.basename(fp),
-                        original_size[0], original_size[1], pil.size[0], pil.size[1],
-                    )
-                    frame_b64s.append(base64.b64encode(buf.getvalue()).decode())
-                except Exception as ee:
-                    thumb_logger.debug('Job %s frame encode failed for %s: %s', job_id, fp, ee)
-
-            if not frame_b64s:
-                thumb_logger.warning('Job %s failed: frame encoding produced no output', job_id)
-                thumbnail_jobs[job_id] = {'status': 'error', 'error': 'Frame encoding failed'}
-                return
-            if encoded_sizes:
-                largest = max(size[1][0] * size[1][1] for size in encoded_sizes)
-                thumb_logger.info('Job %s encoded %s frames for ranking (largest encoded frame area=%s)', job_id, len(frame_b64s), largest)
-
-            # ── Claude Vision ranking ──
-            api_key_val = read_api_key()
-            client      = anthropic.Anthropic(api_key=api_key_val)
-            try:
-                content = []
-                for i, b64 in enumerate(frame_b64s):
-                    content.append({"type": "text", "text": f"Frame {i}:"})
-                    content.append({
-                        "type": "image",
-                        "source": {"type": "base64", "media_type": "image/jpeg", "data": b64}
-                    })
-                content.append({
-                    "type": "text",
-                    "text": (
-                        "Rank these frames best to worst for a YouTube/social media thumbnail. "
-                        "These are from a stage or auditorium setting where speakers are the primary subject. "
-                        "Prefer: speaker face clearly visible and well-lit, eyes open and engaged, "
-                        "natural confident expression (not mid-word or grimacing), sharp focus, good posture. "
-                        "Strongly avoid: dark silhouette frames, motion-blurred frames, "
-                        "frames showing a cut/transition, frames where the speaker is mostly in shadow, "
-                        "partially cropped off-frame, or far from center. "
-                        f"There are {len(frame_b64s)} frames (0-indexed). "
-                        "Return ONLY a JSON array of ALL indices, best first. Example: [2,0,3,1]"
-                    )
-                })
-                rank_msg = client.messages.create(
-                    model="claude-sonnet-4-6", max_tokens=120,
-                    messages=[{"role": "user", "content": content}]
-                )
-                rank_text = rank_msg.content[0].text.strip()
-                s = rank_text.find('['); e = rank_text.rfind(']')
-                if s != -1 and e != -1:
-                    ranks   = json.loads(rank_text[s:e+1])
-                    seen    = set()
-                    ordered = []
-                    for idx in ranks:
-                        if isinstance(idx, int) and 0 <= idx < len(frame_b64s) and idx not in seen:
-                            ordered.append(frame_b64s[idx]); seen.add(idx)
-                    for idx in range(len(frame_b64s)):
-                        if idx not in seen: ordered.append(frame_b64s[idx])
-                    frame_b64s = ordered
-            except Exception as ve:
-                thumb_logger.warning('Job %s vision ranking failed; keeping sharpness order: %s', job_id, ve)
-
-            # FIX 5: titles from clip_transcript (clip-specific range, sent by frontend)
-            thumb_logger.info('Job %s clip transcript length=%s chars', job_id, len(clip_transcript))
-            if not clip_transcript:
-                # Fall back: Whisper tiny on the full video
-                tiny       = get_whisper_tiny()
-                w_result   = tiny.transcribe(video_path)
-                clip_transcript = (w_result.get("text") or "")[:3000]
-                thumb_logger.info('Job %s used Whisper fallback transcript length=%s chars', job_id, len(clip_transcript))
-
-            titles = []
-            try:
-                title_msg = client.messages.create(
-                    model="claude-sonnet-4-6",
-                    max_tokens=800,
-                    messages=[{"role": "user", "content": (
-                        "The Candler Foundry produces faith-based video content for clergy, scholars, "
-                        "and the spiritually curious public. The best thumbnail titles are short, surprising, "
-                        "and emotionally resonant — a question or statement that makes someone stop scrolling. "
-                        "Avoid jargon, church-speak, or academic language. Aim for human, honest, direct.\n\n"
-                        "Generate exactly 8 title options. Rules:\n"
-                        "- MAX 60 characters each — strip any over 60 chars\n"
-                        "- Short, punchy, emotionally direct: a provocative question or bold statement\n"
-                        "- No filler phrases, no colons that only pad length\n"
-                        "Return ONLY a JSON array of 8 strings, no markdown.\n\n"
-                        f"Clip transcript ({len(clip_transcript)} chars):\n{clip_transcript}"
-                    )}]
-                )
-                raw = title_msg.content[0].text.strip()
-                s = raw.find('['); e = raw.rfind(']')
-                if s != -1 and e != -1:
-                    parsed = json.loads(raw[s:e+1])
-                    titles = [str(t) for t in parsed if len(str(t)) <= 40][:8]
-                    if len(titles) < 5:
-                        titles = [str(t)[:40] for t in parsed[:8]]
-            except Exception as te:
-                thumb_logger.warning('Job %s title generation failed: %s', job_id, te)
-                titles = ["Add Your Title Here"] * 8
-
-            thumb_logger.info(
-                'Job %s complete: %s ranked frames, %s titles, orientation=%s',
-                job_id, len(frame_b64s), len(titles), stream_info.get('orientation'),
-            )
-
-            thumbnail_jobs[job_id] = {
-                'status':     'complete',
-                'result':     {'frames': frame_b64s, 'titles': titles,
-                               'clip_transcript': clip_transcript, 'video_info': stream_info},
-                'created_at': now,
-            }
-
-        finally:
-            shutil.rmtree(tmp_dir, ignore_errors=True)
-
-    except Exception as exc:
-        thumb_logger.exception('Job %s worker exception', job_id)
-        thumbnail_jobs[job_id] = {'status': 'error', 'error': str(exc)}
-
-
-@app.route('/thumbnail', methods=['POST'])
-def thumbnail():
-    """
-    Starts async thumbnail job.
-    Accepts form fields: filename, clipstart, clipend, clip_transcript
-    Returns immediately: {"jobid": "...", "status": "processing"}
-    """
-    if not FFMPEG_EXE:
-        return jsonify({'error': 'ffmpeg not found. Expected at Dropbox\\Scripts\\FFMPEG\\ffmpeg.exe'}), 500
-
-    filename        = request.form.get('filename', '').strip()
-    clipstart       = request.form.get('clipstart', '').strip()
-    clipend         = request.form.get('clipend',   '').strip()
-    clip_transcript = request.form.get('clip_transcript', '')
-
-    if not filename:
-        return jsonify({'error': 'filename is required'}), 400
-
-    job_id = 'thumb' + uuid.uuid4().hex[:8]
-    thumb_logger.info(
-        'Queueing thumbnail job %s for filename="%s" clipstart="%s" clipend="%s" transcript_chars=%s',
-        job_id, filename, clipstart, clipend, len(clip_transcript),
-    )
-    thumbnail_jobs[job_id] = {
-        'status':     'processing',
-        'created_at': datetime.datetime.utcnow(),
-    }
-    t = threading.Thread(
-        target=_thumbnail_worker,
-        args=(job_id, filename, clipstart, clipend, clip_transcript),
-        daemon=True
-    )
-    t.start()
-    return jsonify({'jobid': job_id, 'status': 'processing'})
 
 
 @app.route('/thumbnail_titles', methods=['POST'])
@@ -2709,20 +2238,6 @@ def caption_emphasis():
     except Exception as exc:
         logger.warning('[emphasis] Failed: %s', exc)
         return jsonify({'words': []})
-
-
-@app.route('/thumbnailstatus/<jobid>', methods=['GET'])
-def thumbnailstatus(jobid):
-    """Poll thumbnail job status."""
-    job = thumbnail_jobs.get(jobid)
-    if not job:
-        thumb_logger.warning('Status poll for missing thumbnail job %s', jobid)
-        return jsonify({'status': 'error', 'error': 'Job not found'}), 404
-    if job['status'] == 'processing':
-        return jsonify({'status': 'processing'})
-    if job['status'] == 'complete':
-        return jsonify({'status': 'complete', **job['result']})
-    return jsonify({'status': 'error', 'error': job.get('error', 'Unknown error')}), 500
 
 
 # ── Clips ──
