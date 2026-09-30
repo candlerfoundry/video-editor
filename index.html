@@ -750,7 +750,7 @@
       min-height: 72px; cursor: pointer;
       transition: border-color 150ms, background 150ms;
     }
-    .clips-load-card:hover { border-color: var(--orange); background: var(--orange-tint); }
+    .clips-load-card:hover, .clips-load-card.dragover { border-color: var(--orange); background: var(--orange-tint); }
     .clips-load-card.loaded {
       border-color: var(--green); background: #F0FAF5; cursor: default;
     }
@@ -1211,7 +1211,7 @@
       box-shadow: 0 0 0 3px var(--orange-tint), var(--shadow-sm);
     }
     .candidate-card.selected:hover { transform: none; }
-    .candidate-card { cursor: pointer; }
+    .candidate-card { cursor: default; }  /* the card itself isn't clickable — its buttons are */
 
     /* ─── MINI-EDITOR ─── */
     #mini-editor-controls {
@@ -2439,7 +2439,7 @@
                 <div class="clc-icon">🎬</div>
                 <div class="clc-body">
                   <div class="clc-value muted" id="clc-video-value">Browse for video</div>
-                  <div style="font-size:11px;color:var(--muted);margin-top:2px;">Use the <strong>UNCAPTIONED</strong> master &#8212; the app burns phone-sized captions at save. The transcript loads automatically.</div>
+                  <div style="font-size:11px;color:var(--muted);margin-top:2px;">Click or drop a video. Use the <strong>UNCAPTIONED</strong> master &#8212; the app burns phone-sized captions at save. The transcript loads automatically.</div>
                 </div>
                 <input type="file" accept=".mp4,.MP4,.mov,.MOV,video/mp4,video/quicktime" id="clips-file" style="display:none;" />
               </div>
@@ -2494,6 +2494,11 @@
             </button>
           </div>
 
+          <!-- Shown when this video already has results (e.g. after "← Back") -->
+          <div id="clips-view-results" style="display:none;margin-top:12px;">
+            <button class="btn-ghost btn-sm" type="button" onclick="showClipResults()">See your results &rarr;</button>
+          </div>
+
           <!-- Empty state / what Claude looks for -->
           <div class="empty-state fade-up-2" id="clips-empty-state">
             <div class="empty-state-svg">
@@ -2515,6 +2520,7 @@
 
           <!-- 1-line summary bar -->
           <div class="clips-summary-bar active" id="clips-summary-bar">
+            <a href="#" onclick="event.preventDefault(); showStage(1);" title="Back to the video and transcript (your results stay here)">&larr; Back</a>
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="8" width="13" height="8" rx="2"/><path d="M16 10l4.553-2.276A1 1 0 0121 8.724v6.552a1 1 0 01-1.447.894L16 14"/></svg>
             <span class="mono" id="summary-filename"></span>
             <a href="#" onclick="switchProject(event)">Save &amp; switch project</a>
@@ -2779,15 +2785,7 @@
         <div class="card fade-up-1" style="margin-bottom:20px;">
           <h3>Options</h3>
           <div style="margin-top:14px;display:flex;flex-direction:column;gap:14px;">
-
-            <div>
-              <div class="drop-zone-label" style="margin-bottom:8px;">Font size</div>
-              <div class="mode-toggle">
-                <button class="mode-btn"        id="caption-size-small"  onclick="setCaptionSize('small')">Small</button>
-                <button class="mode-btn active" id="caption-size-medium" onclick="setCaptionSize('medium')">Medium</button>
-                <button class="mode-btn"        id="caption-size-large"  onclick="setCaptionSize('large')">Large</button>
-              </div>
-            </div>
+            <p style="margin:0;font-size:12.5px;color:var(--muted);">Caption size is set automatically to fit the video (vertical or horizontal).</p>
 
             <div>
               <div class="drop-zone-label" style="margin-bottom:8px;">Position</div>
@@ -3157,6 +3155,8 @@
     if (_tabPid && _projectCache[_tabPid] && activeProject?.id !== _tabPid) {
       setActiveProject(_projectCache[_tabPid], { refreshRecent: false });
     }
+    // Don't leave a video playing in the tab you're leaving.
+    document.querySelectorAll('.tab-panel.active video').forEach(v => { try { v.pause(); } catch (_) {} });
     document.querySelectorAll('.tab-btn').forEach(btn => {
       btn.classList.toggle('active', btn.dataset.tab === target);
     });
@@ -3170,7 +3170,28 @@
     btn.addEventListener('click', () => switchTab(btn.dataset.tab));
   });
 
-  // ── Drag/drop styling ──
+  // ── Drag/drop ──
+  // A file dropped anywhere that isn't a drop target used to make the browser OPEN it,
+  // leaving the app (and any unsaved edits). Swallow stray drops page-wide.
+  window.addEventListener('dragover', e => { e.preventDefault(); });
+  window.addEventListener('drop', e => { e.preventDefault(); });
+  // Clips tab: the "Source Video" card accepts a dropped video like the other tabs do.
+  (function () {
+    const card = document.getElementById('clc-video');
+    if (!card) return;
+    card.addEventListener('dragover', e => { e.preventDefault(); card.classList.add('dragover'); });
+    card.addEventListener('dragleave', () => card.classList.remove('dragover'));
+    card.addEventListener('drop', e => {
+      e.preventDefault(); card.classList.remove('dragover');
+      const file = e.dataTransfer.files[0];
+      if (!file) return;
+      if (!/\.(mp4|mov)$/i.test(file.name)) { showToast('Drop an MP4 or MOV video here.', 'warn'); return; }
+      const dt = new DataTransfer(); dt.items.add(file);
+      const inp = document.getElementById('clips-file');
+      inp.files = dt.files;
+      inp.dispatchEvent(new Event('change'));
+    });
+  })();
   document.querySelectorAll('.drop-zone').forEach(zone => {
     zone.addEventListener('dragover', e => { e.preventDefault(); zone.classList.add('dragover'); });
     zone.addEventListener('dragleave', () => zone.classList.remove('dragover'));
@@ -3235,7 +3256,7 @@
   // Must match BACKEND_BUILD in server.py — bumped together whenever the
   // frontend/backend contract changes. A mismatch means the user is running
   // an old backend (launcher not restarted after a deploy).
-  const EXPECTED_BACKEND_BUILD = '2026-09-29-clipstate';
+  const EXPECTED_BACKEND_BUILD = '2026-09-30-ux';
 
   if (document.fonts && document.fonts.load) { document.fonts.load("700 64px 'Handmade Sans'").catch(function(){}); document.fonts.load("700 64px 'Montserrat'").catch(function(){}); }
   let _staleBackendWarned = false;
@@ -3247,7 +3268,7 @@
       el.id = 'stale-backend-banner';
       el.style.cssText = 'position:fixed;top:0;left:0;right:0;z-index:9999;background:#B45309;color:#fff;' +
         'font-size:13px;font-weight:600;text-align:center;padding:8px 16px;box-shadow:0 2px 8px rgba(0,0,0,0.25);';
-      el.innerHTML = '\u26A0 Your backend is running an OLD version \u2014 close and reopen the Foundry Video Editor launcher, then reload this page. (Saving clips now may produce broken captions or missing features.)';
+      el.innerHTML = '\u26A0 The editor page and the local server are different versions \u2014 close and reopen the launcher, then hard-refresh this page (Ctrl+Shift+R, or Cmd+Shift+R on a Mac). (Saving clips now may produce broken captions or missing features.)';
       document.body.appendChild(el);
     }
     el.style.display = 'block';
@@ -3692,7 +3713,10 @@
 
   function finalizeProjectResume(project, view) {
     const result = attemptProjectRestore(project, view);
-    showProjectRestoreBanner(view, result.tone, result.title, result.body);
+    // "Project ready — this source video is linked…" appeared on every reopen and told the
+    // user nothing; only show banners that report something (restored work, a warning).
+    if (result.title !== 'Project ready') showProjectRestoreBanner(view, result.tone, result.title, result.body);
+    else dismissProjectRestoreBanner(view);
     clearPendingProjectResume();
     return result;
   }
@@ -4135,7 +4159,13 @@
       if (editVid) { editVid.pause(); editVid.currentTime = 0; }
       if (currentlyPlaying) { currentlyPlaying.pause(); currentlyPlaying = null; }
     }
+    // Leaving a stage: stop any inline preview players (they kept playing under the editor).
+    document.querySelectorAll('.inline-preview video').forEach(v => { try { v.pause(); } catch (_) {} });
+    // Leaving the editor: stop the split-screen canvas loop (it redrew 60×/s forever).
+    try { if (n !== 3 && _splitRaf) { cancelAnimationFrame(_splitRaf); _splitRaf = null; } } catch (_) {}
     _currentStage = n;
+    const _vr = document.getElementById('clips-view-results');
+    if (_vr) _vr.style.display = (n === 1 && ((_candidates && _candidates.length) || (_splitParts && _splitParts.length))) ? '' : 'none';
     document.getElementById('clips-stage1').style.display = n === 1 ? 'block' : 'none';
     document.getElementById('clips-stage2').style.display = n === 2 ? 'block' : 'none';
     document.getElementById('clips-stage3').style.display = n === 3 ? 'block' : 'none';
@@ -4144,6 +4174,22 @@
       const mc = document.querySelector('.main-content');
       if (mc) mc.scrollTop = savedScrollY;
     }
+  }
+
+  // Back to the results list for the current mode (from Stage 1's "See your results").
+  function showClipResults() {
+    showStage(2);
+    if (_clipMode === 'split') renderParts(_splitParts); else renderCandidates(_candidates);
+  }
+
+  // Find Clips / Split failed: say so in the results area with a way to retry, instead of
+  // an alert() followed by an empty page.
+  function showClipsError(message, retryFn) {
+    const sec = document.getElementById('candidates-section');
+    const sk = document.getElementById('clips-skeleton'); if (sk) sk.style.display = 'none';
+    if (!sec) return;
+    sec.innerHTML = '<div class="export-error" style="margin:12px 0;"><strong>That didn’t work.</strong> ' + escHtml(message) +
+      ' <button class="btn-ghost btn-sm" type="button" style="margin-left:8px;" onclick="' + retryFn + '()">Try again</button></div>';
   }
 
   // Switch to another video without losing this project: candidates are
@@ -4229,7 +4275,7 @@
     if (!file) return;
 
     if (/captioned/i.test(file.name) && !/uncaptioned/i.test(file.name)) {
-      alert('Heads up: this looks like a CAPTIONED master. Baked-in captions get sliced by the 9:16 crop and cannot be resized.\n\nFor clips, use the UNCAPTIONED version \u2014 the app burns correctly-sized captions at save (check \u201CBurn captions onto the clip\u201D in the save window).');
+      showToast('Heads up: this looks like a CAPTIONED master. Its captions get cut off by the 9:16 crop. For clips, use the UNCAPTIONED version \u2014 the app burns correctly-sized captions at save.', 'warn', 12000);
     }
 
     // Load video
@@ -4287,6 +4333,8 @@
     valEl.textContent = filename;
     valEl.className = 'clc-value mono';
     valEl.style.color = '';
+    // "Ready to find your best clips — Load an MP4 above" no longer applies.
+    const es = document.getElementById('clips-empty-state'); if (es) es.style.display = 'none';
   }
 
   function showJsonSearching() {
@@ -4373,12 +4421,18 @@
     reader.onload = function (e) {
       try {
         const data = JSON.parse(e.target.result);
-        setWordsData(extractWords(data), file.name);
+        const words = extractWords(data);
+        // A JSON with no words used to get a green check while Find Clips stayed disabled.
+        if (!words.length) { showToast('“' + file.name + '” doesn’t contain any transcript words. Choose the Words JSON for this video.', 'warn', 8000); return; }
+        setWordsData(words, file.name);
+        updateProject('transcript_loaded', { json_filename: file.name, json_path: '', word_count: words.length });
+        restoreClipsAfterTranscript();
       } catch (err) {
-        alert('Could not parse JSON: ' + err.message);
+        showToast('That file isn’t a readable transcript JSON (' + err.message + ').', 'error');
       }
     };
     reader.readAsText(file);
+    this.value = '';   // choosing the same file again still works
 
   });
 
@@ -4398,12 +4452,17 @@
       const d = await res.json();
       if (gen !== _clipWorkGen) return;   // a different video was loaded while Whisper ran
       if (d.words) {
-        setWordsData(d.words, _clipFile.name.replace(/\.(mp4|mov)$/i, '') + ' - Transcript (Words).json');
+        const _jname = d.json_filename || (_clipFile.name.replace(/\.(mp4|mov)$/i, '') + ' - Transcript (Words).json');
+        setWordsData(d.words, _jname);
+        // The server now SAVES the transcript (next to the video in Dropbox when it can), so
+        // reopening this project reloads it instead of re-running Whisper.
         await updateProject('transcript_loaded', {
-          json_filename: _clipFile.name.replace(/\.(mp4|mov)$/i, '') + ' - Transcript (Words).json',
-          json_path: '',
+          json_filename: _jname,
+          json_path: d.json_path || '',
           word_count: d.words.length,
         });
+        if (d.json_path) showToast('Transcript created and saved as “' + _jname + '”.', 'success', 6000);
+        restoreClipsAfterTranscript();
       } else {
         setJsonStatus('not_found');
         showToast('Transcript generation failed: ' + (d.error || 'unknown error'), 'error');
@@ -4415,8 +4474,17 @@
     }
   }
 
+  // A transcript just became available (generated or chosen by hand): bring this project's
+  // saved clip suggestions back — the banner promised this, but nothing did it.
+  function restoreClipsAfterTranscript() {
+    const p = clipProject();
+    if (!p || (_candidates && _candidates.length) || (_splitParts && _splitParts.length)) return;
+    if ((p.clip_candidates || []).length || (p.split_parts || []).length) finalizeProjectResume(p, 'clips');
+  }
+
   // ── Helper: extractWords from various Whisper output formats ──
   function extractWords(data) {
+    if (!data || typeof data !== 'object') return [];
     if (Array.isArray(data)) return data;
     if (data.segments) {
       const words = [];
@@ -4497,15 +4565,15 @@
   // ── Find Clips → POST /clips → Stage 2 ──
   async function findClips() {
     if (!_wordsData || !_wordsData.length) {
-      alert('Transcript not loaded.');
+      showToast('The transcript isn’t loaded yet.', 'warn');
       return;
     }
     if (!backendOnline) {
-      alert('Backend is not connected.');
+      showToast('The local server isn’t connected. Start the launcher, then try again.', 'warn');
       return;
     }
     if (!_clipFile) {
-      alert('Load a video first.');
+      showToast('Choose a video first.', 'warn');
       return;
     }
 
@@ -4532,7 +4600,7 @@
       document.getElementById('clips-skeleton').style.display = 'none';
 
       if (data.error) {
-        alert('Backend error: ' + data.error);
+        showClipsError(data.error, 'findClips');
         return;
       }
       _candidates = data.candidates || [];
@@ -4544,8 +4612,8 @@
       });
       renderCandidates(_candidates);
     } catch (err) {
-      document.getElementById('clips-skeleton').style.display = 'none';
-      alert('Request failed: ' + err.message);
+      if (gen !== _clipWorkGen) return;
+      showClipsError('Couldn’t reach the local server (' + err.message + ').', 'findClips');
     }
   }
 
@@ -4650,15 +4718,15 @@
   // ── Split Video → POST /split → Stage 2 ──
   async function splitVideo() {
     if (!_wordsData || !_wordsData.length) {
-      alert('Transcript not loaded.');
+      showToast('The transcript isn’t loaded yet.', 'warn');
       return;
     }
     if (!backendOnline) {
-      alert('Backend is not connected.');
+      showToast('The local server isn’t connected. Start the launcher, then try again.', 'warn');
       return;
     }
     if (!_clipFile) {
-      alert('Load a video first.');
+      showToast('Choose a video first.', 'warn');
       return;
     }
 
@@ -4686,7 +4754,7 @@
       document.getElementById('clips-skeleton').style.display = 'none';
 
       if (data.error) {
-        alert('Backend error: ' + data.error);
+        showClipsError(data.error, 'splitVideo');
         return;
       }
       _splitParts = data.parts || [];
@@ -4703,8 +4771,8 @@
       });
       renderParts(_splitParts);
     } catch (err) {
-      document.getElementById('clips-skeleton').style.display = 'none';
-      alert('Request failed: ' + err.message);
+      if (gen !== _clipWorkGen) return;
+      showClipsError('Couldn’t reach the local server (' + err.message + ').', 'splitVideo');
     }
   }
 
@@ -5880,15 +5948,17 @@
 
   // ── Caption Videos tab ──
   let _captionFile     = null;
-  let _captionFontPx   = 18;   // default medium (matches HTML)
   let _captionPosition = 'bottom';
   let _captionColor    = 'white';
-
-  const CAPTION_FONT_SIZES = { small: 14, medium: 18, large: 24 };
+  let _captionBusy     = false;   // one captioning job at a time
 
   document.getElementById('caption-file').addEventListener('change', function () {
     const file = this.files[0];
+    this.value = '';   // choosing the same file again still works
     if (!file) return;
+    // Swapping the file mid-job re-enabled the button (second concurrent Whisper run) and
+    // named the finished download after the NEW file.
+    if (_captionBusy) { showToast('Captions are still being made for the current video — wait for it to finish.', 'info'); return; }
     _captionFile = file;
 
     const drop = document.getElementById('caption-drop');
@@ -5914,16 +5984,11 @@
         const dt = new DataTransfer(); dt.items.add(file);
         document.getElementById('caption-file').files = dt.files;
         document.getElementById('caption-file').dispatchEvent(new Event('change'));
+      } else if (file) {
+        showToast('Drop an MP4 or MOV video here.', 'warn');
       }
     });
   })();
-
-  function setCaptionSize(size) {
-    _captionFontPx = CAPTION_FONT_SIZES[size] || 18;
-    ['small', 'medium', 'large'].forEach(s => {
-      document.getElementById('caption-size-' + s).classList.toggle('active', s === size);
-    });
-  }
 
   function setCaptionPosition(pos) {
     _captionPosition = pos;
@@ -5940,21 +6005,30 @@
   }
 
   async function generateCaptions() {
-    if (!_captionFile) { alert('Load an MP4 first.'); return; }
-    if (!backendOnline) { alert('Backend is not connected. Start the Foundry Video Editor launcher, then try again.'); return; }
+    if (!_captionFile) { showToast('Choose an MP4 first.', 'warn'); return; }
+    if (!backendOnline) { showToast('The local server isn\u2019t connected. Start the launcher, then try again.', 'warn'); return; }
+    if (_captionBusy) return;
 
     const statusEl = document.getElementById('caption-status');
     const btn = document.getElementById('btn-generate-captions');
+    const file = _captionFile;   // this job's file, even if another is chosen meanwhile
 
+    _captionBusy = true;
     btn.disabled = true;
     statusEl.style.display = 'block';
+    const _t0 = Date.now();
+    const _label = () => {
+      const s = Math.round((Date.now() - _t0) / 1000);
+      return 'Transcribing with Whisper and burning captions\u2026 ' + Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0') +
+        ' elapsed. This can take about as long as the video itself \u2014 keep this tab open.';
+    };
     statusEl.innerHTML =
       '<div class="export-progress-bar"><div class="export-shimmer"></div></div>' +
-      '<p class="export-progress-label">Transcribing with Whisper\u2026 this may take a minute</p>';
+      '<p class="export-progress-label" id="caption-progress-label">' + _label() + '</p>';
+    const _tick = setInterval(() => { const l = document.getElementById('caption-progress-label'); if (l) l.textContent = _label(); }, 1000);
 
     const form = new FormData();
-    form.append('file', _captionFile);
-    form.append('font_size', _captionFontPx);
+    form.append('file', file);
     form.append('position',   _captionPosition);
     form.append('text_color', _captionColor);
 
@@ -5967,10 +6041,8 @@
         throw new Error(errMsg);
       }
 
-      const cd = res.headers.get('Content-Disposition') || '';
-      const nameMatch = cd.match(/filename[^;=\n]*=["']?([^"'\n]+)/i);
-      const baseName = _captionFile.name.replace(/\.(mp4|mov)$/i, '');
-      const downloadName = nameMatch ? nameMatch[1].trim() : baseName + ' (Captioned).mp4';
+      // (The server's download name header isn't readable cross-origin, so name it here.)
+      const downloadName = file.name.replace(/\.(mp4|mov)$/i, '') + ' (Captioned).mp4';
 
       const blob = await res.blob();
       const blobUrl = URL.createObjectURL(blob);
@@ -5982,10 +6054,13 @@
           '<a href="' + blobUrl + '" download="' + escHtml(downloadName) + '" class="btn btn-sm">Download</a>' +
         '</div>';
 
+      showToast('Captions ready — click Download.', 'success');
     } catch (err) {
       statusEl.innerHTML =
         '<div class="export-error"><strong>Caption failed:</strong> ' + escHtml(err.message) + '</div>';
     } finally {
+      clearInterval(_tick);
+      _captionBusy = false;
       btn.disabled = false;
     }
   }
@@ -12763,31 +12838,40 @@
   // ── Edit Captions ──
   let _srtBlocks   = [];
   let _srtFilename = 'captions-edited.srt';
+  let _srtDirty    = false;   // edits not yet saved with "Save"
+  // Leaving/reloading the page with unsaved caption edits asks first.
+  window.addEventListener('beforeunload', function (e) { if (_srtDirty) { e.preventDefault(); e.returnValue = ''; } });
 
   function loadSRTFile(input) {
     const f = input.files[0];
+    input.value = '';
     if (!f) return;
-    _srtFilename = f.name.replace(/\.srt$/i, '') + ' (Edited).srt';
+    // Opening another file used to throw away unsaved edits without asking.
+    if (_srtDirty && !confirm('You have unsaved caption edits. Open “' + f.name + '” and discard them?')) return;
     const reader = new FileReader();
     reader.onload = e => {
-      _srtBlocks = parseSRT(e.target.result);
+      const blocks = parseSRT(e.target.result);
+      if (!blocks.length) { showToast('No captions found in “' + f.name + '”. Is it an .srt caption file?', 'warn'); return; }
+      _srtFilename = f.name.replace(/\.srt$/i, '') + ' (Edited).srt';
+      _srtBlocks = blocks;
+      _srtDirty = false;
       renderSRT();
-      input.value = '';
     };
     reader.readAsText(f, 'utf-8');
   }
 
   function parseSRT(text) {
     const blocks  = [];
-    const cleaned = text.replace(/\r\n/g, '\n').replace(/\r/g, '\n').trim();
-    const entries = cleaned.split(/\n\n+/);
+    const cleaned = text.replace(/^﻿/, '').replace(/\r\n/g, '\n').replace(/\r/g, '\n').trim();
+    const entries = cleaned.split(/\n\s*\n+/);
     for (const entry of entries) {
       const lines = entry.trim().split('\n');
-      if (lines.length < 3) continue;
-      const idx = lines[0].trim();
-      const ts  = lines[1].trim();
-      const txt = lines.slice(2).join('\n').trim();
-      if (/-->/.test(ts)) blocks.push({ index: idx, ts: ts, text: txt });
+      // Find the timestamp line wherever it is (some files have no index numbers).
+      const ti = lines.findIndex(l => /-->/.test(l));
+      if (ti < 0) continue;
+      const txt = lines.slice(ti + 1).join('\n').trim();
+      if (!txt) continue;
+      blocks.push({ index: ti > 0 ? lines[0].trim() : String(blocks.length + 1), ts: lines[ti].trim(), text: txt });
     }
     return blocks;
   }
@@ -12810,7 +12894,7 @@
         '<span class="caption-ts">' + escHtml(b.ts) + '</span>' +
         '<input class="caption-input" type="text" value="' +
           escHtml(b.text.replace(/\n/g, ' ')) + '" ' +
-          'oninput="_srtBlocks[' + i + '].text = this.value" />' +
+          'oninput="_srtBlocks[' + i + '].text = this.value; _srtDirty = true;" />' +
       '</div>'
     ).join('');
   }
@@ -12827,6 +12911,7 @@
     document.body.appendChild(a); a.click();
     document.body.removeChild(a);
     URL.revokeObjectURL(url);
+    _srtDirty = false;
   }
 
   // ── Save Clip → POST /export_clip → download ──

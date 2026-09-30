@@ -3202,3 +3202,80 @@ thumbnail drafts; no send without a Clips project), tab-follows-project, per-cli
 saved-clip restore, save lock (Cancel, Esc, reopen), workspace reset. A load-order bug found in
 testing (listener on a not-yet-parsed dialog aborted the rest of the script) was fixed before
 commit. Regression risk: Medium — touches how every project save is routed.
+NOTE for future edits: top-level `document.getElementById(x).addEventListener` only works for
+markup ABOVE the <script> (dialogs at the end of <body> are not parsed yet) — use a
+document-level listener for those.
+
+## 2026-09-30 — Whole-app review, Round C: everyday UX (build `2026-09-30-ux`)
+Handshake bumped on both sides → full deploy (push + server.py next to the launcher + restart).
+
+### Transcripts (server.py + index.html)
+- `/generate_transcript_upload` now SAVES the Words JSON and returns `json_path` /
+  `json_filename`: next to the video in Dropbox as "<bare_stem> - Transcript (Words).json"
+  (source_path, or the cached path of the uploaded filename) — so `/find_json` finds it for
+  everyone next time — else `<app-data>/transcripts/`. Temp file + `os.replace`,
+  `unique_path_in` (never overwrites). Before, the words were returned and thrown away, so every
+  session re-ran Whisper and saved clips could never be restored. `source_path` must be a video.
+- `/find_json` picks THIS video's transcript: JSONs whose name starts with the video's
+  `bare_stem` win (ranked by "words"/"transcript" in the name); else a lone JSON; else a single
+  "words"/"transcript" JSON; otherwise `json_found:false` with "Several transcripts … choose the
+  file manually". (It used to take the first .json of any name in the folder.)
+- Frontend: `generateTranscript()` records the returned `json_path`; the manual "Choose file"
+  JSON is validated (no words → notice, not a green check), recorded (`transcript_loaded`), and
+  the input cleared. `restoreClipsAfterTranscript()` brings back the project's saved clip
+  suggestions once a transcript arrives (generate or manual) — the banner promised this.
+  `extractWords()` tolerates null.
+
+### Server reliability (server.py)
+- Whisper runs a bare `ffmpeg`: the folder of the ffmpeg we found (Dropbox\Scripts\FFMPEG) is
+  prepended to this process's PATH at startup (fresh PCs failed Generate Transcript / Captions).
+- `find_video_in_dropbox()` checks `video_path_cache` first, skips hidden folders
+  (`.dropbox.cache`…) in the walk and caches every hit. `resolve_project_for_source()` only walks
+  for names with a video extension (the "Made from images" project walked all of Dropbox on every
+  open) and caches the resolved path.
+- `get_video_dimensions()` now reads DISPLAYED size from `ffmpeg -i` first
+  (`_video_dims_from_ffmpeg`, rotation-aware: "displaymatrix: rotation of ±90" / "rotate: 90"
+  swap w/h), then ffprobe, then 1920x1080. Without ffprobe (the main machine) every video was
+  treated as 1920x1080, so Caption Videos laid out vertical/phone videos wrong.
+- `/clips`: when every Claude attempt raised, returns `{"error": "Claude could not be reached: …"}`
+  instead of an empty list that looked like "no clips found".
+- `/projects/recent` returns 40 projects (was 12). Dropbox shared-link fallback uses
+  `direct_only=True` (could return a parent folder's link).
+- `/caption` docstring updated; unused alignment/colour variables removed.
+
+### Clips tab (index.html)
+- Stage 2 bar has "← Back" (to Stage 1 without losing results); Stage 1 shows "See your results →"
+  (`#clips-view-results`, `showClipResults()`) whenever results exist.
+- Find Clips / Split errors show in the results area with "Try again" (`showClipsError()`), not
+  alert() + an empty page; stale errors for an old video are ignored (`_clipWorkGen`).
+- The Source Video card accepts a dropped MP4/MOV; a page-wide dragover/drop guard stops a stray
+  drop from making the browser open the file and leave the app.
+- "Ready to find your best clips / Load an MP4" empty state hides once a video loads.
+- The every-reopen "Project ready — this source video is linked…" banner is no longer shown.
+- `showStage()` pauses inline previews and stops the split-screen canvas loop when leaving the
+  editor (it redrew 60×/s forever); `switchTab()` pauses videos in the tab being left.
+- Candidate cards no longer show a pointer cursor (only their buttons are clickable).
+- Version-mismatch banner says "different versions … reopen the launcher, then hard-refresh".
+- Remaining clip-flow alert()s → notices (captioned-master warning, Find/Split checks).
+
+### Caption Videos / Edit Captions
+- Small/Medium/Large font-size buttons REMOVED (Emily's call — the server never read `font_size`;
+  size is automatic). `setCaptionSize` / `_captionFontPx` / `CAPTION_FONT_SIZES` deleted.
+- One captioning job at a time (`_captionBusy`); choosing another file mid-job is refused; the
+  download is named after the job's own file; elapsed-time progress text; unsupported drop →
+  notice; the unreadable Content-Disposition parsing was removed.
+- Edit Captions: opening another file with unsaved edits asks first (`_srtDirty`), leaving the
+  page with unsaved edits warns (beforeunload), `parseSRT()` finds the timestamp line anywhere
+  (files without index numbers, BOM), and an empty parse shows a notice.
+
+### Setup docs
+- START HERE (PC).html (repo + the live Dropbox copy) and start_server.bat named
+  "Foundry Video Editor.exe"; the launcher in Dropbox is "App Launcher.exe" (build.bat's name).
+- Not changed (needs a Mac to deploy safely — Dropbox exec-bit gotcha): Launch Editor (Mac)
+  treats ANY reply on :5000 as ready (`curl -s` without `-f`; AirPlay Receiver can hold :5000).
+
+Verified: 16 server checks (stem-matched transcript, ambiguous folder, transcript saved next to
+the video and found again, landscape/portrait/rotated dimensions, /clips error, no walk for the
+image project) + browser checks (Find Clips error + Try again, Back / See results, empty state,
+size buttons gone, index-less SRT, banner suppressed, stray drop blocked), no console errors.
+Regression risk: Medium — /find_json selection and transcript saving change what gets loaded.

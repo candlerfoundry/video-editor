@@ -3,7 +3,7 @@ title Foundry Video Editor — Backend (Advanced)
 echo =============================================
 echo   Foundry Video Editor Backend (Advanced)
 echo   Most users should use the launcher app.
-echo   (Foundry Video Editor.exe in this folder)
+echo   (App Launcher.exe in this folder)
 echo =============================================
 echo.
 cd /d "%~dp0"

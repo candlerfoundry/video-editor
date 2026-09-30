@@ -69,7 +69,7 @@ CORS(app, origins=[
 
 # Bump this whenever the frontend/backend contract changes (the frontend
 # carries a matching EXPECTED_BACKEND_BUILD and warns when they differ).
-BACKEND_BUILD = "2026-09-29-clipstate"
+BACKEND_BUILD = "2026-09-30-ux"
 
 
 @app.errorhandler(Exception)
@@ -175,6 +175,12 @@ def find_ffmpeg():
 
 FFMPEG_EXE = find_ffmpeg()
 
+# Whisper runs a bare `ffmpeg` command internally. On a fresh PC the only ffmpeg is the one in
+# Dropbox\Scripts\FFMPEG (not on PATH), so Generate Transcript / Caption Videos failed with
+# "file not found". Put the folder we found onto this process's PATH. (Round C)
+if FFMPEG_EXE and os.path.isabs(FFMPEG_EXE):
+    os.environ['PATH'] = os.path.dirname(FFMPEG_EXE) + os.pathsep + os.environ.get('PATH', '')
+
 logger.info('[startup] Python: %s', sys.executable)
 logger.info('[startup] Working dir: %s', os.getcwd())
 logger.info('[startup] ffmpeg: %s', FFMPEG_EXE)
@@ -226,11 +232,18 @@ except Exception:
 
 
 def find_video_in_dropbox(filename):
-    """Walk Dropbox to find a video file by exact filename. Returns full path or None."""
+    """Find a video file by exact filename in Dropbox. Returns full path or None.
+    Checks the path cache first; the (slow) full walk skips hidden folders such as
+    .dropbox.cache, and every hit is cached so the same video is never walked for twice."""
+    cached = video_path_cache.get(filename)
+    if cached and os.path.exists(cached):
+        return cached
     for root, dirs, files in os.walk(dropbox_root):
+        dirs[:] = [d for d in dirs if not d.startswith('.')]
         if filename in files:
             found = os.path.join(root, filename)
             logger.info('[find_video] Found "%s" at %s', filename, found)
+            video_path_cache[filename] = found
             return found
     logger.warning('[find_video] "%s" not found in Dropbox', filename)
     return None
@@ -567,8 +580,34 @@ def spec_to_ass(spec, width, height):
     return header + "\n".join(events) + "\n"
 
 # ── Adaptive caption sizing ──
+def _video_dims_from_ffmpeg(video_path, ffmpeg_exe):
+    """(width, height) AS DISPLAYED, read from `ffmpeg -i` output. ffmpeg is always present
+    (ffprobe often isn't — CANONICAL "coveraudio3"), and this honours rotation metadata, so an
+    iPhone portrait video stored as 1920x1080 + 90° comes back 1080x1920 like ffmpeg renders it."""
+    r = subprocess.run([ffmpeg_exe, '-hide_banner', '-i', video_path],
+                       capture_output=True, timeout=30, creationflags=CREATE_NO_WINDOW)
+    err = r.stderr.decode('utf-8', errors='replace')
+    m = re.search(r'Stream #[^\n]*Video:[^\n]*?[ ,](\d{2,5})x(\d{2,5})[ ,\[]', err)
+    if not m:
+        return None
+    w, h = int(m.group(1)), int(m.group(2))
+    rot = re.search(r'rotation of (-?\d+(?:\.\d+)?) degrees', err) or re.search(r'rotate\s*:\s*(-?\d+)', err)
+    if rot and abs(abs(float(rot.group(1))) % 180 - 90) < 1:
+        w, h = h, w
+    logger.info('[dimensions] %s: %sx%s (ffmpeg)', video_path, w, h)
+    return w, h
+
+
 def get_video_dimensions(video_path, ffmpeg_exe):
-    """Returns (width, height) using ffprobe. Returns (1920, 1080) as safe default on failure."""
+    """Returns displayed (width, height). Tries ffmpeg first (rotation-aware), then ffprobe.
+    Returns (1920, 1080) as safe default on failure."""
+    try:
+        dims = _video_dims_from_ffmpeg(video_path, ffmpeg_exe) if ffmpeg_exe else None
+        if dims:
+            return dims
+    except Exception as e:
+        logger.warning('[dimensions] ffmpeg probe failed: %s', e)
+
     def _probe(ffprobe_exe):
         result = subprocess.run(
             [ffprobe_exe, '-v', 'error', '-select_streams', 'v:0',
@@ -721,7 +760,10 @@ def caption():
     """
     Accepts multipart/form-data:
       file       — the source MP4
-      font_size  — integer, caption font size in points (default 18)
+      position   — "bottom" (default) | "top"
+      text_color — "white" (default) | "yellow"
+    Caption size is automatic (scaled to the video's real, rotation-aware dimensions); the
+    old Small/Medium/Large font_size control never did anything and was removed (Round C).
     Returns the captioned MP4 as a download.
     """
     if not FFMPEG_EXE:
@@ -733,12 +775,6 @@ def caption():
 
     position   = request.form.get("position",   "bottom")
     text_color = request.form.get("text_color", "white")
-
-    # Alignment: bottom-center=2, top-center=8 (ASS numpad layout)
-    alignment = 8 if position == "top" else 2
-    # PrimaryColour in ASS format (&HAABBGGRR)
-    color_map = {"white": "&H00FFFFFF", "yellow": "&H0000FFFF"}
-    primary_colour = color_map.get(text_color, "&H00FFFFFF")
 
     original_name = file.filename or "video.mp4"
     base_name     = os.path.splitext(os.path.basename(original_name))[0]
@@ -1376,7 +1412,9 @@ def get_or_create_shared_link(dbx, dbx_path):
         result = dbx.sharing_create_shared_link_with_settings(dbx_path)
         return result.url
     except dbx_module.exceptions.ApiError:
-        links = dbx.sharing_list_shared_links(path=dbx_path)
+        # direct_only: a link for THIS file, never a parent folder's link (Airtable's clip
+        # URL could otherwise point at the whole folder).
+        links = dbx.sharing_list_shared_links(path=dbx_path, direct_only=True)
         if links.links:
             return links.links[0].url
         return None
@@ -1395,8 +1433,13 @@ def resolve_project_for_source(filename='', source_path=None):
     resolved_path = (source_path or '').strip() or video_path_cache.get(clean_filename)
     if resolved_path and not os.path.exists(resolved_path):
         resolved_path = ''
-    if not resolved_path and clean_filename:
+    # Only walk Dropbox for real video names (the "Made from images" thumbnail project is
+    # not a file and used to trigger a full Dropbox walk every time it opened).
+    if (not resolved_path and clean_filename
+            and os.path.splitext(clean_filename)[1].lower() in VIDEO_EXTENSIONS):
         resolved_path = find_video_in_dropbox(clean_filename) or ''
+    if resolved_path and clean_filename:
+        video_path_cache[clean_filename] = resolved_path
     project_id = make_source_key(resolved_path or None, clean_filename)
     with project_store_lock:
         project = load_project(project_id)
@@ -1442,7 +1485,9 @@ def recent_projects():
             key=lambda project: project.get('updated_at') or project.get('last_opened_at') or '',
             reverse=True,
         )
-        return jsonify({'projects': [summarize_project(project) for project in projects[:12]]})
+        # 40, not 12: older projects silently dropped out of Recent Projects (CANONICAL §15
+        # expects 20+). The sidebar groups them into Today / This Week / Earlier.
+        return jsonify({'projects': [summarize_project(project) for project in projects[:40]]})
     except Exception as exc:
         logger.exception('[projects] Failed to list recent projects')
         return jsonify({'error': str(exc), 'projects': []}), 500
@@ -1935,19 +1980,34 @@ def find_json():
         logger.debug('[find_json] Searching folder: %s', video_folder)
         logger.debug('[find_json] Files in folder: %s', os.listdir(video_folder))
 
-        # Search same folder for any .json file
-        matches = [
-            os.path.join(video_folder, f)
-            for f in os.listdir(video_folder)
-            if f.lower().endswith('.json')
-        ]
-        logger.debug('[find_json] .json files in same folder: %s', matches)
+        # Pick THIS video's transcript. It used to take the first .json of any name, so a
+        # folder holding two talks (or Horizontal + Vertical versions) could load the wrong
+        # transcript. Prefer JSONs named after the video (its bare stem), then ones with
+        # "Words"/"Transcript" in the name; only fall back to a lone JSON. (Round C)
+        jsons = sorted(f for f in os.listdir(video_folder) if f.lower().endswith('.json'))
+        stem = bare_stem(os.path.basename(video_path)).lower()
+        def _rank(f):
+            fl = f.lower()
+            return ('words' in fl, 'transcript' in fl)
+        named = [f for f in jsons if stem and f.lower().startswith(stem)]
+        wordsy = [f for f in jsons if 'words' in f.lower() or 'transcript' in f.lower()]
+        if named:
+            pick = max(named, key=_rank)
+        elif len(jsons) == 1:
+            pick = jsons[0]
+        elif len(wordsy) == 1:
+            pick = wordsy[0]
+        else:
+            pick = None
+        logger.debug('[find_json] .json files in same folder: %s -> %s', jsons, pick)
 
-        if not matches:
-            logger.warning('[find_json] No .json file found in %s', video_folder)
-            return jsonify({'json_found': False, 'error': 'No transcript found near this video'})
+        if not pick:
+            logger.warning('[find_json] No matching transcript in %s (%d .json files)', video_folder, len(jsons))
+            return jsonify({'json_found': False, 'error': (
+                'No transcript found near this video' if not jsons else
+                'Several transcripts are in this folder and none is named after this video — choose the file manually')})
 
-        json_path = matches[0]
+        json_path = os.path.join(video_folder, pick)
         logger.info('[find_json] Using transcript JSON: %s', json_path)
 
         with open(json_path, 'r', encoding='utf-8') as f:
@@ -2016,11 +2076,12 @@ def generate_transcript():
 def generate_transcript_upload():
     """
     Accepts multipart/form-data: file (MP4) or source_path.
-    Runs Whisper medium, returns { "words": [...] }.
+    Runs Whisper medium, saves the Words JSON (see below) and returns
+    { "words": [...], "json_path": "...", "json_filename": "..." }.
     """
     file = request.files.get("file")
     source_path = (request.form.get("source_path") or "").strip()
-    if not file and (not source_path or not os.path.isfile(source_path)):
+    if not file and not is_video_file_path(source_path):
         return jsonify({"error": "No file provided"}), 400
 
     tmp_dir = tempfile.mkdtemp()
@@ -2047,7 +2108,38 @@ def generate_transcript_upload():
     finally:
         shutil.rmtree(tmp_dir, ignore_errors=True)
 
-    return jsonify({"words": words})
+    # Save the transcript (Round C). It used to be returned and thrown away, so every
+    # later session re-ran Whisper (minutes) and saved clips could never be restored.
+    # Preferred spot: next to the video in Dropbox, named like the team's other transcripts
+    # ("<video> - Transcript (Words).json"), so /find_json finds it automatically next time
+    # for everyone. Fallback: this computer's app-data folder.
+    json_path = ''
+    video_name = file.filename if file else os.path.basename(source_path)
+    video_path = source_path if (source_path and os.path.isfile(source_path)) else video_path_cache.get(video_name)
+    json_name = (bare_stem(video_name or 'video') or 'video') + ' - Transcript (Words).json'
+    targets = []
+    if video_path and os.path.isfile(video_path):
+        targets.append(os.path.dirname(video_path))
+    targets.append(os.path.join(local_app_root, 'transcripts'))
+    for folder in targets:
+        try:
+            os.makedirs(folder, exist_ok=True)
+            candidate = os.path.join(folder, unique_path_in(folder, json_name))
+            tmp_json = candidate + '.tmp'
+            with open(tmp_json, 'w', encoding='utf-8') as fh:
+                json.dump(words, fh, ensure_ascii=False, indent=2)
+            os.replace(tmp_json, candidate)
+            json_path = candidate
+            logger.info('[transcript] Saved %d words to %s', len(words), json_path)
+            break
+        except Exception as exc:
+            logger.warning('[transcript] Could not save transcript in %s: %s', folder, exc)
+
+    return jsonify({
+        "words": words,
+        "json_path": json_path,
+        "json_filename": os.path.basename(json_path) if json_path else json_name,
+    })
 
 
 # ── Thumbnails — async job worker ──
@@ -2734,12 +2826,14 @@ def find_clips():
 
         # Retry loop: require ≥ 3 clips with valid duration (25–95s) before returning
         valid = []
+        last_error = None
         MAX_RETRIES = 3
         for attempt in range(MAX_RETRIES):
             try:
                 candidates = _call_clips_claude(transcript_text, client)
             except Exception as ce:
                 logger.warning("[clips] Attempt %s Claude call failed: %s", attempt + 1, ce)
+                last_error = ce
                 candidates = []
 
             valid = [
@@ -2758,6 +2852,11 @@ def find_clips():
 
         # Highest hook_score first (10s at the top)
         valid.sort(key=lambda c: c.get('hook_score') or 0, reverse=True)
+
+        # Every attempt failed (rate limit, overload, bad API key…): say so, instead of an
+        # empty list that looked like "Claude found no clips". (Round C)
+        if not valid and last_error is not None:
+            return jsonify({'error': f'Claude could not be reached: {last_error}', 'candidates': []})
 
         return jsonify({'candidates': valid})
 
